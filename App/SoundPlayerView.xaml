@@ -1,0 +1,43 @@
+<UserControl x:Class="NHL27Kit.App.SoundPlayerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:NHL27Kit.App">
+    <Border Style="{StaticResource Card}" Background="{StaticResource Surface2}" Padding="14,12">
+        <StackPanel>
+            <Grid Height="76">
+                <local:WaveformView x:Name="Wave" />
+                <TextBlock x:Name="WaveNote" Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextAlignment="Center" TextWrapping="Wrap" Margin="16,0" IsHitTestVisible="False" />
+            </Grid>
+            <DockPanel Margin="0,10,0,0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE767;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Muted}" />
+                    <Slider x:Name="Volume" Width="84" Minimum="0" Maximum="1" Value="0.8" Margin="8,0,0,0" ValueChanged="OnVolume" ToolTip="Volume" />
+                </StackPanel>
+                <Button x:Name="PlayBtn" Width="42" Height="42" Click="OnToggle" Cursor="Hand" IsEnabled="False"
+                        FontFamily="{StaticResource IconFont}" FontSize="16" Foreground="White" Content="&#xE768;" Focusable="False">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="Root">
+                                <Ellipse Fill="{StaticResource AccentGradient}" />
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="2,0,0,0" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Root" Property="Opacity" Value="0.88" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Root" Property="Opacity" Value="0.35" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <StackPanel Margin="14,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="TimeText" Text="0:00 / 0:00" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock x:Name="InfoText" Style="{StaticResource Caption}" FontSize="11.5" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </DockPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

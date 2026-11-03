@@ -1,0 +1,98 @@
+<UserControl x:Class="NHL27Kit.App.ArenasPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:NHL27Kit.App">
+    <Grid Margin="22,18,22,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="0,0,0,14">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="ReloadButton" Click="OnReload" Padding="12,6" ToolTip="Read the arena from the game again">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Reload" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Arenas" Style="{StaticResource Title}" />
+                <TextBlock x:Name="Summary" Text="Every arena in the game, drawn in 3D with its own textures, read from the game when you pick one." Style="{StaticResource Caption}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </DockPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="270" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- arenas -->
+            <Border Style="{StaticResource Card}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="16,14,16,8">
+                        <TextBlock x:Name="ArenaCount" DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                        <TextBlock Text="ARENAS" Style="{StaticResource Overline}" />
+                    </DockPanel>
+                    <TextBox x:Name="Search" DockPanel.Dock="Top" Margin="12,0,12,8" Style="{StaticResource SearchBox}" Tag="Find an arena or city" TextChanged="OnSearch" />
+                    <ListBox x:Name="ArenaList" Background="Transparent" BorderThickness="0" Padding="6,0,4,6" ItemContainerStyle="{StaticResource RowItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="OnArenaPicked"
+                             VirtualizingPanel.IsVirtualizing="True">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:ArenaRow}">
+                                <StackPanel Margin="4,5">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- the view -->
+            <Border Grid.Column="2" Style="{StaticResource Card}" ClipToBounds="True">
+                <Grid>
+                    <local:ArenaViewer x:Name="Viewer" CornerRadius="10" />
+                    <Border VerticalAlignment="Top" Margin="12,10,12,0" Padding="6,5,12,5" Background="#D90C0E12" CornerRadius="8">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox x:Name="TeamAdsSwitch" Style="{StaticResource Switch}" Content="Team ads" IsChecked="True" Checked="OnTeamAds" Unchecked="OnTeamAds" Margin="0,0,14,0"
+                                      ToolTip="The NHL team's own centre-ice ads from its rink on TheFaceoff.net; off, the game's" />
+                            <CheckBox x:Name="GlassSwitch" Style="{StaticResource Switch}" Content="Glass" IsChecked="True" Checked="OnLayers" Unchecked="OnLayers" Margin="0,0,14,0" />
+                            <CheckBox x:Name="IceSwitch" Style="{StaticResource Switch}" Content="Ice" IsChecked="True" Checked="OnLayers" Unchecked="OnLayers" Margin="0,0,14,0" />
+                            <CheckBox x:Name="JumboSwitch" Style="{StaticResource Switch}" Content="Jumbotron" IsChecked="True" Checked="OnLayers" Unchecked="OnLayers" Margin="0,0,14,0" />
+                            <CheckBox x:Name="RoofSwitch" Style="{StaticResource Switch}" Content="Roof" IsChecked="True" Checked="OnLayers" Unchecked="OnLayers" Margin="0,0,14,0" />
+                            <CheckBox x:Name="PropsSwitch" Style="{StaticResource Switch}" Content="Props" IsChecked="True" Checked="OnLayers" Unchecked="OnLayers"
+                                      ToolTip="Lights, ladders, tables and the other shared objects the level places" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource Segment}" Content="Broadcast" GroupName="ArenaView" CommandParameter="Broadcast" IsChecked="True" Checked="OnView" />
+                            <RadioButton Style="{StaticResource Segment}" Content="End" GroupName="ArenaView" CommandParameter="End" Checked="OnView" />
+                            <RadioButton Style="{StaticResource Segment}" Content="Bowl" GroupName="ArenaView" CommandParameter="Bowl" Checked="OnView" />
+                            <RadioButton Style="{StaticResource Segment}" Content="Overhead" GroupName="ArenaView" CommandParameter="Overhead" Checked="OnView" />
+                            <RadioButton Style="{StaticResource Segment}" Content="Ice level" GroupName="ArenaView" CommandParameter="Ice" Checked="OnView" />
+                        </StackPanel>
+                    </DockPanel>
+                    </Border>
+                    <Border x:Name="Busy" Background="#CC0C0E12" CornerRadius="8" Padding="18,12" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock x:Name="BusyText" Style="{StaticResource Caption}" FontSize="13" />
+                    </Border>
+                    <TextBlock x:Name="Empty" Text="Pick an arena." Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16,10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="16,0,0,0"
+                           Text="Drag to orbit · right-drag to move · scroll to zoom · double-click for the broadcast view" />
+                <TextBlock x:Name="Detail" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,138 @@
+<Window x:Class="NHL27Kit.App.FaceoffWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:NHL27Kit.App"
+        Title="Centre ice from TheFaceoff.net" Width="1240" Height="800" MinWidth="980" MinHeight="640"
+        WindowStartupLocation="CenterOwner" Background="{StaticResource Bg}" Foreground="{StaticResource Text}" FontFamily="{StaticResource UiFont}" FontSize="13"
+        ShowInTaskbar="False">
+    <Grid x:Name="Root" Background="{StaticResource Bg}" Margin="0">
+        <Grid Margin="20,16,20,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock x:Name="Heading" Text="Centre ice from TheFaceoff.net" Style="{StaticResource Title}" />
+                <TextBlock Style="{StaticResource Caption}" Margin="0,3,0,0" TextWrapping="Wrap"
+                           Text="Pick a rink: its top-down layout is turned into the game's centre-ice logo and centre line. TheFaceoff.net's graphics are for personal use with credit; they're downloaded to export/faceoff, never shipped with the kit." />
+            </StackPanel>
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="360" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- rinks -->
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="14,14,14,8">
+                            <DockPanel Margin="0,0,0,8">
+                                <ComboBox x:Name="LeaguePicker" DockPanel.Dock="Right" Width="120" Margin="8,0,0,0" SelectionChanged="OnLeague" />
+                                <TextBox x:Name="Search" Style="{StaticResource SearchBox}" Tag="Filter — e.g. toronto 2027" TextChanged="OnSearch" />
+                            </DockPanel>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Open" Padding="10,4" Margin="6,0,0,0" Click="OnOpenLink" />
+                                <TextBlock Text="Link" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="2,0,8,0" />
+                                <TextBox x:Name="LinkBox" Height="30" VerticalContentAlignment="Center"
+                                         ToolTip="Paste a thefaceoff.net/center-ice/… page, from any league or year" />
+                            </DockPanel>
+                        </StackPanel>
+                        <DockPanel DockPanel.Dock="Bottom" Margin="14,6,14,12">
+                            <Button x:Name="MoreButton" DockPanel.Dock="Right" Style="{StaticResource Ghost}" Content="Load older" Padding="10,4" Click="OnMore"
+                                    ToolTip="The list goes back to 1968, 8 rinks a page, newest first" />
+                            <TextBlock x:Name="ListStatus" Style="{StaticResource Caption}" FontSize="11.5" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </DockPanel>
+                        <ListBox x:Name="RinkList" Background="Transparent" BorderThickness="0" Padding="6,0,4,0" ItemContainerStyle="{StaticResource RowItem}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True" SelectionChanged="OnRinkPicked">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:FaceoffRow}">
+                                    <DockPanel Margin="4,5">
+                                        <Border Width="48" Height="48" CornerRadius="8" Background="{StaticResource Surface3}" ClipToBounds="True" Margin="0,0,10,0">
+                                            <Image Source="{Binding Thumb}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource Text}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <!-- preview -->
+                <Border Grid.Column="2" Style="{StaticResource Card}">
+                    <DockPanel Margin="18,14,18,14">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock x:Name="RinkTitle" Text="No rink picked" FontSize="18" FontWeight="Bold" FontFamily="{StaticResource DisplayFont}" />
+                                <TextBlock x:Name="RinkInfo" Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <Button x:Name="SaveButton" Style="{StaticResource Ghost}" Content="Save PNGs…" Padding="10,6" Click="OnSavePngs" IsEnabled="False" />
+                                <Button x:Name="WriteButton" Style="{StaticResource Primary}" Padding="14,6" Margin="8,0,0,0" Click="OnWrite" IsEnabled="False">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" FontSize="13" />
+                                        <TextBlock x:Name="WriteText" Text="Write into the game" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <TextBlock x:Name="WriteStatus" Style="{StaticResource Caption}" FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
+                        </DockPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="280" />
+                            </Grid.ColumnDefinitions>
+                            <Grid>
+                                <Border CornerRadius="10" Background="{StaticResource Surface2}" ClipToBounds="True">
+                                    <Viewbox Stretch="Uniform" Margin="8">
+                                        <Image x:Name="PreviewImage" Width="768" Height="768" RenderOptions.BitmapScalingMode="HighQuality" />
+                                    </Viewbox>
+                                </Border>
+                                <StackPanel x:Name="PreviewEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
+                                    <TextBlock x:Name="PreviewEmptyText" Text="Pick a rink on the left" Style="{StaticResource Caption}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" />
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="WHOLE RINK  ·  the square is what's taken" Style="{StaticResource Overline}" Margin="0,0,0,6" />
+                                <Border CornerRadius="8" Background="{StaticResource Surface2}" ClipToBounds="True" Height="126">
+                                    <Grid>
+                                        <Image x:Name="RinkImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                                        <Canvas x:Name="RinkMarks" />
+                                    </Grid>
+                                </Border>
+
+                                <TextBlock Text="LOOK" Style="{StaticResource Overline}" Margin="0,16,0,6" />
+                                <DockPanel>
+                                    <TextBlock x:Name="SatText" DockPanel.Dock="Right" Style="{StaticResource Caption}" Width="40" TextAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock Text="Saturation" Width="78" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                    <Slider x:Name="SatSlider" Minimum="0" Maximum="2.5" Value="1.15" SmallChange="0.05" LargeChange="0.25" ValueChanged="OnLook" />
+                                </DockPanel>
+                                <DockPanel Margin="0,6,0,0">
+                                    <TextBlock x:Name="CutText" DockPanel.Dock="Right" Style="{StaticResource Caption}" Width="40" TextAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock Text="Ice cut-out" Width="78" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                    <Slider x:Name="CutSlider" Minimum="0" Maximum="0.25" Value="0.06" SmallChange="0.01" LargeChange="0.03" ValueChanged="OnLook"
+                                            ToolTip="How much of the ice's pale scratches is cut away around the paint. Higher cleans the ice more; too high eats pale paint." />
+                                </DockPanel>
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button Style="{StaticResource Ghost}" Content="Defaults" Padding="8,3" Click="OnDefaults" />
+                                    <CheckBox x:Name="IceToggle" Style="{StaticResource Switch}" Content="On dark" Margin="10,0,0,0" VerticalAlignment="Center" Click="OnLook"
+                                                  ToolTip="Preview on dark instead of ice, to see what is transparent" />
+                                </WrapPanel>
+
+                                <TextBlock Text="CENTRE LINE  ·  85 ft, rotated" Style="{StaticResource Overline}" Margin="0,16,0,6" />
+                                <Border CornerRadius="8" Background="{StaticResource Checker}" ClipToBounds="True" Height="64">
+                                    <Image x:Name="LineImage" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Border>
+                                <TextBlock x:Name="TargetInfo" Style="{StaticResource Caption}" FontSize="11.5" TextWrapping="Wrap" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

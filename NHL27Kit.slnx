@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/App/">
+    <Project Path="App/NHL27Kit.App.csproj" />
+  </Folder>
+  <Folder Name="/Cli/">
+    <Project Path="Cli/NHL27Kit.Cli.csproj" />
+  </Folder>
+  <Folder Name="/Core/">
+    <Project Path="Core/NHL27Kit.Core.csproj" />
+  </Folder>
+</Solution>

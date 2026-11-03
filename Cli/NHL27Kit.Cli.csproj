@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- nhl27kit: command-line explorer for NHL 27 (PS5) data. Reads the game folder; never writes to it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>nhl27kit</AssemblyName>
+    <RootNamespace>NHL27Kit.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\NHL27Kit.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Oodle from the user's FMT install (not redistributed with the kit's source). -->
+    <None Include="..\ThirdParty\oo2core_9_win64.dll" Condition="Exists('..\ThirdParty\oo2core_9_win64.dll')" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Opus (speech) from the user's FMT install. -->
+    <None Include="..\ThirdParty\opus.dll" Condition="Exists('..\ThirdParty\opus.dll')" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

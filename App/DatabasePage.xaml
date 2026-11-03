@@ -1,0 +1,128 @@
+<UserControl x:Class="NHL27Kit.App.DatabasePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:NHL27Kit.App">
+    <UserControl.Resources>
+        <Style x:Key="GridHeader" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{StaticResource Surface2}" />
+            <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+        </Style>
+        <Style x:Key="GridCell" TargetType="DataGridCell">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Selection}" />
+                    <Setter Property="Foreground" Value="{StaticResource Text}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Grid Margin="22,18,22,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="0,0,0,14">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <ComboBox x:Name="DbPicker" Width="300" SelectionChanged="OnDbPicked" />
+                <Button x:Name="ReloadButton" Click="OnReload" Padding="12,6" Margin="8,0,0,0" ToolTip="Read the database from the game again">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Reload" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="DiscardButton" Click="OnDiscard" Padding="12,6" Margin="8,0,0,0" IsEnabled="False">
+                    <TextBlock Text="Discard" />
+                </Button>
+                <Button x:Name="SaveButton" Style="{StaticResource Primary}" Click="OnSave" Padding="14,6" Margin="8,0,0,0" IsEnabled="False">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Save to game" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Database" Style="{StaticResource Title}" />
+                <TextBlock x:Name="Summary" Text="Every table of the game's databases, read from the game when the page opens." Style="{StaticResource Caption}" Margin="0,3,0,0" />
+            </StackPanel>
+        </DockPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="270" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- tables -->
+            <Border Style="{StaticResource Card}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="16,14,16,8">
+                        <TextBlock x:Name="TableCount" DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                        <TextBlock Text="TABLES" Style="{StaticResource Overline}" />
+                    </DockPanel>
+                    <TextBox x:Name="TableSearch" DockPanel.Dock="Top" Style="{StaticResource SearchBox}" Tag="Filter tables" Margin="12,0,12,8" TextChanged="OnTableSearch" />
+                    <ListBox x:Name="TableList" Background="Transparent" BorderThickness="0" Margin="6,0,6,8" SelectionChanged="OnTablePicked"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource RowItem}" />
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:DbTableRow}">
+                                <DockPanel Margin="4,3">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding EditText}" Foreground="{StaticResource Patch}" FontSize="11" VerticalAlignment="Center" />
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource Text}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Meta}" Style="{StaticResource Caption}" FontSize="11" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- rows -->
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="16,12,16,10">
+                        <TextBox x:Name="RowSearch" DockPanel.Dock="Right" Width="260" Style="{StaticResource SearchBox}" Tag="Find in rows" TextChanged="OnRowSearch" />
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="TableTitle" Text="Pick a table" Foreground="{StaticResource Text}" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock x:Name="TableMeta" Style="{StaticResource Caption}" Margin="0,1,0,0"
+                                       Text="Double-click a cell to edit it. Numbers keep to their field's range; text must fit the space the old text used." />
+                        </StackPanel>
+                    </DockPanel>
+                    <Grid>
+                        <DataGrid x:Name="Rows" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
+                                  HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource Line}"
+                                  Background="Transparent" RowBackground="Transparent" AlternatingRowBackground="#08FFFFFF" BorderThickness="0,1,0,0"
+                                  BorderBrush="{StaticResource Line}" Foreground="{StaticResource Text}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                  ColumnHeaderStyle="{StaticResource GridHeader}" CellStyle="{StaticResource GridCell}" SelectionUnit="Cell"
+                                  EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  CellEditEnding="OnCellEditEnding" BeginningEdit="OnBeginningEdit" />
+                        <TextBlock x:Name="RowsBusy" Text="Reading the database from the game…" Style="{StaticResource Caption}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,144 @@
+<UserControl x:Class="NHL27Kit.App.TuningPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:NHL27Kit.App">
+    <UserControl.Resources>
+        <Style x:Key="GridHeader" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{StaticResource Surface2}" />
+            <Setter Property="Foreground" Value="{StaticResource TextDim}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+        </Style>
+        <Style x:Key="GridCell" TargetType="DataGridCell">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Selection}" />
+                    <Setter Property="Foreground" Value="{StaticResource Text}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="Number" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+    </UserControl.Resources>
+    <Grid Margin="22,18,22,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="0,0,0,14">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="ReloadButton" Click="OnReload" Padding="12,6" ToolTip="Read eboot.bin from the game again">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Reload" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="ExportButton" Click="OnExport" Padding="12,6" Margin="8,0,0,0" IsEnabled="False" ToolTip="Save the values shown as a CSV file">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE74E;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Export CSV…" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Tuning" Style="{StaticResource Title}" />
+                <TextBlock x:Name="Summary" Text="The gameplay tuning values compiled into eboot.bin, read from the game when the page opens." Style="{StaticResource Caption}" Margin="0,3,0,0" />
+            </StackPanel>
+        </DockPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- groups -->
+            <Border Style="{StaticResource Card}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="16,14,16,8">
+                        <TextBlock x:Name="GroupCount" DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                        <TextBlock Text="GROUPS" Style="{StaticResource Overline}" />
+                    </DockPanel>
+                    <TreeView x:Name="Groups" Background="Transparent" BorderThickness="0" Padding="8,0,6,8" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" SelectedItemChanged="OnGroupPicked">
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate DataType="{x:Type local:TuningGroup}" ItemsSource="{Binding Children}">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Foreground="{StaticResource Faint}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="&#xE8B7;" Style="{StaticResource Icon}" FontSize="13" Foreground="#E3B341" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+
+            <!-- values -->
+            <Border Grid.Column="2" Style="{StaticResource Card}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="16,12,16,10">
+                        <TextBox x:Name="Search" DockPanel.Dock="Right" Width="260" Style="{StaticResource SearchBox}" Tag="Find by name or label" TextChanged="OnSearch" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <RadioButton x:Name="TypeAll" Style="{StaticResource Segment}" Content="All" GroupName="TuneType" IsChecked="True" Checked="OnFilter" />
+                            <RadioButton x:Name="TypeFloat" Style="{StaticResource Segment}" Content="Float" GroupName="TuneType" Checked="OnFilter" />
+                            <RadioButton x:Name="TypeInt" Style="{StaticResource Segment}" Content="Int" GroupName="TuneType" Checked="OnFilter" />
+                            <RadioButton x:Name="TypeBool" Style="{StaticResource Segment}" Content="Bool" GroupName="TuneType" Checked="OnFilter" />
+                            <CheckBox x:Name="RatingsOnly" Style="{StaticResource Switch}" Content="Ratings only" Margin="16,0,0,0" VerticalAlignment="Center"
+                                      Checked="OnFilter" Unchecked="OnFilter" ToolTip="Values whose name or label mentions a rating or attribute" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Grid>
+                        <DataGrid x:Name="Rows" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False" IsReadOnly="True"
+                                  HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource Line}"
+                                  Background="Transparent" RowBackground="Transparent" AlternatingRowBackground="#08FFFFFF" BorderThickness="0,1,0,0"
+                                  BorderBrush="{StaticResource Line}" Foreground="{StaticResource Text}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                  ColumnHeaderStyle="{StaticResource GridHeader}" CellStyle="{StaticResource GridCell}" SelectionMode="Single" SelectionUnit="FullRow"
+                                  EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                  SelectionChanged="OnRowPicked">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2.3*" />
+                                <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="1.4*" Foreground="{StaticResource TextDim}" />
+                                <DataGridTextColumn Header="Type" Binding="{Binding TypeText}" Width="56" Foreground="{StaticResource Muted}" />
+                                <DataGridTextColumn Header="Default" Binding="{Binding DefaultText}" Width="80" ElementStyle="{StaticResource Number}" />
+                                <DataGridTextColumn Header="Min" Binding="{Binding MinText}" Width="72" ElementStyle="{StaticResource Number}" Foreground="{StaticResource TextDim}" />
+                                <DataGridTextColumn Header="Max" Binding="{Binding MaxText}" Width="72" ElementStyle="{StaticResource Number}" Foreground="{StaticResource TextDim}" />
+                                <DataGridTextColumn Header="Group" Binding="{Binding Group}" Width="1.5*" Foreground="{StaticResource Muted}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock x:Name="RowsBusy" Text="Reading eboot.bin from the game…" Style="{StaticResource Caption}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16,10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="16,0,0,0"
+                           Text="Read only. The game's online tuner can override these at run time." />
+                <TextBlock x:Name="Detail" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Text="Pick a value to see where the eboot registers it." />
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

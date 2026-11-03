@@ -1,0 +1,20 @@
+# build output
+bin/
+obj/
+.vs/
+*.user
+
+# the kit's working folders: game indexes, exported and extracted assets, mod data, previews, logs
+cache/
+export/
+mods/
+previews/
+logs/
+
+# packaged builds (published as GitHub releases, not source)
+release/
+
+# third-party binaries (Oodle, Opus): not ours to redistribute
+ThirdParty/*.dll
+*.dll
+*.exe

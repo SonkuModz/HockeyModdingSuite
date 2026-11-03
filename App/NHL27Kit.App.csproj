@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- NHL27Kit: the NHL 27 (PS5) modding kit's window. Reads the game through NHL27Kit.Core; never writes to it. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>NHL27Kit</AssemblyName>
+    <RootNamespace>NHL27Kit.App</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\NHL27Kit.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Oodle from the user's FMT install (not redistributed: release builds pass -p:NoThirdParty=true). -->
+    <None Include="..\ThirdParty\oo2core_9_win64.dll" Condition="Exists('..\ThirdParty\oo2core_9_win64.dll') And '$(NoThirdParty)' != 'true'" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Opus (speech) from the user's FMT install. -->
+    <None Include="..\ThirdParty\opus.dll" Condition="Exists('..\ThirdParty\opus.dll') And '$(NoThirdParty)' != 'true'" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+</Project>
