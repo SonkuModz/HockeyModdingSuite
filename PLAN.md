@@ -1156,3 +1156,22 @@ original ranges are possible (pad smaller data; refuse bigger), until another wa
 6. **3D pages**: Uniforms, Studio, Unused, Arenas once PS4 meshes and kit folders are checked on the dump.
 
 Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide when NHL 24 is picked.
+
+### Done (2026-11-03)
+
+- **Step 1**: `GameProfile` (param.json / param.sfo), `cache/nhl24/index.bin`, `mods-nhl24/`, the game switcher
+  (title bar and Settings). Indexing NHL 24 takes ~9 s: 129,715 bundles, 482,971 EBX, 193,291 RES, 180,802 chunks
+  (the same counts as 24Kit's FMT index). Fix: a PS4 TOC without a chunk table (ui.toc) was read as PS5; the
+  reader now takes the platform from the layout (`GameLayout.TocCatalogs`).
+- **Step 2 (reading)**: checked on the dump, view and export only.
+  - Textures: PS4 header (`TextureHeader.Parse(res, ps4)`), `Ps4Tiling` (8x8 Morton), mips largest first from
+    mip 0 (a FirstMip bundle copy is the tail), arrays mip by mip with the layer count in **Depth** (SliceCount is
+    8 on the jersey logo arrays, not the layers). 890 of 909 sampled decode; the rest are BC6H (arena HDR), no
+    decoder yet. Some stock 2D logos (`content/common/logo/*`) are all zeros in the data; that's the game.
+  - Sounds and Videos: worked as they were (Opus codecs 14/15, VP8 WebM).
+  - Legacy files: NHL 24's index has 56-byte entries `[u64 path offset][i64 stored start][i64 stored end][i64
+    offset][i64 size][chunk GUID]` (3,218 files), then a 16-byte-entry table of root folders and a table of
+    `[u64 size][GUID]` per shared data chunk. `Legacy` reads both layouts. nhl_game.db: 119 tables, CRCs 240/240.
+  - Roster (11,675 players, portraits), Database, Teams (527 teams, logos) read through it.
+  - Every write is refused for NHL 24 (`ModService.RefuseWrite`, the CLI's `RefuseWhileRunning`,
+    `LegacyEditor`, `TextureBuilder.Unsupported`) until step 3.

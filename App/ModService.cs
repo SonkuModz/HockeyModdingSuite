@@ -26,6 +26,16 @@ public sealed class ModService
 
     public AssetIndex Index { get; }
     /// <summary>Which game the index is of: its mod list is that game's own.</summary>
+    /// <summary>
+    /// Throws when the game's files mustn't change now: an emulator is running, or the game is NHL 24, whose signed TOCs
+    /// haven't been write-tested yet (PLAN §28 step 3).
+    /// </summary>
+    private void RefuseWrite()
+    {
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        if (Profile.Kind == GameKind.Nhl24) throw new InvalidOperationException("NHL 24 can be viewed and exported for now; changing its files isn't ready yet.");
+    }
+
     public GameProfile Profile { get; }
     public ModStore Store { get; }
     public string Game => Index.Layout.GameDir;
@@ -80,7 +90,7 @@ public sealed class ModService
     /// </summary>
     public async Task<TextureReplacementPlan> ReplaceArrayLayerAsync(string name, string imageFile, int layer, Action<string> note)
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         var current = await Run(() => Texture.Load(Index, name, decode: false).Data);
         var existing = Find("texture", name);
         string history = existing != null && State(existing) == ModState.Applied ? existing.Summary : null;
@@ -134,14 +144,14 @@ public sealed class ModService
 
     public async Task ApplyAsync(ModEntry e)
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         try { await Run(() => { Store.Apply(e, Game); return 0; }); }
         finally { Changed?.Invoke(); }
     }
 
     public async Task RestoreAsync(ModEntry e)
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         try { await Run(() => { Store.Restore(e, Game); return 0; }); }
         finally { Changed?.Invoke(); }
     }
@@ -154,7 +164,7 @@ public sealed class ModService
     /// </summary>
     public async Task<ModEntry> SaveEbxAsync(string name, byte[] data, string summary)
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         try
         {
             return await Run(() =>
@@ -206,7 +216,7 @@ public sealed class ModService
     /// <summary>Writes score clock edits into the game (recompiles tin_nhl.swf; one mod entry).</summary>
     public async Task SaveScorebugAsync(Scorebug current, IReadOnlyDictionary<string, string> edits, bool sharpBadge = false)
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         try { await Run(() => Scorebug.Save(Index, Store, Game, current, edits, sharpBadge: sharpBadge)); }
         finally { Changed?.Invoke(); }
     }
@@ -220,7 +230,7 @@ public sealed class ModService
     /// <summary>Edits a database in the game: <paramref name="edit"/> gets it as the game has it now and returns what it changed.</summary>
     public async Task<ModEntry> SaveDbAsync(string name, Func<T3Db, string> edit, string source = "Database page")
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         try { return await Run(() => DbEditor.Save(Index, Store, Game, name, edit, source: source)); }
         finally { Changed?.Invoke(); }
     }
@@ -240,7 +250,7 @@ public sealed class ModService
     /// </summary>
     public async Task<List<string>> ImportPackAsync(string file, Action<string> progress)
     {
-        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
+        RefuseWrite();
         var manifest = await Run(() => ModPack.Open(file, Path.Combine(Store.Dir, "sources")));
         var results = new List<string>();
         int n = 0;

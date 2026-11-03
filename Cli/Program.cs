@@ -702,6 +702,8 @@ public static class Program
     {
         if (Emulators.Running() is { } emu)
             throw new InvalidOperationException($"{emu} is running. Close the game before changing its files.");
+        if (_profile?.Kind == GameKind.Nhl24)
+            throw new InvalidOperationException("NHL 24 can be viewed and exported for now; changing its files isn't ready yet.");
     }
 
     /// <summary>mods: the mod list (the app's Mods page) and each entry's state in the game.</summary>

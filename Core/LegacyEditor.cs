@@ -29,6 +29,8 @@ public static class LegacyEditor
     public static ModEntry Save(AssetIndex index, ModStore store, string game, string collector, string name, byte[] data,
         string summary, Action<string> log = null)
     {
+        if (!index.Layout.IsPs5)
+            throw new NotSupportedException("Saving NHL 24's legacy files (its databases) isn't ready yet: its index entries and compressed data chunks differ from NHL 27's.");
         // the original layout, under any earlier save of this file
         var existing = store.Find(Kind, name);
         if (existing != null && store.State(existing, game) is ModState.Applied or ModState.Partial)
