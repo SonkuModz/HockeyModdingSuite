@@ -1082,6 +1082,13 @@ public partial class MainWindow : Window
             }
             await Task.Delay(1500);
         }
+        if (a.TryGetValue("page", out var pPage) && pPage == "play" && _profile.Kind == GameKind.Nhl24)
+        {
+            await Task.Delay(800);
+            if (a.TryGetValue("p24set", out var pset)) Play24Page.SetValues(pset);
+            if (a.ContainsKey("p24save")) { Play24Page.Save(); await Task.Delay(800); }
+            if (a.TryGetValue("p24scroll", out var psc) && double.TryParse(psc, out double psy)) { Play24Page.Scroller.ScrollToVerticalOffset(psy); await Task.Delay(400); }
+        }
         if (a.TryGetValue("page", out var bPage) && bPage == "beapro")
         {
             if (a.TryGetValue("bapdir", out var bdir)) BeAProPage.SavesDirOverride = bdir;

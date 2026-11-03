@@ -12,9 +12,9 @@ using NHL27Kit.Core;
 namespace NHL27Kit.App;
 
 /// <summary>
-/// Plays NHL 24 on NHL24 PC (LEVASTAK's PS4 port): Play opens its own launcher (tools\launcher.ps1, the same thing its
-/// desktop shortcut runs), which patches the eboot for the settings picked there and starts nhl24_new.exe. The page
-/// only reads NHL24 PC's files: its settings, play time, log, and the game folder it runs.
+/// Plays NHL 24 on NHL24 PC (a shadPS4 build for NHL 24): Play opens the package's launcher (launcher.exe, or
+/// tools\launcher.ps1 in older packages), which starts nhl24.exe. The emulator settings are its shadPS4 config,
+/// user\config.json, edited here. The page also shows its play time, log and the game folder it runs.
 /// </summary>
 public partial class Play24Page : UserControl
 {
@@ -77,10 +77,22 @@ public partial class Play24Page : UserControl
     private static bool IsInstall(string dir) =>
         !string.IsNullOrEmpty(dir) && (File.Exists(Path.Combine(dir, "nhl24_new.exe")) || File.Exists(Path.Combine(dir, "nhl24.exe")));
 
-    /// <summary>The NHL24 PC folder: the one chosen, else a Games folder on any drive that has it.</summary>
+    /// <summary>
+    /// The NHL24 PC folder: the one chosen, else the newest one next to the game folder (up to three folders above it),
+    /// else one in a Games folder on any drive.
+    /// </summary>
     private string FindInstall()
     {
+        if (App.Args.TryGetValue("p24pc", out var arg)) return IsInstall(arg) ? arg : null;
         if (IsInstall(_settings?.Nhl24Pc)) return _settings.Nhl24Pc;
+        var near = new List<string>();
+        var dir = KitPaths.IsGame(_gameDir) ? new DirectoryInfo(_gameDir).Parent : null;
+        for (int up = 0; dir?.Parent != null && up < 3; dir = dir.Parent, up++)
+        {
+            try { near.AddRange(Directory.GetDirectories(dir.FullName).Where(IsInstall)); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        if (near.Count > 0) return near.OrderByDescending(d => File.GetLastWriteTimeUtc(Exe(d))).First();
         foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
             foreach (string games in new[] { "Games", "Emulators" }.Select(g => Path.Combine(drive.RootDirectory.FullName, g)).Where(Directory.Exists))
             {
@@ -92,18 +104,21 @@ public partial class Play24Page : UserControl
         return null;
     }
 
+    /// <summary>The emulator: nhl24_new.exe in older packages, nhl24.exe in newer ones.</summary>
+    private static string Exe(string install) =>
+        new[] { "nhl24_new.exe", "nhl24.exe" }.Select(x => Path.Combine(install, x)).FirstOrDefault(File.Exists);
+
     private string User(string name) => Path.Combine(_install ?? "", "user", name);
 
     private void ShowInstall()
     {
         _install = FindInstall();
         InstallPath.Text = _install ?? "NHL24 PC not found";
-        bool launcher = _install != null && File.Exists(Path.Combine(_install, "tools", "launcher.ps1"));
-        InstallInfo.Text = _install == null ? "Choose the NHL24 PC folder, the one with nhl24_new.exe."
-            : launcher ? "Play opens its launcher, which applies the settings below and starts the game."
-            : "No tools\\launcher.ps1 here: Play starts the emulator straight away.";
+        InstallInfo.Text = _install == null ? "Choose the NHL24 PC folder, the one with nhl24.exe."
+            : Launcher() != null ? "Play opens its launcher; press Play there to start the game with the settings below."
+            : "No launcher here: Play starts the emulator straight away.";
         ShowPlaytime();
-        ShowLauncherSettings();
+        LoadConfig();
         ShowRunsGame();
         OnTick();
     }
@@ -129,39 +144,199 @@ public partial class Play24Page : UserControl
         Playtime.Text = last is { } d ? $"{text}  ·  last played {d:MMM d, h:mm tt}" : text;
     }
 
-    private sealed record LauncherRow(string Label, string Value);
+    // ================================================================ emulator settings (user\config.json)
 
-    /// <summary>user\launcher_settings.json, as the launcher shows it.</summary>
-    private void ShowLauncherSettings()
+    private string ConfigFile => User("config.json");
+    private JsonObject _config;
+    private List<SettingSection> _sections;
+    private bool _dirty;
+
+    private static Choice C(string label, string value) => new(label, value);
+
+    private static readonly List<Choice> Sizes = new() { C("1280 × 720", "1280x720"), C("1600 × 900", "1600x900"), C("1920 × 1080", "1920x1080"),
+        C("2560 × 1440", "2560x1440"), C("3840 × 2160", "3840x2160") };
+
+    /// <summary>
+    /// The settings NHL24 PC's launcher shows, as keys of its shadPS4 config ("GPU.fsr_enabled"). Sizes are two keys each
+    /// ("GPU.window_*" is window_width and window_height); the display mode also sets GPU.full_screen.
+    /// </summary>
+    private void BuildSections()
     {
-        JsonObject s = null;
-        try { s = File.Exists(User("launcher_settings.json")) ? JsonNode.Parse(File.ReadAllText(User("launcher_settings.json")))?.AsObject() : null; }
-        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { }
-        if (s == null)
+        _sections = new List<SettingSection>
         {
-            LauncherRows.ItemsSource = null;
-            LauncherCaption.Text = _install == null ? "" : "No launcher settings yet: they're saved the first time you play from the launcher.";
-            return;
-        }
-        string Get(string key) => s[key] is JsonValue v ? v.ToString() : null;
-        string OnOff(string key) => Get(key) switch { "true" => "On", "false" => "Off", var x => x ?? "–" };
-        string Res(string r) => r switch { "1080" => "1920 × 1080", "1200" => "1920 × 1200", "1440" => "2560 × 1440", "1600" => "2560 × 1600", "2160" => "3840 × 2160", _ => r ?? "–" };
-        string Cap(string x) => string.IsNullOrEmpty(x) ? "–" : char.ToUpperInvariant(x[0]) + x[1..];
-        LauncherRows.ItemsSource = new List<LauncherRow>
-        {
-            new("Resolution", Res(Get("resolution"))),
-            new("Fullscreen", OnOff("fullscreen")),
-            new("HDR", Cap(Get("hdr"))),
-            new("VSync", OnOff("vsync")),
-            new("Frame rate cap", Get("fps") is { } fps ? fps + " FPS" : "–"),
-            new("Menus at full frame rate", OnOff("menu_full_fps")),
-            new("PS4 Pro mode", OnOff("ps4pro")),
-            new("16× anisotropic filtering", OnOff("aniso16")),
-            new("Sharpness", Cap(Get("sharpness"))),
-            new("FSR", OnOff("fsr")),
-            new("Red zone protection", OnOff("redzone")),
+            new()
+            {
+                Title = "Display", Glyph = "", Caption = "window and presentation",
+                Rows = new()
+                {
+                    new() { Key = "GPU.full_screen_mode", Label = "Display mode", Kind = RowKind.Choice, Type = RowType.String, Fallback = "Windowed",
+                            Choices = new() { C("Windowed", "Windowed"), C("Borderless fullscreen", "Fullscreen (Borderless)"), C("Fullscreen", "Fullscreen") } },
+                    new() { Key = "GPU.window_*", Label = "Window size", Hint = "When windowed", Kind = RowKind.Choice, Type = RowType.String, Fallback = "1280x720", Choices = Sizes },
+                    new() { Key = "GPU.internal_screen_*", Label = "Resolution", Hint = "The size the game renders and goes fullscreen at", Kind = RowKind.Choice, Type = RowType.String,
+                            Fallback = "1920x1080", Choices = Sizes },
+                    new() { Key = "GPU.present_mode", Label = "Present mode", Hint = "Mailbox: lowest latency without tearing. Fifo: vsync. Immediate: may tear", Kind = RowKind.Choice,
+                            Type = RowType.String, Fallback = "Mailbox", Choices = new() { C("Mailbox", "Mailbox"), C("Fifo (vsync)", "Fifo"), C("Immediate", "Immediate") } },
+                    new() { Key = "GPU.vblank_frequency", Label = "Frame rate", Hint = "The emulated display's refresh rate", Kind = RowKind.Choice, Type = RowType.Int, Fallback = "60",
+                            Choices = new() { C("60 FPS", "60"), C("120 FPS", "120"), C("144 FPS", "144") } },
+                    new() { Key = "GPU.hdr_allowed", Label = "HDR", Hint = "When the display supports it", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
+                    new() { Key = "General.show_fps_counter", Label = "FPS counter", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
+                },
+            },
+            new()
+            {
+                Title = "Image", Glyph = "", Caption = "upscaling and sharpening",
+                Rows = new()
+                {
+                    new() { Key = "GPU.fsr_enabled", Label = "FSR upscaling", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "true" },
+                    new() { Key = "GPU.rcas_enabled", Label = "Sharpening", Hint = "FSR's RCAS pass", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "true" },
+                    new() { Key = "GPU.rcas_attenuation", Label = "Sharpening strength", Hint = "Lower is sharper", Kind = RowKind.Slider, Type = RowType.Int, Min = 0, Max = 3000,
+                            Fallback = "250", Format = v => (v / 1000).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) },
+                },
+            },
+            new()
+            {
+                Title = "Game", Glyph = "", Caption = "console and system",
+                Rows = new()
+                {
+                    new() { Key = "General.neo_mode", Label = "PS4 Pro mode", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
+                    new() { Key = "General.redzone_patches", Label = "Red zone protection", Hint = "Turn on if the game crashes while a match loads (0xc0000005)", Kind = RowKind.Toggle,
+                            Type = RowType.Bool, Fallback = "false" },
+                    new() { Key = "General.console_language", Label = "Console language", Kind = RowKind.Choice, Type = RowType.Int, Fallback = "1", Choices = ConsoleLanguages.Choices },
+                    new() { Key = "General.volume_slider", Label = "Volume", Kind = RowKind.Slider, Type = RowType.Int, Min = 0, Max = 100, Fallback = "100", Format = v => $"{v:0}%" },
+                    new() { Key = "General.show_splash", Label = "Splash screen", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
+                    new() { Key = "Network.connected_to_network", Label = "Network", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
+                },
+            },
+            new()
+            {
+                Title = "Controls", Glyph = "", Caption = "gamepad, mouse and keyboard",
+                Rows = new()
+                {
+                    new() { Key = "Input.motion_controls_enabled", Label = "Motion controls", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "true" },
+                    new() { Key = "Input.background_controller_input", Label = "Gamepad in the background", Hint = "Keep reading the gamepad when the window isn't focused",
+                            Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
+                    new() { Key = "Input.cursor_hide_timeout", Label = "Hide cursor after", Kind = RowKind.Slider, Type = RowType.Int, Min = 0, Max = 30, Fallback = "5", Format = v => $"{v:0} s" },
+                },
+            },
+            new()
+            {
+                Title = "Advanced", Glyph = "", Caption = "memory, caches and logging",
+                Rows = new()
+                {
+                    new() { Key = "General.extra_dmem_in_mbytes", Label = "Extra direct memory", Hint = "On top of the PS4's own", Kind = RowKind.Slider, Type = RowType.Int,
+                            Min = 0, Max = 8000, Fallback = "0", Format = v => $"{v:0} MB" },
+                    new() { Key = "Vulkan.pipeline_cache_enabled", Label = "Pipeline cache", Hint = "Fewer hitches after the first play", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "true" },
+                    new() { Key = "Log.enable", Label = "Log", Hint = "user\\log\\shadps4.log, shown under Console", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "true" },
+                },
+            },
         };
-        LauncherCaption.Text = User("launcher_settings.json");
+        foreach (var row in AllRows)
+            row.Changed += _ => SetDirty(true);
+        Sections.ItemsSource = _sections;
+    }
+
+    private IEnumerable<SettingRow> AllRows => _sections.SelectMany(x => x.Rows);
+
+    private static JsonNode At(JsonObject config, string key)
+    {
+        string[] parts = key.Split('.');
+        return (config?[parts[0]] as JsonObject)?[parts[1]];
+    }
+
+    private static string Raw(JsonNode n) => n is JsonValue v ? v.ToString() : null;
+
+    private void LoadConfig()
+    {
+        if (_sections == null) BuildSections();
+        _config = null;
+        try { _config = File.Exists(ConfigFile) ? JsonNode.Parse(File.ReadAllText(ConfigFile))?.AsObject() : null; }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException or InvalidOperationException) { }
+        foreach (var row in AllRows)
+        {
+            string raw = row.Key.EndsWith(".window_*") || row.Key.EndsWith(".internal_screen_*")
+                ? Raw(At(_config, row.Key.Replace("*", "width"))) is { } w && Raw(At(_config, row.Key.Replace("*", "height"))) is { } h ? $"{w}x{h}" : null
+                : Raw(At(_config, row.Key));
+            row.Load(raw);
+        }
+        bool ok = _config != null;
+        Sections.IsEnabled = ok;
+        SetDirty(false);
+        ConfigCaption.Text = _install == null ? "Choose the NHL24 PC folder first."
+            : ok ? $"{ConfigFile}  ·  the launcher saves over it when you change settings there"
+            : $"No {ConfigFile} yet: start the launcher once to make it.";
+    }
+
+    private void SetDirty(bool dirty)
+    {
+        _dirty = dirty;
+        SaveButton.IsEnabled = dirty;
+        RevertButton.IsEnabled = dirty;
+        ConfigTitle.Text = "Emulator settings" + (dirty ? "  ·  unsaved changes" : "");
+    }
+
+    private void OnRevert(object sender, RoutedEventArgs e) => LoadConfig();
+
+    /// <summary>Changes rows without saving (scripted runs): "GPU.vblank_frequency=120;General.neo_mode=true".</summary>
+    public void SetValues(string spec)
+    {
+        foreach (string pair in spec.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] kv = pair.Split('=', 2);
+            if (AllRows.FirstOrDefault(x => x.Key.Equals(kv[0].Trim(), StringComparison.OrdinalIgnoreCase)) is not { } row) continue;
+            string v = kv[1].Trim();
+            switch (row.Kind)
+            {
+                case RowKind.Toggle: row.BoolValue = v is "1" or "true" or "on"; break;
+                case RowKind.Choice: row.ChoiceValue = row.Choices.FirstOrDefault(c => c.Value.Equals(v, StringComparison.OrdinalIgnoreCase)) ?? row.ChoiceValue; break;
+                case RowKind.Slider: row.NumberValue = double.Parse(v, System.Globalization.CultureInfo.InvariantCulture); break;
+                default: row.TextValue = v; break;
+            }
+        }
+    }
+
+    public bool Save() => SaveConfig();
+
+    private void OnSave(object sender, RoutedEventArgs e) => SaveConfig();
+
+    /// <summary>Writes the rows into config.json, keeping every other key as it was (a copy of the first original is kept as config.json.hms-backup).</summary>
+    private bool SaveConfig()
+    {
+        if (_config == null) return false;
+        if (Emulators.Running() is { } emu)
+        {
+            StatusChanged?.Invoke($"{emu} is running: close the game before changing its settings.");
+            return false;
+        }
+        foreach (var row in AllRows)
+        {
+            string[] parts = row.Key.Split('.');
+            if (_config[parts[0]] is not JsonObject section) _config[parts[0]] = section = new JsonObject();
+            if (parts[1].EndsWith("*"))
+            {
+                string[] wh = (row.ChoiceValue?.Value ?? row.Fallback).Split('x');
+                section[parts[1].Replace("*", "width")] = long.Parse(wh[0]);
+                section[parts[1].Replace("*", "height")] = long.Parse(wh[1]);
+            }
+            else
+                section[parts[1]] = row.ToNode();
+        }
+        // fullscreen follows the display mode
+        if (_config["GPU"] is JsonObject gpu)
+            gpu["full_screen"] = Raw(gpu["full_screen_mode"]) is { } mode && mode != "Windowed";
+        try
+        {
+            string backup = ConfigFile + ".hms-backup";
+            if (!File.Exists(backup)) File.Copy(ConfigFile, backup);
+            File.WriteAllText(ConfigFile, _config.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }) + "\n");
+            SetDirty(false);
+            StatusChanged?.Invoke("Saved " + ConfigFile);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusChanged?.Invoke("Couldn't save the settings: " + ex.Message);
+            return false;
+        }
     }
 
     /// <summary>
@@ -251,11 +426,11 @@ public partial class Play24Page : UserControl
 
     private void OnBrowseInstall(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFolderDialog { Title = "Choose the NHL24 PC folder (the one with nhl24_new.exe)", InitialDirectory = _install };
+        var dlg = new OpenFolderDialog { Title = "Choose the NHL24 PC folder (the one with nhl24.exe)", InitialDirectory = _install };
         if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
         if (!IsInstall(dlg.FolderName))
         {
-            StatusChanged?.Invoke("No nhl24_new.exe in " + dlg.FolderName);
+            StatusChanged?.Invoke("No nhl24.exe in " + dlg.FolderName);
             return;
         }
         _settings.Nhl24Pc = dlg.FolderName;
@@ -276,15 +451,16 @@ public partial class Play24Page : UserControl
         }
         try
         {
-            string script = Path.Combine(_install, "tools", "launcher.ps1");
-            string exe = new[] { "nhl24_new.exe", "nhl24.exe" }.Select(x => Path.Combine(_install, x)).First(File.Exists);
-            var start = File.Exists(script)
-                ? new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\"") { CreateNoWindow = true }
-                : new ProcessStartInfo(exe);
+            // the launcher reads the same config, so unsaved changes are saved first
+            if (_dirty && !SaveConfig()) return;
+            string launcher = Launcher(), exe = Exe(_install);
+            var start = launcher == null ? new ProcessStartInfo(exe)
+                : launcher.EndsWith(".ps1") ? new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{launcher}\"") { CreateNoWindow = true }
+                : new ProcessStartInfo(launcher);
             start.WorkingDirectory = _install;
             start.UseShellExecute = false;
             Process.Start(start)?.Dispose();
-            StatusChanged?.Invoke(File.Exists(script) ? "Opened the NHL24 PC launcher: press Play there to start the game" : $"Started {Path.GetFileName(exe)}");
+            StatusChanged?.Invoke(launcher != null ? "Opened the NHL24 PC launcher: press Play there to start the game" : $"Started {Path.GetFileName(exe)}");
             _tick.Start();
         }
         catch (Exception ex)
@@ -293,6 +469,10 @@ public partial class Play24Page : UserControl
             PlayProblem.Visibility = Visibility.Visible;
         }
     }
+
+    /// <summary>The package's launcher: tools\launcher.ps1 (what older packages' shortcut runs), else launcher.exe, or null.</summary>
+    private string Launcher() =>
+        new[] { Path.Combine(_install, "tools", "launcher.ps1"), Path.Combine(_install, "launcher.exe") }.FirstOrDefault(File.Exists);
 
     private static Process[] Running() => GameProcesses.SelectMany(Process.GetProcessesByName).ToArray();
 

@@ -29,6 +29,7 @@ public partial class App : Application
     ///   --bapadvanced, --bapscroll Y, --bapsave;
     ///   for the Arenas page --arena LEVEL|NAME, --aview broadcast|end|bowl|overhead|ice, --alook "YAW,PITCH,DIST[,HEIGHT]",
     ///   --anoglass, --anoice, --anoroof, --anoprops, --anojumbo, --agameads (the game's centre-ice ads, not the team's);
+    ///   for NHL 24's Play page --p24pc DIR (another NHL24 PC folder), --p24set "GPU.vblank_frequency=120;GPU.window_*=1920x1080", --p24save, --p24scroll Y;
     ///   for the Videos page --vsearch TEXT, --vcat KIND, --vselect N [--vwait MS] [--vmp4 FILE]
     /// </summary>
     public static Dictionary<string, string> Args { get; } = new(StringComparer.OrdinalIgnoreCase);

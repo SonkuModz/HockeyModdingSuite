@@ -102,10 +102,6 @@ public partial class PlayPage : UserControl
 
     private void BuildSections()
     {
-        var languages = new[] { "Japanese", "English (US)", "French", "Spanish", "German", "Italian", "Dutch", "Portuguese", "Russian", "Korean",
-            "Chinese (Traditional)", "Chinese (Simplified)", "Finnish", "Swedish", "Danish", "Norwegian", "Polish", "Portuguese (Brazil)",
-            "English (UK)", "Turkish", "Spanish (Latin America)", "Arabic", "French (Canada)", "Czech", "Hungarian", "Greek", "Romanian", "Thai",
-            "Vietnamese", "Indonesian" };
         _sections = new List<SettingSection>
         {
             new()
@@ -147,7 +143,7 @@ public partial class PlayPage : UserControl
                 {
                     new() { Key = "user_name", Label = "User name", Hint = "Local user, 1–16 characters", Kind = RowKind.Text, Type = RowType.String, Fallback = "Kyty" },
                     new() { Key = "console_language", Label = "Console language", Kind = RowKind.Choice, Type = RowType.Int, Fallback = "1",
-                            Choices = languages.Select((l, i) => C(l, i.ToString(CultureInfo.InvariantCulture))).ToList() },
+                            Choices = ConsoleLanguages.Choices },
                     new() { Key = "skip_notice_screen", Label = "Skip intro logos", Hint = "Startup logos and notices", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
                     new() { Key = "network_connected", Label = "Network", Hint = "Let the game use the local network", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "false" },
                     new() { Key = "trophy_enabled", Label = "Trophy notifications", Kind = RowKind.Toggle, Type = RowType.Bool, Fallback = "true" },

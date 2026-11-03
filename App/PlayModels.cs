@@ -82,9 +82,23 @@ public sealed class SettingRow : Observable
     /// <summary>Shows the value in effect and where it comes from.</summary>
     public void Load(KytySetup setup)
     {
-        _loading = true;
         var (node, from) = setup.Get(Key, Env);
-        string raw = node is JsonValue v ? v.ToString() : Fallback;
+        Show(node is JsonValue v ? v.ToString() : Fallback);
+        Source = from == KytySetup.Layer.Default ? "Default" : from.ToString();
+        Overridden = from == KytySetup.Layer.Profile;
+    }
+
+    /// <summary>Shows a value from a single file (no layers to say it came from).</summary>
+    public void Load(string raw)
+    {
+        Show(raw ?? Fallback);
+        Source = "";
+        Overridden = false;
+    }
+
+    private void Show(string raw)
+    {
+        _loading = true;
         switch (Kind)
         {
             case RowKind.Toggle:
@@ -101,8 +115,6 @@ public sealed class SettingRow : Observable
                 TextValue = raw ?? "";
                 break;
         }
-        Source = from == KytySetup.Layer.Default ? "Default" : from.ToString();
-        Overridden = from == KytySetup.Layer.Profile;
         _loading = false;
     }
 
@@ -134,6 +146,17 @@ public sealed class SettingRow : Observable
         RowType.Number => JsonValue.Create(double.Parse(Fallback, CultureInfo.InvariantCulture)),
         _ => JsonValue.Create(Fallback),
     };
+}
+
+/// <summary>The PS4/PS5 system languages, in console_language order.</summary>
+public static class ConsoleLanguages
+{
+    public static readonly string[] Names = { "Japanese", "English (US)", "French", "Spanish", "German", "Italian", "Dutch", "Portuguese", "Russian", "Korean",
+        "Chinese (Traditional)", "Chinese (Simplified)", "Finnish", "Swedish", "Danish", "Norwegian", "Polish", "Portuguese (Brazil)",
+        "English (UK)", "Turkish", "Spanish (Latin America)", "Arabic", "French (Canada)", "Czech", "Hungarian", "Greek", "Romanian", "Thai",
+        "Vietnamese", "Indonesian" };
+
+    public static List<Choice> Choices => Names.Select((l, i) => new Choice(l, i.ToString(CultureInfo.InvariantCulture))).ToList();
 }
 
 public sealed class SettingSection
