@@ -21,7 +21,7 @@ public static partial class Replacements
     public static TextureReplacementPlan PlanTexture(AssetIndex index, string name, byte[] rgba, LocationIndex locations, TocCache tocs, Action<string> log = null, int layer = 0, byte[] arrayData = null, bool takeShared = false)
     {
         var res = index.GetRes(name) ?? throw new InvalidDataException($"No texture named {name}.");
-        var header = TextureHeader.Parse(index.Read(res));
+        var header = TextureHeader.Parse(index.Read(res), ps4: !index.Layout.IsPs5);
         string why = TextureBuilder.Unsupported(header);
         if (why != null) throw new NotSupportedException(why);
         byte[] raw = TextureBuilder.BuildChunk(header, rgba, log);

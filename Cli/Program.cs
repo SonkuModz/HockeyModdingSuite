@@ -241,7 +241,7 @@ public static class Program
                 t.Layer = int.TryParse(opts.Get("layer"), out int layerN) ? layerN : 0;
                 var h = t.Header;
                 Console.WriteLine($"{name}");
-                Console.WriteLine($"  {h.Width}x{h.Height} {h.Format.Name} mips={h.MipCount} first={h.FirstMip} u32/33={h.Unknown32}/{h.Unknown33} flags={h.Flags} " +
+                Console.WriteLine($"  {h.Type} d={h.Depth} s={h.SliceCount} {h.Width}x{h.Height} {h.Format.Name} mips={h.MipCount} first={h.FirstMip} u32/33={h.Unknown32}/{h.Unknown33} flags={h.Flags} " +
                                   $"chunk={t.Data.Length:N0} (header says {h.ChunkSize:N0}) mipSizes=[{string.Join(",", h.MipSizes.Take(Math.Max(1, (int)h.MipCount)))}] " +
                                   $"offsets={h.MipOffsets[0]},{h.MipOffsets[1]}");
                 t.DecodeLargest();

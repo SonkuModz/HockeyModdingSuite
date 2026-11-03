@@ -33,6 +33,8 @@ public enum TextureType : uint
 ///   +0 mip offsets[2], +8 type, +12 pixel format, +16 pool id, +20 flags, +22 width, +24 height, +26 depth,
 ///   +28 slice count, +30 mip count, +31 first mip, +32/+33 unknown u8s, +40 chunk id, +56 mip sizes[15],
 ///   +116 chunk size, +120 hash of the texture's RES name.
+/// NHL 24's PS4 header (<see cref="Ps4"/>) lacks the two u8s: chunk id at +32, mip sizes at +48, chunk size at +108,
+/// name hash at +112, texture group at +116.
 /// </summary>
 public sealed class TextureHeader
 {
@@ -41,7 +43,7 @@ public sealed class TextureHeader
 
     /// <summary>Layers of a 2D array (its slices); 1 for anything else. The chunk holds them one after another, each
     /// laid out like a plain 2D texture of <see cref="ChunkSize"/> bytes.</summary>
-    public int Layers => Type == TextureType.TT_2dArray ? Math.Max(1, (int)SliceCount) : 1;
+    public int Layers => Type == TextureType.TT_2dArray ? Math.Max(1, (int)(Ps4 ? Depth : SliceCount)) : 1;
     public int PixelFormatId { get; private set; }
     public TextureFormat Format => TextureFormat.Of(PixelFormatId);
     public uint PoolId { get; private set; }
@@ -59,7 +61,13 @@ public sealed class TextureHeader
     public uint ChunkSize { get; private set; }
     public uint NameHash { get; private set; }
 
-    public static TextureHeader Parse(byte[] res)
+    /// <summary>
+    /// NHL 24's PS4 layout: mips stored largest first from mip 0 (the bundle copy of a texture with
+    /// <see cref="FirstMip"/> &gt; 0 holds only the tail), arrays mip by mip, 8x8 Morton tiles (<see cref="Ps4Tiling"/>).
+    /// </summary>
+    public bool Ps4 { get; private set; }
+
+    public static TextureHeader Parse(byte[] res, bool ps4 = false)
     {
         if (res == null || res.Length < 124)
             throw new InvalidDataException($"A texture header is at least 124 bytes, this RES has {res?.Length ?? 0}.");
@@ -78,12 +86,17 @@ public sealed class TextureHeader
         t.SliceCount = S(28);
         t.MipCount = res[30];
         t.FirstMip = res[31];
-        t.Unknown32 = res[32];
-        t.Unknown33 = res[33];
-        t.ChunkId = new Guid(res.AsSpan(40, 16));
-        for (int i = 0; i < 15; i++) t.MipSizes[i] = U(56 + 4 * i);
-        t.ChunkSize = U(116);
-        t.NameHash = U(120);
+        t.Ps4 = ps4;
+        int at = ps4 ? 32 : 40;
+        if (!ps4)
+        {
+            t.Unknown32 = res[32];
+            t.Unknown33 = res[33];
+        }
+        t.ChunkId = new Guid(res.AsSpan(at, 16));
+        for (int i = 0; i < 15; i++) t.MipSizes[i] = U(at + 16 + 4 * i);
+        t.ChunkSize = U(at + 76);
+        t.NameHash = U(at + 80);
         return t;
     }
 
@@ -104,9 +117,13 @@ public sealed record TextureFormat(int Code, string Name, int BlockBytes, int Dx
     {
         0x36 => new(code, "BC1", 8, 71, "DXT1"),
         0x37 => new(code, "BC1 sRGB", 8, 72, "DXT1"),
+        0x38 => new(code, "BC1A", 8, 71, "DXT1"),
+        0x39 => new(code, "BC1A sRGB", 8, 72, "DXT1"),
+        0x3E => new(code, "BC4", 8, 80, "ATI1"),
         0x3C => new(code, "BC3", 16, 77, "DXT5"),
         0x3D => new(code, "BC3 sRGB", 16, 78, "DXT5"),
         0x3F => new(code, "BC5", 16, 83, "ATI2"),
+        0x40 => new(code, "BC6H HDR", 0, 95, null),
         0x42 => new(code, "BC7", 16, 98, null),
         0x43 => new(code, "BC7 sRGB", 16, 99, null),
         _ => new(code, $"0x{code:X2}", 0, 0, null),

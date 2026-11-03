@@ -6,6 +6,7 @@ public static class TextureBuilder
     /// <summary>Why a texture can't be replaced (null if it can): arrays, cubes and volumes are not handled, nor unknown formats.</summary>
     public static string Unsupported(TextureHeader h)
     {
+        if (h.Ps4) return "Replacing NHL 24 textures isn't ready yet: for now they can be viewed and exported.";
         if (h.Type != TextureType.TT_2d && h.Type != TextureType.TT_2dArray) return $"{h.Type} textures can't be replaced yet (only 2D textures and 2D arrays).";
         if (h.Type == TextureType.TT_2d && (h.Depth > 1 || h.SliceCount > 1)) return "This texture has several slices but isn't an array; it can't be replaced yet.";
         if (!h.Format.Known) return $"Pixel format {h.Format.Name} has no encoder.";

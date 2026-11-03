@@ -61,7 +61,7 @@ public sealed class ModService
     public Task<TextureReplacementPlan> PlanTextureAsync(string name, string imageFile, Action<string> note, bool takeShared = false) => Run(() =>
     {
         var res = Index.GetRes(name) ?? throw new InvalidDataException($"No texture named {name}.");
-        var header = TextureHeader.Parse(Index.Read(res));
+        var header = TextureHeader.Parse(Index.Read(res), ps4: !Index.Layout.IsPs5);
         string why = TextureBuilder.Unsupported(header);
         if (why != null) throw new NotSupportedException(why);
         var (rgba, w, h) = ImageLoader.Load(imageFile);
@@ -90,7 +90,7 @@ public sealed class ModService
             var plan = await Run(() =>
             {
                 var res = Index.GetRes(name) ?? throw new InvalidDataException($"No texture named {name}.");
-                var header = TextureHeader.Parse(Index.Read(res));
+                var header = TextureHeader.Parse(Index.Read(res), ps4: !Index.Layout.IsPs5);
                 var (rgba, w, h) = ImageLoader.Load(imageFile);
                 if (w != header.Width || h != header.Height)
                 {

@@ -59,7 +59,7 @@ public partial class TexturePage : UserControl
         _service = new TextureService(index);
         _all = index.Ebx.Values.Where(e => e.Type is "TextureAsset" or "TextureArrayAsset" && index.GetRes(e.Name) != null)
             .Select(e => e.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-        Summary.Text = $"{_all.Count:N0} textures  ·  decoded on the fly (PS5 tiling, BC1 / BC3 / BC5 / BC7)";
+        Summary.Text = $"{_all.Count:N0} textures  ·  decoded on the fly ({(index.Layout.IsPs5 ? "PS5" : "PS4")} tiling, BC1 / BC3 / BC4 / BC5 / BC7)";
         Refresh();
     }
 

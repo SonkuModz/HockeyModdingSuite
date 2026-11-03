@@ -17,9 +17,10 @@ public static class BcDecoder
             for (int bx = 0; bx < bw; bx++)
             {
                 var block = blocks.Slice((by * bw + bx) * format.BlockBytes, format.BlockBytes);
-                switch (format.BlockBytes == 8 ? "BC1" : format.Name[..3])
+                switch (format.Name[..3])
                 {
                     case "BC1": Bc1(block, px, opaqueOnly: false); break;
+                    case "BC4": Bc4Gray(block, px); break;
                     case "BC3": Bc3(block, px); break;
                     case "BC5": Bc5(block, px); break;
                     default: Bc7(block, px); break;
@@ -94,6 +95,17 @@ public static class BcDecoder
         for (int i = 0; i < 6; i++) bits |= (ulong)b[2 + i] << (8 * i);
         for (int i = 0; i < 16; i++)
             px[i * 4 + channel] = a[(int)((bits >> (3 * i)) & 7)];
+    }
+
+    /// <summary>BC4: one channel, shown as grey.</summary>
+    private static void Bc4Gray(ReadOnlySpan<byte> b, Span<byte> px)
+    {
+        Bc4(b, px, 0);
+        for (int i = 0; i < 16; i++)
+        {
+            px[i * 4 + 1] = px[i * 4 + 2] = px[i * 4];
+            px[i * 4 + 3] = 255;
+        }
     }
 
     private static void Bc3(ReadOnlySpan<byte> b, Span<byte> px)
@@ -362,7 +374,7 @@ public sealed class Texture
     public static Texture Load(AssetIndex index, string name, bool decode = true)
     {
         var res = index.GetRes(name) ?? throw new InvalidDataException($"No RES named {name}.");
-        var header = TextureHeader.Parse(index.Read(res));
+        var header = TextureHeader.Parse(index.Read(res), ps4: !index.Layout.IsPs5);
         // A streamed texture's bundle lists only part of its chunk (the small mips); the whole chunk, every mip, is in a
         // TOC chunk table under the same id. Take the copy whose size matches the header, else the largest.
         var candidates = (index.TableChunks.GetValueOrDefault(header.ChunkId) ?? new List<ChunkEntry>()).ToList();
@@ -411,6 +423,13 @@ public sealed class Texture
     /// <summary>Stored bytes of mip <paramref name="mip"/> (a tail mip: the shared tail tile).</summary>
     public int MipBytes(int mip)
     {
+        if (Header.Ps4)
+        {
+            if (mip < 15 && Header.MipSizes[mip] != 0)
+                return (int)Header.MipSizes[mip];
+            var (pw, ph) = Header.MipSize(mip);
+            return Ps4Tiling.TiledSize((pw + 3) / 4, (ph + 3) / 4, Header.Format.BlockBytes);
+        }
         int entry = TailStart >= 0 ? Math.Min(mip, TailStart) : mip;
         if (entry < 15 && Header.MipSizes[entry] != 0)
             return (int)Header.MipSizes[entry];
@@ -421,6 +440,20 @@ public sealed class Texture
     /// <summary>Where mip <paramref name="mip"/> starts in <see cref="Data"/> (mips are stored smallest first, mip 0 last); negative when the chunk does not hold it.</summary>
     public long MipStart(int mip)
     {
+        if (Header.Ps4)
+        {
+            // largest first, mip by mip, each mip's layers one after another; a chunk without the large mips (the
+            // bundle copy of a texture with FirstMip > 0) is the full chain's tail
+            int layers = Header.Layers;
+            long full = 0, start = 0;
+            for (int i = 0; i < MipCount; i++)
+            {
+                if (i == mip) start = full + (long)Math.Clamp(Layer, 0, layers - 1) * MipBytes(i);
+                full += (long)MipBytes(i) * layers;
+            }
+            long at = start - Math.Max(0, full - Data.Length);
+            return at >= 0 && at + MipBytes(mip) <= Data.Length ? at : -1;
+        }
         int entry = TailStart >= 0 ? Math.Min(mip, TailStart) : mip;
         long end = Data.Length;
         // an array's layers each take the header's chunk size, in order
@@ -469,8 +502,16 @@ public sealed class Texture
         Mip = mip;
         Width = w;
         Height = h;
-        int tail = TailStart;
         var stored = Data.AsSpan((int)MipStart(mip), MipBytes(mip));
+        if (Header.Ps4)
+        {
+            Blocks = (Header.Flags & TextureFlags.Swizzle) != 0
+                ? Ps4Tiling.Untile(stored, bw, bh, f.BlockBytes)
+                : stored[..Math.Min(stored.Length, bw * bh * f.BlockBytes)].ToArray();
+            Rgba = BcDecoder.Decode(Blocks, w, h, f);
+            return;
+        }
+        int tail = TailStart;
         Blocks = tail >= 0 && mip >= tail ? MipTail.Unpack(stored, mip - tail, bw, bh, f.BlockBytes) : Ps5Swizzle.Deswizzle(stored, bw, bh, f.BlockBytes);
         Rgba = BcDecoder.Decode(Blocks, w, h, f);
     }
