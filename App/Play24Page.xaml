@@ -132,6 +132,13 @@
                                 <TextBlock x:Name="RunsText" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" LineHeight="17" />
                             </Border>
                             <TextBlock x:Name="RunsWarning" Foreground="{StaticResource Patch}" Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+                            <Button x:Name="FixLinkButton" Style="{StaticResource Ghost}" HorizontalAlignment="Left" Margin="-8,6,0,0" Click="OnFixLink" Visibility="Collapsed"
+                                    ToolTip="Makes NHL24 PC's game link point at the NHL 24 folder HMS has open, so the game plays what HMS changes">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE71B;" Style="{StaticResource Icon}" FontSize="13" />
+                                    <TextBlock Text="Point it at HMS's NHL 24 folder" Margin="8,0,0,0" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Border>
 

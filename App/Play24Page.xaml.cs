@@ -171,6 +171,7 @@ public partial class Play24Page : UserControl
     private void ShowRunsGame()
     {
         RunsWarning.Visibility = Visibility.Collapsed;
+        FixLinkButton.Visibility = Visibility.Collapsed;
         if (_install == null)
         {
             RunsText.Text = "–";
@@ -180,12 +181,11 @@ public partial class Play24Page : UserControl
         if (runs == null)
         {
             // game is usually a link to the extracted dump: say where it points when that's gone
-            string game = Path.Combine(_install, "game");
-            string target = null;
-            try { target = new DirectoryInfo(game).LinkTarget; } catch (IOException) { }
+            string game = Nhl24Pc.GameLink(_install);
+            string target = Nhl24Pc.LinkTarget(_install);
+            CanFixLink();
             if (target != null)
             {
-                target = target.StartsWith(@"\??\") ? target[4..] : target;
                 RunsText.Text = $"{game}\n→ {target}";
                 RunsWarning.Text = "That folder doesn't exist any more (moved or renamed?), so NHL24 PC can't start the game. Point the game link at your NHL 24 folder again.";
             }
@@ -203,7 +203,36 @@ public partial class Play24Page : UserControl
         {
             RunsWarning.Text = $"That isn't the folder HMS has open ({_gameDir}), so changes made here won't show in this game.";
             RunsWarning.Visibility = Visibility.Visible;
+            if (!runs.EndsWith("game-UPDATE", StringComparison.OrdinalIgnoreCase)) CanFixLink();
         }
+    }
+
+    /// <summary>Offers to relink install\game when HMS has an NHL 24 dump open and game is a link (or missing).</summary>
+    private void CanFixLink()
+    {
+        string game = Nhl24Pc.GameLink(_install);
+        bool fixable = File.Exists(Path.Combine(_gameDir ?? "", "eboot.bin")) && GameProfile.Detect(_gameDir).Kind == GameKind.Nhl24
+                       && (Nhl24Pc.LinkTarget(_install) != null || !Directory.Exists(game));
+        FixLinkButton.Visibility = fixable ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnFixLink(object sender, RoutedEventArgs e)
+    {
+        string game = Nhl24Pc.GameLink(_install), old = Nhl24Pc.LinkTarget(_install);
+        string ask = $"Point NHL24 PC's game link at the NHL 24 folder HMS has open?\n\n{game}\n→ {_gameDir}\n\n"
+                     + (old != null ? $"It points at {old} now. Only the link changes: no game files are moved or deleted.\n\n" : "")
+                     + "From then on, NHL24 PC's launcher writes its resolution and FPS patches into that folder's eboot.bin when you play.";
+        if (MessageBox.Show(Window.GetWindow(this), ask, "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try
+        {
+            Nhl24Pc.Relink(_install, _gameDir);
+            StatusChanged?.Invoke($"NHL24 PC now plays {_gameDir}" + (old != null ? $" (it was {old})" : ""));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(Window.GetWindow(this), "Couldn't change the link: " + ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        ShowRunsGame();
     }
 
     /// <summary>A folder with its links (junctions) followed.</summary>

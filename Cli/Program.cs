@@ -89,6 +89,7 @@ public static class Program
                 "roundtrip" => RoundtripCmd(game, opts),
                 "sound" => SoundCmd(game, opts),
                 "movies" => MoviesCmd(game, opts),
+                "nhl24pc" => Nhl24PcCmd(opts),
                 "movie-replace" => MovieReplaceCmd(game, opts),
                 _ => Unknown(args[0]),
             };
@@ -1171,6 +1172,19 @@ public static class Program
             if (find != null && !line.Contains(find, StringComparison.OrdinalIgnoreCase)) continue;
             Console.WriteLine($"  [{i}] {line}");
             shown++;
+        }
+        return 0;
+    }
+
+    /// <summary>nhl24pc --install DIR [--relink DUMP]: where NHL24 PC's game link points, and repoints it.</summary>
+    private static int Nhl24PcCmd(Options opts)
+    {
+        string install = opts.Get("install") ?? throw new ArgumentException("--install DIR");
+        Console.WriteLine($"{Nhl24Pc.GameLink(install)} -> {Nhl24Pc.LinkTarget(install) ?? "(not a link)"}");
+        if (opts.Get("relink") is { } dump)
+        {
+            string old = Nhl24Pc.Relink(install, dump);
+            Console.WriteLine($"relinked (was {old ?? "nothing"}): now -> {Nhl24Pc.LinkTarget(install)}");
         }
         return 0;
     }
