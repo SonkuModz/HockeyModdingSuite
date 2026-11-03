@@ -412,6 +412,7 @@
 
                 <!-- ======================================================== play page -->
                 <local:PlayPage x:Name="PlayPage" Grid.Column="1" Visibility="Collapsed" />
+                <local:Play24Page x:Name="Play24Page" Grid.Column="1" Visibility="Collapsed" />
 
                 <!-- ======================================================== settings page -->
                 <ScrollViewer x:Name="SettingsPage" Grid.Column="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">

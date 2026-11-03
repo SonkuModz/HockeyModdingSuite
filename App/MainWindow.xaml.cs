@@ -62,6 +62,9 @@ public partial class MainWindow : Window
         PlayPage.StateChanged += SetState;
         PlayPage.StatusChanged += text => Status.Text = text;
         PlayPage.Init(_settings, Game, _titleId, _title, _version);
+        Play24Page.StateChanged += SetState;
+        Play24Page.StatusChanged += text => Status.Text = text;
+        Play24Page.Init(_settings, Game, _titleId, _title, _version);
         TexturePage.StatusChanged += text => Status.Text = text;
         TexturePage.ShowInExplorer += ShowAssetInExplorer;
         SoundPage.StatusChanged += text => Status.Text = text;
@@ -644,7 +647,7 @@ public partial class MainWindow : Window
         (sender as FrameworkElement)?.BringIntoView();
         // the page that's now showing glides in
         Motion.Enter(new FrameworkElement[] { ExplorerPage, TexturePage, SoundPage, VideoPage, ModsPage, RosterPage, UniformsPage, StudioPage, UnusedPage, ScorebugPage,
-            DatabasePage, TuningPage, BeAProPage, ArenasPage, TeamsPage, PlayPage, SettingsPage }.FirstOrDefault(p => p.Visibility == Visibility.Visible));
+            DatabasePage, TuningPage, BeAProPage, ArenasPage, TeamsPage, PlayPage, Play24Page, SettingsPage }.FirstOrDefault(p => p.Visibility == Visibility.Visible));
     }
 
     private void ShowPage(object sender)
@@ -677,7 +680,10 @@ public partial class MainWindow : Window
         if (sender != NavSounds) SoundPage.StopPlayback();
         if (sender != NavVideos) VideoPage.StopPlayback();
         if (sender != NavExplorer) ExplorerPlayer.Stop();
-        PlayPage.Visibility = sender == NavPlay ? Visibility.Visible : Visibility.Collapsed;
+        // NHL 24 plays on NHL24 PC, NHL 27 on KytyPS5
+        bool ps4 = _profile?.Kind == GameKind.Nhl24;
+        PlayPage.Visibility = sender == NavPlay && !ps4 ? Visibility.Visible : Visibility.Collapsed;
+        Play24Page.Visibility = sender == NavPlay && ps4 ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = sender == NavSettings ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -834,13 +840,16 @@ public partial class MainWindow : Window
         bool ps4 = _profile.Kind == GameKind.Nhl24;
         var all = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTuning, NavTeams, NavArenas,
             NavBeAPro, NavUniforms, NavStudio, NavUnused, NavScorebug, NavMods, NavSettings };
-        var nhl24 = new[] { NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTeams, NavMods, NavSettings };
+        var nhl24 = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTeams, NavMods, NavSettings };
         foreach (var nav in all)
             nav.Visibility = !ps4 || nhl24.Contains(nav) ? Visibility.Visible : Visibility.Collapsed;
         ComingSoonArenas.Visibility = ps4 ? Visibility.Collapsed : Visibility.Visible;
         // the page that's open may have gone
         if (all.FirstOrDefault(n => n.IsChecked == true) is { Visibility: Visibility.Collapsed })
             NavExplorer.IsChecked = true;
+        // Play is for both games, but each has its own page
+        else if (NavPlay.IsChecked == true)
+            ShowPage(NavPlay);
         FillGamePicker();
     }
 
@@ -863,6 +872,7 @@ public partial class MainWindow : Window
         TuningPage.GameDir = Game;
         ShowGameInfo();
         PlayPage.Init(_settings, Game, _titleId, _title, _version);
+        Play24Page.Init(_settings, Game, _titleId, _title, _version);
         BeAProPage.Init(_settings, _titleId);
         if (KitPaths.IsGame(Game))
             await LoadIndex(rebuild: false);

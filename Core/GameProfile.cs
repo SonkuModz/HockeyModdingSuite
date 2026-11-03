@@ -98,7 +98,7 @@ public sealed record GameProfile(GameKind Kind, string Title, string TitleId, st
 /// <summary>The emulators that read the game's files while they run: nothing may be written then.</summary>
 public static class Emulators
 {
-    private static readonly (string Process, string Name)[] Known = { ("kyty_emulator", "KytyPS5"), ("nhl24", "NHL24 PC"), ("shadPS4", "shadPS4") };
+    private static readonly (string Process, string Name)[] Known = { ("kyty_emulator", "KytyPS5"), ("nhl24_new", "NHL24 PC"), ("nhl24", "NHL24 PC"), ("shadPS4", "shadPS4") };
 
     /// <summary>The name of a running emulator, or null.</summary>
     public static string Running()

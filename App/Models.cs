@@ -210,6 +210,8 @@ public sealed class Settings
     public bool AskForGame { get; set; } = true;
     /// <summary>kyty_emulator.exe to launch; empty means the launcher's choice or the newest build next to the kit.</summary>
     public string Emulator { get; set; }
+    /// <summary>The NHL24 PC folder (the one with nhl24_new.exe), when it isn't found by itself.</summary>
+    public string Nhl24Pc { get; set; }
 
     private static string File => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NHL27Kit", "settings.json");
 

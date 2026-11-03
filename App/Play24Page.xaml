@@ -1,0 +1,158 @@
+<UserControl x:Class="NHL27Kit.App.Play24Page"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto">
+        <Grid Margin="22,18,22,22">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ============================================================ hero -->
+            <Border CornerRadius="14" Height="300" ClipToBounds="True" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <Border.Background>
+                    <ImageBrush x:Name="HeroArt" Stretch="UniformToFill" AlignmentX="Right" AlignmentY="Center" />
+                </Border.Background>
+                <Grid>
+                    <Border CornerRadius="13">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#F20C0E12" Offset="0" />
+                                <GradientStop Color="#C80C0E12" Offset="0.42" />
+                                <GradientStop Color="#300C0E12" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <Border CornerRadius="13">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#000C0E12" Offset="0.55" />
+                                <GradientStop Color="#B00C0E12" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <StackPanel VerticalAlignment="Bottom" Margin="34,0,34,30">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="92" Height="92" CornerRadius="16" ClipToBounds="True" BorderBrush="#33FFFFFF" BorderThickness="1">
+                                <Border.Background>
+                                    <ImageBrush x:Name="IconArt" Stretch="UniformToFill" />
+                                </Border.Background>
+                            </Border>
+                            <StackPanel Margin="20,0,0,0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Style="{StaticResource Pill}" Padding="8,1">
+                                        <TextBlock Text="PS4" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource Accent}" />
+                                    </Border>
+                                    <TextBlock x:Name="HeroMeta" Foreground="{StaticResource TextDim}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock x:Name="HeroTitle" Text="NHL 24" FontFamily="{StaticResource DisplayFont}" FontSize="38" FontWeight="Bold" Margin="0,4,0,0" />
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="&#xE916;" Style="{StaticResource Icon}" FontSize="12" Foreground="{StaticResource Muted}" />
+                                    <TextBlock x:Name="Playtime" Foreground="{StaticResource TextDim}" Margin="7,0,0,0" />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                            <Button x:Name="PlayButton" Style="{StaticResource Primary}" Padding="30,0" Height="46" FontSize="15" Click="OnPlay"
+                                    ToolTip="Opens the NHL24 PC launcher: check the settings there, then press its Play">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" FontSize="15" />
+                                    <TextBlock Text="Play" Margin="10,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="StopButton" Style="{StaticResource DangerButton}" Padding="22,0" Height="46" FontSize="15" Click="OnStop" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE71A;" Style="{StaticResource Icon}" FontSize="14" />
+                                    <TextBlock Text="Stop" Margin="10,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource ButtonBase}" Background="#33FFFFFF" BorderBrush="#40FFFFFF" Height="46" Padding="18,0" Margin="10,0,0,0" Click="OnOpenInstall"
+                                    ToolTip="Open the NHL24 PC folder">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE838;" Style="{StaticResource Icon}" FontSize="14" />
+                                    <TextBlock Text="NHL24 PC folder" Margin="9,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <StackPanel x:Name="RunningBadge" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                                <Ellipse Width="8" Height="8" Fill="{StaticResource Good}" />
+                                <TextBlock x:Name="RunningText" Text="Running" Margin="8,0,0,0" Foreground="{StaticResource Text}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock x:Name="PlayProblem" Foreground="{StaticResource Danger}" Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ============================================================ settings + install -->
+            <Grid Grid.Row="1" Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="420" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <Border Style="{StaticResource Card}" Padding="20,16,20,12" Margin="0,0,0,12">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Text="&#xE7F4;" Style="{StaticResource Icon}" FontSize="15" Foreground="{StaticResource Accent}" />
+                                <TextBlock Text="Launcher settings" FontSize="14.5" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                                <TextBlock Text="change them in the launcher, which opens when you press Play" Style="{StaticResource Caption}" Margin="10,1,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ItemsControl x:Name="LauncherRows">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,10">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontWeight="SemiBold" Foreground="{StaticResource Text}" />
+                                                <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextDim}" />
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="LauncherCaption" Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- right column -->
+                <StackPanel Grid.Column="2">
+                    <Border Style="{StaticResource Card}" Padding="18">
+                        <StackPanel>
+                            <TextBlock Text="NHL24 PC" Style="{StaticResource Overline}" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="…" Width="36" Height="36" Padding="0" Margin="8,0,0,0" Click="OnBrowseInstall" ToolTip="Choose the NHL24 PC folder (the one with nhl24_new.exe)" />
+                                <TextBox x:Name="InstallPath" FontFamily="{StaticResource MonoFont}" FontSize="11.5" IsReadOnly="True" />
+                            </DockPanel>
+                            <TextBlock x:Name="InstallInfo" Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+                            <TextBlock Text="GAME IT RUNS" Style="{StaticResource Overline}" Margin="0,18,0,6" />
+                            <Border Background="#0A0C10" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="12,10">
+                                <TextBlock x:Name="RunsText" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{StaticResource TextDim}" TextWrapping="Wrap" LineHeight="17" />
+                            </Border>
+                            <TextBlock x:Name="RunsWarning" Foreground="{StaticResource Patch}" Margin="0,10,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Padding="18" Margin="0,12,0,0">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Ghost}" Padding="6,3" Click="OnOpenLog" ToolTip="Open the full log">
+                                    <TextBlock Text="&#xE8A7;" Style="{StaticResource Icon}" FontSize="12" />
+                                </Button>
+                                <TextBlock Text="CONSOLE" Style="{StaticResource Overline}" Margin="0" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <Border Background="#0A0C10" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Height="300">
+                                <ScrollViewer x:Name="ConsoleScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="12,10">
+                                    <TextBlock x:Name="ConsoleText" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Foreground="{StaticResource Muted}" TextWrapping="Wrap"
+                                               Text="The emulator's log shows here." />
+                                </ScrollViewer>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
