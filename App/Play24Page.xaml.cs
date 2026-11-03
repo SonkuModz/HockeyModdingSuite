@@ -339,9 +339,21 @@ public partial class Play24Page : UserControl
         }
     }
 
+    /// <summary>The folder of the eboot.bin NHL24 PC last started (user\game_path.txt), when it's still there.</summary>
+    private string LastStarted()
+    {
+        try
+        {
+            string eboot = File.Exists(User("game_path.txt")) ? File.ReadAllText(User("game_path.txt")).Trim() : null;
+            return !string.IsNullOrEmpty(eboot) && File.Exists(eboot) ? Path.GetDirectoryName(eboot) : null;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException) { return null; }
+    }
+
     /// <summary>
-    /// The game folder NHL24 PC runs: game-UPDATE when there is one, else game (often a link to the extracted dump).
-    /// Mods only reach the game when that's the folder HMS writes to.
+    /// The game folder NHL24 PC runs: the one it last started (newer launchers pick any folder), else game-UPDATE when
+    /// there is one, else game (often a link to the extracted dump). Mods only reach the game when that's the folder HMS
+    /// writes to.
     /// </summary>
     private void ShowRunsGame()
     {
@@ -352,7 +364,8 @@ public partial class Play24Page : UserControl
             RunsText.Text = "–";
             return;
         }
-        string runs = new[] { "game-UPDATE", "game" }.Select(d => Path.Combine(_install, d)).FirstOrDefault(d => File.Exists(Path.Combine(d, "eboot.bin")));
+        string last = LastStarted();
+        string runs = last ?? new[] { "game-UPDATE", "game" }.Select(d => Path.Combine(_install, d)).FirstOrDefault(d => File.Exists(Path.Combine(d, "eboot.bin")));
         if (runs == null)
         {
             // game is usually a link to the extracted dump: say where it points when that's gone
@@ -376,9 +389,11 @@ public partial class Play24Page : UserControl
         RunsText.Text = real.Equals(runs, StringComparison.OrdinalIgnoreCase) ? runs : $"{runs}\n→ {real}";
         if (KitPaths.IsGame(_gameDir) && !Same(real, _gameDir))
         {
-            RunsWarning.Text = $"That isn't the folder HMS has open ({_gameDir}), so changes made here won't show in this game.";
+            RunsWarning.Text = $"That isn't the folder HMS has open ({_gameDir}), so changes made here won't show in this game."
+                               + (last != null ? " Pick the NHL 24 folder in NHL24 PC's launcher." : "");
             RunsWarning.Visibility = Visibility.Visible;
-            if (!runs.EndsWith("game-UPDATE", StringComparison.OrdinalIgnoreCase)) CanFixLink();
+            // relinking game only helps when that's what runs
+            if (last == null && !runs.EndsWith("game-UPDATE", StringComparison.OrdinalIgnoreCase)) CanFixLink();
         }
     }
 
