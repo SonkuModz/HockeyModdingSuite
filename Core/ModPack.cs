@@ -29,7 +29,7 @@ public sealed class PackManifest
 public static class ModPack
 {
     public const string Extension = ".nhl27mod";
-    public const string Filter = "NHL27Kit mod pack|*.nhl27mod";
+    public const string Filter = "HMS mod pack|*.nhl27mod";
 
     /// <summary>
     /// Writes a pack of these mods. <paramref name="dbBytes"/> gives a database's current bytes in the game (its mod must

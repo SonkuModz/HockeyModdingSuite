@@ -42,7 +42,7 @@ public static unsafe class Oodle
                 }
             }
             if (path == null)
-                throw new FileNotFoundException("Oodle (oo2core_9_win64.dll) was not found next to NHL27Kit.");
+                throw new FileNotFoundException("Oodle (oo2core_9_win64.dll) was not found. Copy it from your FMT folder next to HMS.exe.");
             nint lib = NativeLibrary.Load(path);
             _decompress = Marshal.GetDelegateForFunctionPointer<DecompressFn>(NativeLibrary.GetExport(lib, "OodleLZ_Decompress"));
             _compress = Marshal.GetDelegateForFunctionPointer<CompressFn>(NativeLibrary.GetExport(lib, "OodleLZ_Compress"));
