@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     private CancellationTokenSource _filterCts, _previewCts;
     private bool _suppress;
     private string _title, _version, _titleId;
+    /// <summary>The game in the game folder (NHL 27 or NHL 24): which pages show, and its own cache and mods.</summary>
+    private GameProfile _profile = GameProfile.None;
 
     public MainWindow()
     {
@@ -41,7 +43,9 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        GameDir.Text = KitPaths.IsGame(_settings.GameDir) ? _settings.GameDir : KitPaths.FindGame() ?? _settings.GameDir ?? "";
+        // --game DIR opens another game for this run without changing the saved choice (scripted shots)
+        GameDir.Text = App.Args.TryGetValue("game", out var argGame) ? argGame
+            : KitPaths.IsGame(_settings.GameDir) ? _settings.GameDir : KitPaths.FindGame() ?? _settings.GameDir ?? "";
         ShowGameInfo();
         PlayPage.StateChanged += SetState;
         PlayPage.StatusChanged += text => Status.Text = text;
@@ -106,36 +110,36 @@ public partial class MainWindow : Window
     {
         var props = new List<Property>();
         bool ok = KitPaths.IsGame(Game);
-        GameCheck.Text = ok ? "✓  Found Data\\layout.toc" : "No Data\\layout.toc in this folder.";
+        _profile = ok ? GameProfile.Detect(Game) : GameProfile.None;
+        GameCheck.Text = !ok ? "No Data\\layout.toc in this folder."
+            : _profile.Kind == GameKind.Unknown ? "✓  Found Data\\layout.toc, but it isn't NHL 27 or NHL 24: pages may not read it."
+            : $"✓  {_profile.Name} ({_profile.Platform}) found";
         GameCheck.Foreground = (Brush)FindResource(ok ? "Good" : "Danger");
         if (ok)
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(Game, "sce_sys", "param.json")));
-                var r = doc.RootElement;
-                string S(string k) => r.TryGetProperty(k, out var v) ? v.ToString() : "—";
-                string title = r.TryGetProperty("localizedParameters", out var lp) && lp.TryGetProperty("en-US", out var en) && en.TryGetProperty("titleName", out var tn) ? tn.GetString() : "NHL 27";
-                props.Add(new Property("Title", title));
-                props.Add(new Property("Title id", S("titleId"), true));
-                props.Add(new Property("Content id", S("contentId"), true));
-                props.Add(new Property("Version", S("contentVersion"), true));
-                (_title, _version, _titleId) = (title, S("contentVersion"), S("titleId"));
-                GameBadge.Text = $"{title}  ·  PS5  ·  v{S("contentVersion")}";
-            }
-            catch
-            {
-                props.Add(new Property("Title", "NHL 27 (param.json unreadable)"));
-            }
-            bool patched = Directory.Exists(Path.Combine(Game, "Patch"));
+            string title = _profile.Title ?? _profile.Name;
+            props.Add(new Property("Game", $"{_profile.Name}  ·  {_profile.Platform}"));
+            props.Add(new Property("Title", title));
+            props.Add(new Property("Title id", _profile.TitleId ?? "—", true));
+            props.Add(new Property("Content id", _profile.ContentId ?? "—", true));
+            props.Add(new Property("Version", _profile.Version ?? "—", true));
+            (_title, _version, _titleId) = (title, _profile.Version, _profile.TitleId);
+            GameBadge.Text = _profile.Badge;
+            SplashGame.Text = $"{_profile.Name}  ·  {_profile.Platform}  ·  MODDING KIT";
+            string patchDir = Path.Combine(Game, "Patch");
+            bool patched = Directory.Exists(patchDir) && Directory.EnumerateFileSystemEntries(patchDir).Any();
             props.Add(new Property("Patch", patched ? "Installed (Patch\\ overrides Data\\)" : "None"));
         }
+        else
+            GameBadge.Text = "No game";
+        ApplyProfile();
         GameProps.ItemsSource = props;
         bool oodle = File.Exists(Path.Combine(AppContext.BaseDirectory, "oo2core_9_win64.dll"));
         KitProps.ItemsSource = new List<Property>
         {
             new("Kit folder", KitPaths.Root, true),
-            new("Index cache", KitPaths.IndexFile, true),
+            new("Index cache", KitPaths.IndexFileFor(_profile), true),
+            new("Mod list", KitPaths.ModsFor(_profile), true),
             new("Exports", KitPaths.Export, true),
             new("Oodle", oodle ? "oo2core_9_win64.dll found" : "Missing: copy oo2core_9_win64.dll next to NHL27Kit.exe"),
         };
@@ -161,9 +165,11 @@ public partial class MainWindow : Window
         {
             var (index, ebx, res, chunks) = await Task.Run(() =>
             {
-                if (rebuild && File.Exists(KitPaths.IndexFile))
-                    File.Delete(KitPaths.IndexFile);
-                var ix = AssetIndex.Open(game, File.ReadAllBytes, KitPaths.IndexFile, line => Dispatcher.BeginInvoke(() => Status.Text = line.Trim()));
+                string cache = KitPaths.IndexFileFor(GameProfile.Detect(game));
+                Directory.CreateDirectory(Path.GetDirectoryName(cache));
+                if (rebuild && File.Exists(cache))
+                    File.Delete(cache);
+                var ix = AssetIndex.Open(game, File.ReadAllBytes, cache, line => Dispatcher.BeginInvoke(() => Status.Text = line.Trim()));
                 Dispatcher.BeginInvoke(() => Status.Text = "Building folders…");
                 return (ix, Catalog.Build(ix, AssetKind.Ebx), Catalog.Build(ix, AssetKind.Res), Catalog.Build(ix, AssetKind.Chunk));
             });
@@ -663,9 +669,96 @@ public partial class MainWindow : Window
         SettingsPage.Visibility = sender == NavSettings ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    // ================================================================ games (NHL 27, NHL 24)
+
+    /// <summary>A game folder for the switcher.</summary>
+    public sealed record GameChoice(string Dir, GameProfile Profile)
+    {
+        public string Label => $"{Profile.Name}  ·  {Profile.Platform}  ·  {Dir}";
+        public override string ToString() => Label;
+    }
+
+    /// <summary>The game folders the kit knows: the one open, ones picked before, and dumps found next to the kit.</summary>
+    private List<GameChoice> KnownGames() =>
+        new[] { Game }.Concat(_settings.Games).Concat(KitPaths.FindGames())
+            .Where(KitPaths.IsGame).Select(d => Path.GetFullPath(d).TrimEnd('\\', '/')).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(d => new GameChoice(d, GameProfile.Detect(d)))
+            .OrderBy(g => g.Profile.Kind == GameKind.Nhl27 ? 0 : g.Profile.Kind == GameKind.Nhl24 ? 1 : 2).ToList();
+
+    private void FillGamePicker()
+    {
+        var games = KnownGames();
+        _suppress = true;
+        GamePicker.ItemsSource = games;
+        GamePicker.SelectedItem = games.FirstOrDefault(g => g.Dir.Equals(Game, StringComparison.OrdinalIgnoreCase));
+        _suppress = false;
+    }
+
+    private void OnGamePicked(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppress || GamePicker.SelectedItem is not GameChoice g || g.Dir.Equals(Game, StringComparison.OrdinalIgnoreCase)) return;
+        SwitchGame(g.Dir);
+    }
+
+    /// <summary>The title bar's game: a menu of the known games, and Browse.</summary>
+    private void OnGameSwitch(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = GameSwitch, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        foreach (var g in KnownGames())
+        {
+            var item = new MenuItem
+            {
+                Header = $"{g.Profile.Name}  ·  {g.Profile.Platform}",
+                ToolTip = g.Dir,
+                IsCheckable = true,
+                IsChecked = g.Dir.Equals(Game, StringComparison.OrdinalIgnoreCase),
+            };
+            item.Click += (_, _) => { if (!g.Dir.Equals(Game, StringComparison.OrdinalIgnoreCase)) SwitchGame(g.Dir); };
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new Separator());
+        var browse = new MenuItem { Header = "Another game folder…" };
+        browse.Click += OnBrowseGame;
+        menu.Items.Add(browse);
+        menu.IsOpen = true;
+    }
+
+    /// <summary>Opens another game folder: its own index, mods and pages.</summary>
+    private void SwitchGame(string dir)
+    {
+        if (PlayPage.IsRunning)
+        {
+            MessageBox.Show(this, "The game is running. Close it before switching games.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Information);
+            FillGamePicker();
+            return;
+        }
+        GameDir.Text = dir;
+        OnGameDirChanged(null, null);
+    }
+
+    /// <summary>
+    /// Shows the pages that work for the open game. NHL 24 (PS4) starts with the ones that read any Frostbite game
+    /// (PLAN §28); the rest come as each is made to read and write NHL 24.
+    /// </summary>
+    private void ApplyProfile()
+    {
+        if (NavExplorer == null) return;
+        bool ps4 = _profile.Kind == GameKind.Nhl24;
+        var all = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTuning, NavTeams, NavArenas,
+            NavBeAPro, NavUniforms, NavStudio, NavUnused, NavScorebug, NavMods, NavSettings };
+        var nhl24 = new[] { NavExplorer, NavDatabase, NavMods, NavSettings };
+        foreach (var nav in all)
+            nav.Visibility = !ps4 || nhl24.Contains(nav) ? Visibility.Visible : Visibility.Collapsed;
+        ComingSoonArenas.Visibility = ps4 ? Visibility.Collapsed : Visibility.Visible;
+        // the page that's open may have gone
+        if (all.FirstOrDefault(n => n.IsChecked == true) is { Visibility: Visibility.Collapsed })
+            NavExplorer.IsChecked = true;
+        FillGamePicker();
+    }
+
     private void OnBrowseGame(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFolderDialog { Title = "Choose the extracted NHL 27 folder", InitialDirectory = KitPaths.IsGame(Game) ? Game : null };
+        var dlg = new OpenFolderDialog { Title = "Choose the extracted game folder (NHL 27 or NHL 24)", InitialDirectory = KitPaths.IsGame(Game) ? Game : null };
         if (dlg.ShowDialog(this) == true)
         {
             GameDir.Text = dlg.FolderName;
@@ -677,6 +770,7 @@ public partial class MainWindow : Window
     {
         if (_settings.GameDir == Game) return;
         _settings.GameDir = Game;
+        if (KitPaths.IsGame(Game) && !_settings.Games.Contains(Game, StringComparer.OrdinalIgnoreCase)) _settings.Games.Add(Game);
         _settings.Save();
         TuningPage.GameDir = Game;
         ShowGameInfo();

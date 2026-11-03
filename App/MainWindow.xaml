@@ -42,7 +42,14 @@
                                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,1" />
                     </Grid>
                     <TextBlock Text="NHL27KIT" FontFamily="{StaticResource DisplayFont}" FontSize="16" Margin="10,1,0,0" VerticalAlignment="Center" />
-                    <TextBlock x:Name="GameBadge" Text="NHL 27  ·  PS5" Foreground="{StaticResource Muted}" FontSize="12" Margin="12,1,0,0" VerticalAlignment="Center" />
+                    <!-- the game: click to switch between the game folders the kit knows (NHL 27, NHL 24) -->
+                    <Button x:Name="GameSwitch" Style="{StaticResource Ghost}" Margin="8,1,0,0" Padding="8,3" VerticalAlignment="Center" Click="OnGameSwitch"
+                            WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Switch game">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="GameBadge" Text="NHL 27  ·  PS5" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" />
+                            <TextBlock Text="&#xE70D;" Style="{StaticResource Icon}" FontSize="9" Foreground="{StaticResource Muted}" Margin="7,1,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Border x:Name="StatusChip" CornerRadius="999" Padding="10,3" Margin="0,0,14,0" VerticalAlignment="Center"
@@ -112,7 +119,7 @@
                             <RadioButton x:Name="NavStudio" Style="{StaticResource NavItem}" Content="Studio" Tag="&#xE790;" Checked="OnNav" />
                             <RadioButton x:Name="NavUnused" Style="{StaticResource NavItem}" Content="Unused" Tag="&#xE8F1;" ToolTip="Unused jerseys" Checked="OnNav" />
                             <RadioButton x:Name="NavScorebug" Style="{StaticResource NavItem}" Content="Scorebug" Tag="&#xE7F4;" Checked="OnNav" />
-                            <RadioButton Style="{StaticResource NavItem}" Content="Arenas" Tag="&#xE80F;" IsEnabled="False" ToolTipService.ShowOnDisabled="True" ToolTip="Coming soon" />
+                            <RadioButton x:Name="ComingSoonArenas" Style="{StaticResource NavItem}" Content="Arenas" Tag="&#xE80F;" IsEnabled="False" ToolTipService.ShowOnDisabled="True" ToolTip="Coming soon" />
                             <RadioButton x:Name="NavMods" Style="{StaticResource NavItem}" Content="Mods" Tag="&#xE74C;" Checked="OnNav" />
                         </StackPanel>
                         </ScrollViewer>
@@ -426,8 +433,12 @@
                         <Border Style="{StaticResource Card}" Padding="20">
                             <StackPanel>
                                 <TextBlock Text="GAME FOLDER" Style="{StaticResource Overline}" />
-                                <TextBlock Text="The extracted NHL 27 folder: the one with eboot.bin, Data and Patch. The kit only reads it."
+                                <TextBlock Text="The extracted game: NHL 27 (PS5) or NHL 24 (PS4), the folder with eboot.bin and Data. Each game keeps its own index and mod list."
                                            Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock DockPanel.Dock="Left" Text="Switch game" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <ComboBox x:Name="GamePicker" DisplayMemberPath="Label" SelectionChanged="OnGamePicked" />
+                                </DockPanel>
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right" Content="Browse…" Margin="8,0,0,0" Height="36" Click="OnBrowseGame" />
                                     <TextBox x:Name="GameDir" Tag="C:\…\NHL 27 dump\NHL" LostFocus="OnGameDirChanged" />

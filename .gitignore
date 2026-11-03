@@ -8,6 +8,7 @@ obj/
 cache/
 export/
 mods/
+mods-*/
 previews/
 logs/
 

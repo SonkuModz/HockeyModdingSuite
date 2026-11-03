@@ -23,7 +23,7 @@ public sealed class TocCache
     public SuperBundleToc Get(string path)
     {
         if (!_tocs.TryGetValue(path, out var toc))
-            _tocs[path] = toc = new SuperBundleToc(path, File.ReadAllBytes(path), _index.Layout.CatalogOf);
+            _tocs[path] = toc = new SuperBundleToc(path, File.ReadAllBytes(path), _index.Layout.TocCatalogs);
         return toc;
     }
 }

@@ -121,7 +121,7 @@ public sealed class AssetIndex
         var ebxToType = new List<EbxEntry>();
         for (int t = 0; t < tocs.Count; t++)
         {
-            var toc = new SuperBundleToc(tocs[t], tocBytes[tocs[t]], Layout.CatalogOf);
+            var toc = new SuperBundleToc(tocs[t], tocBytes[tocs[t]], Layout.TocCatalogs);
             // a Patch TOC's bundles and chunks replace the ones Data's TOCs listed
             bool overlay = Layout.IsPatchPath(tocs[t]);
             foreach (var c in toc.Chunks)

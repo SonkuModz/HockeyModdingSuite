@@ -23,9 +23,10 @@ public static class Program
         string game = opts.Get("game") ?? KitPaths.FindGame();
         if (game == null || !File.Exists(Path.Combine(game, "Data", "layout.toc")))
         {
-            Console.Error.WriteLine($"No NHL 27 game folder (with Data/layout.toc) found{(game != null ? " at " + game : "")}. Pass --game DIR.");
+            Console.Error.WriteLine($"No game folder (with Data/layout.toc) found{(game != null ? " at " + game : "")}. Pass --game DIR.");
             return 2;
         }
+        _profile = GameProfile.Detect(game);
         try
         {
             return args[0] switch
@@ -139,7 +140,7 @@ public static class Program
             {
                 if (!File.Exists(path))
                     continue;
-                var toc = new SuperBundleToc(path, File.ReadAllBytes(path), layout.CatalogOf);
+                var toc = new SuperBundleToc(path, File.ReadAllBytes(path), layout.TocCatalogs);
                 var refs = toc.Chunks.Select(c => c.Ref).Concat(toc.Bundles.SelectMany(b => b.Entries)).ToList();
                 int patched = refs.Count(r => r.Patch), unknown = refs.Count(r => r.Catalog < 0);
                 Console.WriteLine($"      {Path.GetRelativePath(layout.GameDir, path)}: {toc.Bundles.Count} bundles, {toc.Chunks.Count} chunks" +
@@ -149,9 +150,13 @@ public static class Program
         return 0;
     }
 
+    /// <summary>The game --game names (NHL 27 or NHL 24): which index cache and mod list the commands use.</summary>
+    private static GameProfile _profile;
+
     private static AssetIndex OpenIndex(string game, bool rebuild)
     {
-        string cache = KitPaths.IndexFile;
+        string cache = KitPaths.IndexFileFor(_profile);
+        Directory.CreateDirectory(Path.GetDirectoryName(cache));
         if (rebuild && File.Exists(cache))
             File.Delete(cache);
         return AssetIndex.Open(game, File.ReadAllBytes, cache, Console.WriteLine);
@@ -691,12 +696,12 @@ public static class Program
         return 0;
     }
 
-    private static ModStore Mods() => new ModStore(Path.Combine(KitPaths.Root, "mods"));
+    private static ModStore Mods() => new ModStore(KitPaths.ModsFor(_profile));
 
     private static void RefuseWhileRunning()
     {
-        if (System.Diagnostics.Process.GetProcessesByName("kyty_emulator").Length > 0)
-            throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (Emulators.Running() is { } emu)
+            throw new InvalidOperationException($"{emu} is running. Close the game before changing its files.");
     }
 
     /// <summary>mods: the mod list (the app's Mods page) and each entry's state in the game.</summary>

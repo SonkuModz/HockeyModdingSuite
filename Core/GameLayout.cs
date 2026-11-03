@@ -58,6 +58,12 @@ public sealed class GameLayout
     /// <summary>The catalog index of the install chunk with this persistentIndex, or -1.</summary>
     public int CatalogOf(int persistentIndex) => _byPersistentIndex.GetValueOrDefault(persistentIndex, -1);
 
+    /// <summary>
+    /// What a TOC reader takes to map PS5 install chunks; null on PS4, whose groups carry the catalog index itself. A TOC
+    /// without a chunk table (ui.toc) can't show its format by stride, so the reader goes by this.
+    /// </summary>
+    public Func<int, int> TocCatalogs => IsPs5 ? CatalogOf : null;
+
     /// <summary>The superbundle's TOC in Data.</summary>
     public string TocPath(string superBundle) => Path.Combine(DataDir, Rel(superBundle) + ".toc");
 

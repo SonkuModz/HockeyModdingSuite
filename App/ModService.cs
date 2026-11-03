@@ -8,7 +8,7 @@ namespace NHL27Kit.App;
 
 /// <summary>
 /// The app's side of mods: the mod list (in the kit folder's mods\), planning replacements off the UI thread, and
-/// applying or restoring them in the game folder. One operation at a time; nothing is written while KytyPS5 runs.
+/// applying or restoring them in the game folder. One operation at a time; nothing is written while the emulator runs.
 /// </summary>
 public sealed class ModService
 {
@@ -20,17 +20,20 @@ public sealed class ModService
     {
         Index = index;
         _tocs = new TocCache(index);
-        Store = new ModStore(Path.Combine(KitPaths.Root, "mods"));
+        Profile = GameProfile.Detect(index.Layout.GameDir);
+        Store = new ModStore(KitPaths.ModsFor(Profile));
     }
 
     public AssetIndex Index { get; }
+    /// <summary>Which game the index is of: its mod list is that game's own.</summary>
+    public GameProfile Profile { get; }
     public ModStore Store { get; }
     public string Game => Index.Layout.GameDir;
 
     /// <summary>Raised (on the UI thread's caller) after the list or the game changes.</summary>
     public event Action Changed;
 
-    public static bool GameRunning => Process.GetProcessesByName("kyty_emulator").Length > 0;
+    public static bool GameRunning => Emulators.Running() != null;
 
     public ModEntry Find(string kind, string name) => Store.Find(kind, name);
 
@@ -77,7 +80,7 @@ public sealed class ModService
     /// </summary>
     public async Task<TextureReplacementPlan> ReplaceArrayLayerAsync(string name, string imageFile, int layer, Action<string> note)
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         var current = await Run(() => Texture.Load(Index, name, decode: false).Data);
         var existing = Find("texture", name);
         string history = existing != null && State(existing) == ModState.Applied ? existing.Summary : null;
@@ -131,14 +134,14 @@ public sealed class ModService
 
     public async Task ApplyAsync(ModEntry e)
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         try { await Run(() => { Store.Apply(e, Game); return 0; }); }
         finally { Changed?.Invoke(); }
     }
 
     public async Task RestoreAsync(ModEntry e)
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         try { await Run(() => { Store.Restore(e, Game); return 0; }); }
         finally { Changed?.Invoke(); }
     }
@@ -151,7 +154,7 @@ public sealed class ModService
     /// </summary>
     public async Task<ModEntry> SaveEbxAsync(string name, byte[] data, string summary)
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         try
         {
             return await Run(() =>
@@ -203,7 +206,7 @@ public sealed class ModService
     /// <summary>Writes score clock edits into the game (recompiles tin_nhl.swf; one mod entry).</summary>
     public async Task SaveScorebugAsync(Scorebug current, IReadOnlyDictionary<string, string> edits, bool sharpBadge = false)
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         try { await Run(() => Scorebug.Save(Index, Store, Game, current, edits, sharpBadge: sharpBadge)); }
         finally { Changed?.Invoke(); }
     }
@@ -217,7 +220,7 @@ public sealed class ModService
     /// <summary>Edits a database in the game: <paramref name="edit"/> gets it as the game has it now and returns what it changed.</summary>
     public async Task<ModEntry> SaveDbAsync(string name, Func<T3Db, string> edit, string source = "Database page")
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         try { return await Run(() => DbEditor.Save(Index, Store, Game, name, edit, source: source)); }
         finally { Changed?.Invoke(); }
     }
@@ -237,7 +240,7 @@ public sealed class ModService
     /// </summary>
     public async Task<List<string>> ImportPackAsync(string file, Action<string> progress)
     {
-        if (GameRunning) throw new InvalidOperationException("KytyPS5 is running. Close the game before changing its files.");
+        if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
         var manifest = await Run(() => ModPack.Open(file, Path.Combine(Store.Dir, "sources")));
         var results = new List<string>();
         int n = 0;

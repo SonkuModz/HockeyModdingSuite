@@ -204,6 +204,8 @@ public sealed class BoolVisibleConverter : IValueConverter
 public sealed class Settings
 {
     public string GameDir { get; set; }
+    /// <summary>Game folders picked before (NHL 27, NHL 24…), for the game switcher.</summary>
+    public List<string> Games { get; set; } = new();
     /// <summary>kyty_emulator.exe to launch; empty means the launcher's choice or the newest build next to the kit.</summary>
     public string Emulator { get; set; }
 
