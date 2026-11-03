@@ -259,6 +259,8 @@ public partial class UnusedPage : UserControl
     /// <summary>Picks a jersey by its folder (nhl/boston/adidas/twelve), showing every jersey first.</summary>
     public async Task SelectKit(string path)
     {
+        // the menus are still being read when the page has just opened
+        for (int i = 0; i < 150 && (_busy || _rows.Count == 0); i++) await Task.Delay(200);
         ShowAll.IsChecked = true;
         Search.Text = "";
         ApplyFilter();

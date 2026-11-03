@@ -1,7 +1,132 @@
 # NHL27Kit
 
-Modding kit for NHL 27 (PS5, PPSA34063), run on KytyPS5. Separate from NHL24Kit (`C:\dev\NHL24Kit`); its reader
-started as a port of `NHL24Kit.Game`.
+A Windows modding tool for **NHL 27 on PS5** (PPSA34063), played on the KytyPS5 emulator. Point it at your game dump
+and you can change rosters, jerseys, logos, centre ice, sounds, videos, gameplay tuning and more, all from one window.
+
+Every change goes straight into the game's files and shows up on the **Mods** page, where one click puts the original
+back.
+
+## Getting started
+
+1. Download the zip from [Releases](../../releases) and unzip it anywhere. You don't need to install .NET.
+2. Copy `oo2core_9_win64.dll` from your FMT folder next to `NHL27Kit.exe`. It's needed to read the game and can't be
+   shipped with the kit. Copy `opus.dll` too if you want commentary audio.
+3. Run `NHL27Kit.exe`, open **Settings** and pick your NHL 27 dump (the folder with `eboot.bin`, `Data` and `Patch`).
+   The first start reads the whole game, which takes about a minute.
+4. **Back up your game folder first**, and close the emulator before you change anything.
+
+## A tour of the kit
+
+### Play
+Start NHL 27 on KytyPS5 from the kit, change the emulator's settings for the game (resolution, display mode, extra
+options), and get new emulator builds.
+
+![Play](docs/images/play.png)
+
+### Roster
+Every player in the game with their in-game portrait: name, position, number, bio, ratings and X-Factors. **NHL sync**
+pulls current rosters from the NHL (trades, signings, call-ups), and **Lines** sets each team's lines.
+
+![Roster](docs/images/roster.png)
+
+### Teams
+Team names, abbreviations, colours and home arenas, plus every logo the team has (crest, ice, boards). Replace a logo
+with your own picture, or build a centre-ice logo from any rink on TheFaceoff.net.
+
+![Teams](docs/images/teams.png)
+
+### Uniforms
+Each team's jerseys on a player in 3D. Replace any jersey, pant, sock or logo texture, recolour helmets and gloves,
+and add, move or rename the jerseys in a team's menu. A converter brings in jerseys made for older NHL games.
+
+![Uniforms](docs/images/uniforms.png)
+
+### Jersey Studio
+Design your own jersey from the game's create-a-team templates: pick a pattern, colour every zone and the collar, add
+stripes, and drag crests, numbers and names into place. Then write it over a team's jersey or add it to their menu.
+
+![Jersey Studio](docs/images/studio.png)
+
+### Unused jerseys
+The game ships with hundreds of jerseys that no team's menu shows, such as old alternates, All-Star sets and AHL and
+ECHL thirds. Browse them all, see each one on the player, and add it to any team's menu in one click.
+
+![Unused jerseys](docs/images/unused.png)
+
+### Arenas
+Every arena in 3D as the game builds it, with the ice, boards, glass, ads and jumbotron. Fly around, or jump to the
+broadcast, end, bowl and overhead views.
+
+![Arenas](docs/images/arenas.png)
+
+### Scorebug
+The on-screen score clock with a live preview: its colours, sizes and positions. (Saving is switched off for now: a
+changed score clock crashed the game when a match loaded.)
+
+![Scorebug](docs/images/scorebug.png)
+
+### Be A Pro
+Open your Be A Pro saves and edit your player's ratings and X-Factors. The kit keeps a backup of every save it changes.
+
+![Be A Pro](docs/images/beapro.png)
+
+### Tuning
+The gameplay values built into the game (AI, skating, shooting, checking, goalies and more), searchable and grouped,
+with their defaults and ranges. Export them all as a spreadsheet.
+
+![Tuning](docs/images/tuning.png)
+
+### Database
+Every table of the game's databases (teams, players, schedules, jerseys, equipment…) as a spreadsheet you can search
+and edit.
+
+![Database](docs/images/database.png)
+
+### Textures
+Every texture in the game as a thumbnail gallery. Open one full size, look at each colour channel, export it as PNG
+or DDS, or replace it with your own image.
+
+![Textures](docs/images/textures.png)
+
+### Sounds
+Every sound in the game (commentary, music, goal horns, crowds, effects) with a player. Export any of them as WAV, or
+replace them with your own audio.
+
+![Sounds](docs/images/sounds.png)
+
+### Videos
+Every video in the game (menus, arena intros, transitions, training). Play them, save them as WebM or MP4, or replace
+one with your own clip.
+
+![Videos](docs/images/videos.png)
+
+### Mods
+Everything you've changed, in one list. Restore any change (or all of them), apply them again, and share your mods as
+a `.nhl27mod` pack that others load with **Import pack**.
+
+![Mods](docs/images/mods.png)
+
+### Explorer
+For advanced modders: every file inside the game's archives, with search, type filters, a hex view, and export.
+
+![Explorer](docs/images/explorer.png)
+
+### Settings
+Where the kit finds your game, and where it keeps its own files.
+
+![Settings](docs/images/settings.png)
+
+---
+
+*Made by Sonku. A fan project, not affiliated with EA Sports or the NHL. Centre-ice graphics from TheFaceoff.net are
+for personal use only; all credit to them.*
+
+---
+
+# Technical notes
+
+The rest of this page is for developers: how the kit reads and writes the game. NHL27Kit is separate from NHL24Kit;
+its reader started as a port of `NHL24Kit.Game`.
 
 ## Layout
 

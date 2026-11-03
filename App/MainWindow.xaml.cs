@@ -931,10 +931,10 @@ public partial class MainWindow : Window
         if (a.TryGetValue("page", out var uPage) && uPage == "unused")
         {
             await Task.Delay(4000);
-            if (a.TryGetValue("ureason", out var ur)) { UnusedPage.SetReason(ur); await Task.Delay(300); }
-            if (a.TryGetValue("usearch", out var us)) { UnusedPage.SetSearch(us); await Task.Delay(600); }
-            if (a.TryGetValue("ukit", out var uk)) { await UnusedPage.SelectKit(uk); await Task.Delay(6000); }
-            if (a.TryGetValue("uturn", out var ut) && double.TryParse(ut, out double uyaw)) { UnusedPage.Turn(uyaw); await Task.Delay(500); }
+            if (a.TryGetValue("nreason", out var ur)) { UnusedPage.SetReason(ur); await Task.Delay(300); }
+            if (a.TryGetValue("nsearch", out var us)) { UnusedPage.SetSearch(us); await Task.Delay(600); }
+            if (a.TryGetValue("nkit", out var uk)) { await UnusedPage.SelectKit(uk); await Task.Delay(6000); }
+            if (a.TryGetValue("nturn", out var ut) && double.TryParse(ut, out double uyaw)) { UnusedPage.Turn(uyaw); await Task.Delay(500); }
             // thumbnails
             await Task.Delay(4000);
         }
@@ -1006,7 +1006,8 @@ public partial class MainWindow : Window
     {
         if (!App.Args.TryGetValue("shot", out var file) || string.IsNullOrEmpty(file))
             return;
-        await Task.Delay(500);
+        // --wait MS: for pages that keep loading after the scripted steps (the score clock's decompile)
+        await Task.Delay(App.Args.TryGetValue("wait", out var w) && int.TryParse(w, out int ms) ? ms : 500);
         await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
         // a dialog open on top (TheFaceoff.net converter) is what's on screen
