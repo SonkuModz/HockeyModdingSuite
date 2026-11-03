@@ -44,9 +44,10 @@ public static class KitPaths
 
     /// <summary>
     /// Game folders near the kit: in or below (two levels) each of the five folders above the program, so a dump next to
-    /// the kit folder ("NHL 27 dump/NHL", "NHL 24 Dump") is found. NHL 27 first.
+    /// the kit folder ("NHL 27 dump/NHL", "NHL 24 Dump") is found. The same goes for the folders above <paramref name="near"/>
+    /// (the games already known), so a kit run from elsewhere (its zip, Desktop) still finds the dumps next to them. NHL 27 first.
     /// </summary>
-    public static List<string> FindGames()
+    public static List<string> FindGames(IEnumerable<string> near = null)
     {
         var found = new List<string>();
         void Add(string d)
@@ -61,13 +62,24 @@ public static class KitPaths
             try { return Directory.GetDirectories(d); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return Array.Empty<string>(); }
         }
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int up = 0; dir != null && up < 5; dir = dir.Parent, up++)
-            foreach (string child in Dirs(dir.FullName))
+        var scanned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Scan(string start, int levels)
+        {
+            var dir = new DirectoryInfo(start);
+            for (int up = 0; dir != null && up < levels; dir = dir.Parent, up++)
             {
-                Add(child);
-                foreach (string grand in Dirs(child)) Add(grand);
+                // not a drive or a folder right on it: too much below them
+                if (dir.Parent == null || dir.Parent.Parent == null || !scanned.Add(dir.FullName)) continue;
+                foreach (string child in Dirs(dir.FullName))
+                {
+                    Add(child);
+                    foreach (string grand in Dirs(child)) Add(grand);
+                }
             }
+        }
+        Scan(AppContext.BaseDirectory, 5);
+        foreach (string game in near ?? Enumerable.Empty<string>())
+            if (IsGame(game)) Scan(game, 3);
         return found.OrderBy(d => GameProfile.Detect(d).Kind == GameKind.Nhl27 ? 0 : 1).ThenBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
     }
 

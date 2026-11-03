@@ -692,7 +692,7 @@ public partial class MainWindow : Window
 
     /// <summary>The game folders the kit knows: the one open, ones picked before, and dumps found next to the kit.</summary>
     private List<GameChoice> KnownGames() =>
-        new[] { Game }.Concat(_settings.Games).Concat(KitPaths.FindGames())
+        new[] { Game }.Concat(_settings.Games).Concat(KitPaths.FindGames(_settings.Games.Prepend(Game)))
             .Where(KitPaths.IsGame).Select(d => Path.GetFullPath(d).TrimEnd('\\', '/')).Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(d => new GameChoice(d, GameProfile.Detect(d)))
             .OrderBy(g => g.Profile.Kind == GameKind.Nhl27 ? 0 : g.Profile.Kind == GameKind.Nhl24 ? 1 : 2).ToList();
