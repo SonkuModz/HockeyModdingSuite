@@ -1992,7 +1992,7 @@ public partial class JerseyStudioPage : UserControl
     private bool GameClosed()
     {
         if (!ModService.GameRunning) return true;
-        MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
         return false;
     }
 

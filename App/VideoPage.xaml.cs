@@ -293,7 +293,7 @@ public partial class VideoPage : UserControl
         {
             if (Ffmpeg.Find() == null)
             {
-                ShowMessage("This movie is in EA's older VP6 format, which needs ffmpeg to play.\nPut ffmpeg.exe in a ThirdParty\\ffmpeg folder next to NHL27Kit.exe, or install it (winget install Gyan.FFmpeg).");
+                ShowMessage("This movie is in EA's older VP6 format, which needs ffmpeg to play.\nPut ffmpeg.exe in a ThirdParty\\ffmpeg folder next to HMS.exe, or install it (winget install Gyan.FFmpeg).");
                 return;
             }
             ShowMessage("Converting EA VP6 for the player…");
@@ -369,7 +369,7 @@ public partial class VideoPage : UserControl
         if (_selected == null || _data == null) return;
         if (Ffmpeg.Find() == null)
         {
-            MessageBox.Show(Window.GetWindow(this), "Saving as MP4 needs ffmpeg. Put ffmpeg.exe in a ThirdParty\\ffmpeg folder next to NHL27Kit.exe, or install it (winget install Gyan.FFmpeg).", "NHL27Kit");
+            MessageBox.Show(Window.GetWindow(this), "Saving as MP4 needs ffmpeg. Put ffmpeg.exe in a ThirdParty\\ffmpeg folder next to HMS.exe, or install it (winget install Gyan.FFmpeg).", "HMS");
             return;
         }
         var dlg = new Microsoft.Win32.SaveFileDialog { FileName = _selected.Leaf + ".mp4", Filter = "MP4|*.mp4", InitialDirectory = ExportDir() };
@@ -423,7 +423,7 @@ public partial class VideoPage : UserControl
         if (_selected == null || _mods == null) return;
         if (Ffmpeg.Find() == null)
         {
-            MessageBox.Show(Window.GetWindow(this), "Replacing a video needs ffmpeg to encode it. Put ffmpeg.exe in a ThirdParty\\ffmpeg folder next to NHL27Kit.exe, or install it (winget install Gyan.FFmpeg).", "NHL27Kit");
+            MessageBox.Show(Window.GetWindow(this), "Replacing a video needs ffmpeg to encode it. Put ffmpeg.exe in a ThirdParty\\ffmpeg folder next to HMS.exe, or install it (winget install Gyan.FFmpeg).", "HMS");
             return;
         }
         var picker = new Microsoft.Win32.OpenFileDialog { Title = $"Replace {_selected.Leaf}", Filter = ClipFilter };
@@ -440,9 +440,9 @@ public partial class VideoPage : UserControl
         if (existing != null && (await _mods.StatesAsync()).GetValueOrDefault(existing) is ModState.Applied or ModState.Partial)
         {
             if (MessageBox.Show(Window.GetWindow(this), "This video's current replacement is in the game. Put the original back first and use the new clip instead?",
-                                "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                                "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
             try { await _mods.ResetAsync(ModService.MovieKind, row.Name); }
-            catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Error); return; }
+            catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Error); return; }
         }
         StopPlayback();
         var cts = _encodeCts = new CancellationTokenSource();

@@ -38,7 +38,7 @@ public static class Ffmpeg
     }
 
     public static string Require() => Find() ?? throw new NotSupportedException(
-        "ffmpeg isn't installed. Put ffmpeg.exe in a ThirdParty\\ffmpeg folder next to NHL27Kit.exe, or install it (winget install Gyan.FFmpeg).");
+        "ffmpeg isn't installed. Put ffmpeg.exe in a ThirdParty\\ffmpeg folder next to HMS.exe, or install it (winget install Gyan.FFmpeg).");
 
     /// <summary>Runs ffmpeg; returns its error output, or throws with it when ffmpeg fails.</summary>
     public static async Task<string> RunAsync(IEnumerable<string> args, CancellationToken ct = default, Action<string> line = null)

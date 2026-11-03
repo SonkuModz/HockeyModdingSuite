@@ -298,7 +298,7 @@ public partial class UnusedPage : UserControl
         if (_busy || Tiles.SelectedItem is not UnusedRow r || !r.CanAdd || AddTeam.SelectedItem is not StudioTeamItem team) return;
         if (ModService.GameRunning)
         {
-            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var label = AddLabel.SelectedItem as PickItem ?? new PickItem("Third", 2);

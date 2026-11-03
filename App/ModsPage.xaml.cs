@@ -93,7 +93,7 @@ public partial class ModsPage : UserControl
     private bool CheckGame()
     {
         if (!ModService.GameRunning) return true;
-        MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
         return false;
     }
 
@@ -111,7 +111,7 @@ public partial class ModsPage : UserControl
         catch (Exception ex)
         {
             StatusChanged?.Invoke(what + " failed: " + ex.Message);
-            MessageBox.Show(Window.GetWindow(this), ex.Message, "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Window.GetWindow(this), ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -136,7 +136,7 @@ public partial class ModsPage : UserControl
     {
         var row = RowOf(sender);
         if (row == null) return;
-        if (MessageBox.Show(Window.GetWindow(this), $"Remove {row.Leaf} from the list? Its saved original bytes are deleted with it.", "NHL27Kit",
+        if (MessageBox.Show(Window.GetWindow(this), $"Remove {row.Leaf} from the list? Its saved original bytes are deleted with it.", "HMS",
                             MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         _mods.Remove(row.Entry);
     }
@@ -157,7 +157,7 @@ public partial class ModsPage : UserControl
             var notes = await _mods.ExportPackAsync(file, System.IO.Path.GetFileNameWithoutExtension(file), entries);
             StatusChanged?.Invoke($"Saved {System.IO.Path.GetFileName(file)}: {entries.Count - notes.Count} replacement(s)" + (notes.Count > 0 ? $", {notes.Count} left out" : ""));
             if (notes.Count > 0 && !App.Args.ContainsKey("shot"))
-                MessageBox.Show(Window.GetWindow(this), "Left out of the pack:\n\n" + string.Join("\n", notes), "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Window.GetWindow(this), "Left out of the pack:\n\n" + string.Join("\n", notes), "HMS", MessageBoxButton.OK, MessageBoxImage.Information);
         });
     }
 
@@ -166,7 +166,7 @@ public partial class ModsPage : UserControl
         var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Import mod pack", Filter = ModPack.Filter };
         if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
         if (MessageBox.Show(Window.GetWindow(this), $"Write the replacements in {System.IO.Path.GetFileName(dlg.FileName)} into the game files?\n\nThe originals stay in the kit's mods folder, and Restore puts them back.",
-                            "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                            "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         await ImportPack(dlg.FileName);
     }
 
@@ -188,7 +188,7 @@ public partial class ModsPage : UserControl
         var rows = (List.ItemsSource as List<ModRow>)?.Where(r => r.CanApply).ToList() ?? new();
         if (rows.Count == 0) return;
         if (MessageBox.Show(Window.GetWindow(this), $"Write {rows.Count} replacement{(rows.Count == 1 ? "" : "s")} into the game files?\n\nThe originals stay in the kit's mods folder, and Restore puts them back.",
-                            "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                            "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         await Do($"Applying {rows.Count} replacement(s)", async () => { foreach (var r in rows) await _mods.ApplyAsync(r.Entry); });
     }
 
@@ -197,7 +197,7 @@ public partial class ModsPage : UserControl
         var rows = (List.ItemsSource as List<ModRow>)?.Where(r => r.CanRestore).ToList() ?? new();
         if (rows.Count == 0) return;
         if (MessageBox.Show(Window.GetWindow(this), $"Put the originals of {rows.Count} replacement{(rows.Count == 1 ? "" : "s")} back into the game files?",
-                            "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                            "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         await Do($"Restoring {rows.Count} replacement(s)", async () => { foreach (var r in rows) await _mods.RestoreAsync(r.Entry); });
     }
 }

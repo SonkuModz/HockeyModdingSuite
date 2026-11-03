@@ -555,7 +555,7 @@ public partial class UniformsPage : UserControl
         if (_busy || _mods == null) return false;
         if (ModService.GameRunning)
         {
-            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         _busy = true;

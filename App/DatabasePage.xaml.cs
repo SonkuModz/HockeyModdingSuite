@@ -268,7 +268,7 @@ public partial class DatabasePage : UserControl
     private async void OnDiscard(object sender, RoutedEventArgs e) => await LoadAsync();
 
     private bool Confirm(string text) => App.Args.ContainsKey("shot") ||
-        MessageBox.Show(Window.GetWindow(this), text, "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+        MessageBox.Show(Window.GetWindow(this), text, "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
 
     private async void OnSave(object sender, RoutedEventArgs e) => await SaveAsync();
 

@@ -2204,7 +2204,7 @@ public static class Program
         // into the game: the NHL ice (mesh entry "logo-ads") and this logo (texture entry), each undone by Restore.
         // Every other arena's logo on the NHL ice shows cropped until it's laid out too, or the mesh entry is restored.
         RefuseWhileRunning();
-        if (System.Diagnostics.Process.GetProcessesByName("NHL27Kit").Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+        if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
             throw new InvalidOperationException("The kit is open. Close it before changing the game's files.");
         var store = Mods();
         if (store.Find("texture", logoName) is { } had)
@@ -2299,7 +2299,7 @@ public static class Program
         if (write)
         {
             RefuseWhileRunning();
-            if (System.Diagnostics.Process.GetProcessesByName("NHL27Kit").Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+            if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
                 throw new InvalidOperationException("The kit is open. Close it before changing the game's files.");
         }
         var store = Mods();
@@ -2434,7 +2434,7 @@ public static class Program
 
         // planning took a while: the game and the kit must still be closed
         RefuseWhileRunning();
-        if (System.Diagnostics.Process.GetProcessesByName("NHL27Kit").Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+        if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
             throw new InvalidOperationException("The kit was opened while planning. Nothing was written; close it and run again.");
         var meshEntry = store.Add("mesh", "logo-ads:other-ice", "intl, arcade, outdoor and threes ice", $"Other ice: logo UV3 × {LogoAds.LogoFrac} for the laid-out logos", meshPatches);
         store.Apply(meshEntry, game, null);
@@ -2501,7 +2501,7 @@ public static class Program
         if (write)
         {
             RefuseWhileRunning();
-            if (System.Diagnostics.Process.GetProcessesByName("NHL27Kit").Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+            if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
                 throw new InvalidOperationException("The kit is open. Close it before changing the game's files.");
         }
         var store = Mods();
@@ -2555,7 +2555,7 @@ public static class Program
         Console.WriteLine($"{laid} laid out, {skipped} left alone; {ranges:N0} ranges in {sw.Elapsed.TotalMinutes:0.0} min");
         if (!write) return 0;
         RefuseWhileRunning();
-        if (System.Diagnostics.Process.GetProcessesByName("NHL27Kit").Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+        if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
             throw new InvalidOperationException("The kit was opened while planning. Nothing was written; close it and run again.");
         entry.Summary = $"The named centre logos (vast, arcade, events, HUT…) laid out for the centre-ice ads: {laid} with the game's ads in place";
         store.Commit(entry);
@@ -2612,7 +2612,7 @@ public static class Program
         if (!opts.Has("write")) return 0;
 
         RefuseWhileRunning();
-        if (System.Diagnostics.Process.GetProcessesByName("NHL27Kit").Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+        if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
             throw new InvalidOperationException("The kit is open. Close it before changing the game's files.");
         var store = Mods();
         if (store.Find("texture", name) is { } had)

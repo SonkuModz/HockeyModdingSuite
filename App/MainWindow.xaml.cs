@@ -137,7 +137,7 @@ public partial class MainWindow : Window
             props.Add(new Property("Version", _profile.Version ?? "—", true));
             (_title, _version, _titleId) = (title, _profile.Version, _profile.TitleId);
             GameBadge.Text = _profile.Badge;
-            SplashGame.Text = $"{_profile.Name}  ·  {_profile.Platform}  ·  MODDING KIT";
+            SplashGame.Text = $"{_profile.Name}  ·  {_profile.Platform}";
             string patchDir = Path.Combine(Game, "Patch");
             bool patched = Directory.Exists(patchDir) && Directory.EnumerateFileSystemEntries(patchDir).Any();
             props.Add(new Property("Patch", patched ? "Installed (Patch\\ overrides Data\\)" : "None"));
@@ -153,7 +153,7 @@ public partial class MainWindow : Window
             new("Index cache", KitPaths.IndexFileFor(_profile), true),
             new("Mod list", KitPaths.ModsFor(_profile), true),
             new("Exports", KitPaths.Export, true),
-            new("Oodle", oodle ? "oo2core_9_win64.dll found" : "Missing: copy oo2core_9_win64.dll next to NHL27Kit.exe"),
+            new("Oodle", oodle ? "oo2core_9_win64.dll found" : "Missing: copy oo2core_9_win64.dll next to HMS.exe"),
         };
     }
 
@@ -728,7 +728,7 @@ public partial class MainWindow : Window
     private Task<string> PickGameAsync()
     {
         GameCards.ItemsSource = KnownGames().Select(g => new GameCard(g.Dir, g.Profile, Cover(g.Dir))).ToList();
-        SplashGame.Text = "MODDING KIT";
+        SplashGame.Text = "";
         SplashLoading.Visibility = Visibility.Collapsed;
         GamePick.Visibility = Visibility.Visible;
         _pick = new TaskCompletionSource<string>();
@@ -764,7 +764,7 @@ public partial class MainWindow : Window
         var dlg = new OpenFolderDialog { Title = "Choose the extracted game folder (NHL 27 or NHL 24)" };
         if (dlg.ShowDialog(this) != true) return;
         if (KitPaths.IsGame(dlg.FolderName)) _pick?.TrySetResult(dlg.FolderName);
-        else MessageBox.Show(this, "That folder has no Data\\layout.toc. Pick the extracted game folder, the one with eboot.bin and Data.", "NHL27Kit",
+        else MessageBox.Show(this, "That folder has no Data\\layout.toc. Pick the extracted game folder, the one with eboot.bin and Data.", "HMS",
             MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -816,7 +816,7 @@ public partial class MainWindow : Window
     {
         if (PlayPage.IsRunning)
         {
-            MessageBox.Show(this, "The game is running. Close it before switching games.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "The game is running. Close it before switching games.", "HMS", MessageBoxButton.OK, MessageBoxImage.Information);
             FillGamePicker();
             return;
         }
@@ -878,7 +878,7 @@ public partial class MainWindow : Window
     {
         if (!PlayPage.IsRunning)
             return;
-        if (MessageBox.Show(this, "NHL 27 is still running. Close the kit and stop the game?", "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+        if (MessageBox.Show(this, "NHL 27 is still running. Close the kit and stop the game?", "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
             e.Cancel = true;
         else
             PlayPage.Shutdown();

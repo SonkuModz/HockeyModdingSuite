@@ -334,7 +334,7 @@ public partial class TeamsPage : UserControl
         {
             StatusChanged?.Invoke("Close KytyPS5 before replacing logos: the game has its files open.");
             if (!App.Args.ContainsKey("shot"))
-                MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return "KytyPS5 is running: close the game first.";
         }
         _busy = true;
@@ -459,7 +459,7 @@ public partial class TeamsPage : UserControl
     private async void OnDiscard(object sender, RoutedEventArgs e) => await LoadAsync();
 
     private bool Confirm(string text) => App.Args.ContainsKey("shot") ||
-        MessageBox.Show(Window.GetWindow(this), text, "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+        MessageBox.Show(Window.GetWindow(this), text, "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
 
     private async void OnSave(object sender, RoutedEventArgs e) => await SaveAsync();
 

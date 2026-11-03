@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- NHL27Kit: the NHL 27 (PS5) modding kit's window. Reads the game through NHL27Kit.Core; never writes to it. -->
+  <!-- HMS (Hockey Modding Suite): the window of the NHL 27 (PS5) and NHL 24 (PS4) modding kit. The code keeps its
+       NHL27Kit names, and the kit its NHL27Kit settings and cache folders, so nothing is lost across the rename. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -7,7 +8,9 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <AssemblyName>NHL27Kit</AssemblyName>
+    <AssemblyName>HMS</AssemblyName>
+    <Product>Hockey Modding Suite</Product>
+    <ApplicationIcon>Assets\hms.ico</ApplicationIcon>
     <RootNamespace>NHL27Kit.App</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
@@ -18,6 +21,11 @@
     <None Include="..\ThirdParty\oo2core_9_win64.dll" Condition="Exists('..\ThirdParty\oo2core_9_win64.dll') And '$(NoThirdParty)' != 'true'" CopyToOutputDirectory="PreserveNewest" />
     <!-- Opus (speech) from the user's FMT install. -->
     <None Include="..\ThirdParty\opus.dll" Condition="Exists('..\ThirdParty\opus.dll') And '$(NoThirdParty)' != 'true'" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\hms-icon.png" />
+    <Resource Include="Assets\hms-badge.png" />
+    <Resource Include="Assets\hms.ico" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />

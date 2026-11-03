@@ -283,9 +283,9 @@ public partial class SoundPage : UserControl
         if (existing != null && (await _mods.StatesAsync()).GetValueOrDefault(existing) is ModState.Applied or ModState.Partial)
         {
             if (MessageBox.Show(Window.GetWindow(this), "This variation's current replacement is in the game. Put the original back first and use the new file instead?",
-                                "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                                "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
             try { await _mods.ResetAsync("sound", key); }
-            catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Error); return; }
+            catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Error); return; }
         }
         Player.Stop();
         ReplaceButton.IsEnabled = false;

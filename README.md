@@ -1,18 +1,22 @@
-# NHL27Kit
+<p align="center"><img src="docs/images/hms-badge.png" width="200" alt="HMS"></p>
 
-A Windows modding tool for **NHL 27 on PS5** (PPSA34063), played on the KytyPS5 emulator. Point it at your game dump
-and you can change rosters, jerseys, logos, centre ice, sounds, videos, gameplay tuning and more, all from one window.
+# HMS · Hockey Modding Suite
+
+A Windows modding tool for EA's NHL games: **NHL 27 on PS5** (PPSA34063, played on the KytyPS5 emulator) and
+**NHL 24 on PS4** (CUSA37933, played on nhl24pc). Point it at your game dump and you can change rosters, jerseys,
+logos, centre ice, sounds, videos, gameplay tuning and more, all from one window. HMS was called NHL27Kit before it
+took on more than one game.
 
 Every change goes straight into the game's files and shows up on the **Mods** page, where one click puts the original
-back.
+back. NHL 24 can be viewed and exported for now; changing its files comes next.
 
 ## Getting started
 
 1. Download the zip from [Releases](../../releases) and unzip it anywhere. You don't need to install .NET.
-2. Copy `oo2core_9_win64.dll` from your FMT folder next to `NHL27Kit.exe`. It's needed to read the game and can't be
+2. Copy `oo2core_9_win64.dll` from your FMT folder next to `HMS.exe`. It's needed to read the game and can't be
    shipped with the kit. Copy `opus.dll` too if you want commentary audio.
-3. Run `NHL27Kit.exe`, open **Settings** and pick your NHL 27 dump (the folder with `eboot.bin`, `Data` and `Patch`).
-   The first start reads the whole game, which takes about a minute.
+3. Run `HMS.exe` and pick your game on the start screen, or **Another game folder…** for a dump the kit didn't find
+   (the folder with `eboot.bin` and `Data`). The first start reads the whole game, which takes about a minute.
 4. **Back up your game folder first**, and close the emulator before you change anything.
 
 ## A tour of the kit
@@ -132,7 +136,7 @@ its reader started as a port of `NHL24Kit.Game`.
 
 - `Core/`: reader for the game's Frostbite data: `layout.toc`, superbundle TOCs, bundle records, CAS archives, EBX
   headers, Oodle blocks. No FMT dependency.
-- `App/`: `NHL27Kit.exe`, the kit's window:
+- `App/`: `HMS.exe`, the kit's window (the projects keep their NHL27Kit names):
   - **Play** starts NHL 27 on KytyPS5 and edits the game's Kyty profile.
   - **Explorer** browses every EBX, RES and chunk, with search, type filters, details, a hex preview and export.
     A texture also shows its picture, and a sound has a player.
@@ -395,7 +399,7 @@ images, audio and edited databases. Import pack… rebuilds each item against th
 
 ## Previews
 
-`NHL27Kit.exe --shot file.png` renders the window to a PNG and exits. Further options set up what it shows:
+`HMS.exe --shot file.png` renders the window to a PNG and exits. Further options set up what it shows:
 `--page play|explorer|textures|sounds|settings`, `--no-index`, `--search TEXT`, `--kind ebx|res|chunk`, `--type TYPE`,
 `--folder PATH`, `--select N`, `--scroll PX`, for the Textures page `--tsearch TEXT`, `--tselect N`, `--tlayer N`, for the
 Sounds page `--ssearch TEXT`, `--sselect N`, `--splay`, for the Roster page `--page roster`, `--rsearch TEXT`, `--rselect N`, `--rtext`,

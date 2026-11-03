@@ -107,7 +107,7 @@ public partial class LinesView : UserControl
     {
         if (_suppress || TeamPicker.SelectedItem is not ComboBoxItem item) return;
         if (_slots.Any(s => s.IsChanged) && !App.Args.ContainsKey("shot") &&
-            MessageBox.Show(Window.GetWindow(this), $"Drop the unsaved line changes for {_teamName}?", "NHL27Kit", MessageBoxButton.OKCancel) != MessageBoxResult.OK)
+            MessageBox.Show(Window.GetWindow(this), $"Drop the unsaved line changes for {_teamName}?", "HMS", MessageBoxButton.OKCancel) != MessageBoxResult.OK)
         {
             _suppress = true;
             TeamPicker.SelectedItem = ((List<ComboBoxItem>)TeamPicker.ItemsSource).FirstOrDefault(i => (int)i.Tag == _team);
@@ -191,7 +191,7 @@ public partial class LinesView : UserControl
         if (_busy || _team < 0 || !_slots.Any(s => s.IsChanged)) return;
         if (ModService.GameRunning)
         {
-            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var map = _slots.ToDictionary(s => s.Slot, s => s.Selected.PlayerIndex);

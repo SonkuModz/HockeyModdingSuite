@@ -318,9 +318,9 @@ public partial class TexturePage : UserControl
             if (state is ModState.Applied or ModState.Partial)
             {
                 if (MessageBox.Show(Window.GetWindow(this), "This texture's current replacement is in the game. Put the original back first and use the new image instead?",
-                                    "NHL27Kit", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                                    "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
                 try { await _mods.ResetAsync("texture", name); }
-                catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Error); return; }
+                catch (Exception ex) { MessageBox.Show(Window.GetWindow(this), ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Error); return; }
             }
         }
         ReplaceButton.IsEnabled = false;
@@ -356,7 +356,7 @@ public partial class TexturePage : UserControl
     {
         if (ModService.GameRunning)
         {
-            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         ReplaceButton.IsEnabled = false;

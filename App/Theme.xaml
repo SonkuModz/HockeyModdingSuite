@@ -5,36 +5,39 @@
     <local:NonEmptyVisibleConverter x:Key="NonEmptyVisible" />
     <local:BoolVisibleConverter x:Key="BoolVisible" />
 
-    <!-- ================================================================ palette (a night game: the arena dark, the
-         ice white, the blue lines for what's selected, the red line and goal light for what acts) -->
-    <Color x:Key="BgColor">#090E16</Color>
-    <Color x:Key="AccentColor">#3B8BFF</Color>
-    <Color x:Key="Accent2Color">#1E5FD8</Color>
-    <Color x:Key="GoalColor">#E8323F</Color>
-    <Color x:Key="Goal2Color">#B5121F</Color>
+    <!-- ================================================================ palette: HMS (Hockey Modding Suite) navy and
+         gold, from the logos. Navy for the arena and the panels, gold for what's selected and what acts. -->
+    <Color x:Key="BgColor">#061127</Color>
+    <Color x:Key="AccentColor">#D6B76E</Color>
+    <Color x:Key="Accent2Color">#A8874A</Color>
+    <Color x:Key="GoalColor">#E2C27C</Color>
+    <Color x:Key="Goal2Color">#B38F4E</Color>
+    <Color x:Key="NavyColor">#0B1E3C</Color>
 
     <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
-    <SolidColorBrush x:Key="Rail" Color="#0C121C" />
-    <SolidColorBrush x:Key="Surface" Color="#EB111926" />
-    <SolidColorBrush x:Key="Surface2" Color="#172133" />
-    <SolidColorBrush x:Key="Surface3" Color="#1F2B40" />
-    <SolidColorBrush x:Key="Hover" Color="#1A2539" />
-    <SolidColorBrush x:Key="Line" Color="#1E2A3D" />
-    <SolidColorBrush x:Key="LineStrong" Color="#2B3A52" />
-    <SolidColorBrush x:Key="Text" Color="#EEF4FC" />
-    <SolidColorBrush x:Key="TextDim" Color="#B9C6D8" />
-    <SolidColorBrush x:Key="Muted" Color="#8091A8" />
-    <SolidColorBrush x:Key="Faint" Color="#56657D" />
+    <SolidColorBrush x:Key="Rail" Color="#08152E" />
+    <SolidColorBrush x:Key="Surface" Color="#EB0D1D3A" />
+    <SolidColorBrush x:Key="Surface2" Color="#132849" />
+    <SolidColorBrush x:Key="Surface3" Color="#1A3259" />
+    <SolidColorBrush x:Key="Hover" Color="#152C52" />
+    <SolidColorBrush x:Key="Line" Color="#1A2F53" />
+    <SolidColorBrush x:Key="LineStrong" Color="#284371" />
+    <SolidColorBrush x:Key="Text" Color="#F3F0E6" />
+    <SolidColorBrush x:Key="TextDim" Color="#C6CCD9" />
+    <SolidColorBrush x:Key="Muted" Color="#8B97B0" />
+    <SolidColorBrush x:Key="Faint" Color="#566689" />
+    <SolidColorBrush x:Key="Navy" Color="{StaticResource NavyColor}" />
     <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
-    <SolidColorBrush x:Key="AccentSoft" Color="#1C3B8BFF" />
-    <SolidColorBrush x:Key="AccentLine" Color="#663B8BFF" />
+    <SolidColorBrush x:Key="AccentSoft" Color="#1FD6B76E" />
+    <SolidColorBrush x:Key="AccentLine" Color="#66D6B76E" />
     <SolidColorBrush x:Key="Goal" Color="{StaticResource GoalColor}" />
-    <SolidColorBrush x:Key="GoalSoft" Color="#24E8323F" />
-    <SolidColorBrush x:Key="Patch" Color="#FFC233" />
-    <SolidColorBrush x:Key="PatchSoft" Color="#22FFC233" />
+    <SolidColorBrush x:Key="GoalSoft" Color="#24E2C27C" />
+    <!-- edited / not yet applied: amber, apart from the brand gold -->
+    <SolidColorBrush x:Key="Patch" Color="#FF9F43" />
+    <SolidColorBrush x:Key="PatchSoft" Color="#22FF9F43" />
     <SolidColorBrush x:Key="Good" Color="#3CCB7F" />
     <SolidColorBrush x:Key="Danger" Color="#FF6B6B" />
-    <SolidColorBrush x:Key="Selection" Color="#223B8BFF" />
+    <SolidColorBrush x:Key="Selection" Color="#26D6B76E" />
     <SolidColorBrush x:Key="Violet" Color="#9B8CFF" />
     <SolidColorBrush x:Key="DangerSoft" Color="#26FF6B6B" />
 
@@ -42,12 +45,12 @@
         <GradientStop Color="{StaticResource AccentColor}" Offset="0" />
         <GradientStop Color="{StaticResource Accent2Color}" Offset="1" />
     </LinearGradientBrush>
-    <!-- the goal light: what writes or acts -->
+    <!-- gold: what writes or acts -->
     <LinearGradientBrush x:Key="GoalGradient" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="{StaticResource GoalColor}" Offset="0" />
         <GradientStop Color="{StaticResource Goal2Color}" Offset="1" />
     </LinearGradientBrush>
-    <!-- the rink's lines across the top: blue line, red line, blue line on the boards' white -->
+    <!-- the rink's lines across the top, in gold on the boards' white -->
     <LinearGradientBrush x:Key="RinkStripe" StartPoint="0,0" EndPoint="1,0">
         <GradientStop Color="#18FFFFFF" Offset="0" />
         <GradientStop Color="#18FFFFFF" Offset="0.30" />
@@ -66,8 +69,8 @@
     </LinearGradientBrush>
     <!-- the ice under the pages: a faint sheen, lighter at centre ice -->
     <RadialGradientBrush x:Key="Ice" Center="0.5,0.45" GradientOrigin="0.5,0.45" RadiusX="0.75" RadiusY="0.8">
-        <GradientStop Color="#0F1826" Offset="0" />
-        <GradientStop Color="#0B111B" Offset="0.6" />
+        <GradientStop Color="#0E2346" Offset="0" />
+        <GradientStop Color="#091832" Offset="0.6" />
         <GradientStop Color="{StaticResource BgColor}" Offset="1" />
     </RadialGradientBrush>
 
@@ -75,8 +78,8 @@
     <DrawingBrush x:Key="Checker" TileMode="Tile" Viewport="0,0,16,16" ViewportUnits="Absolute">
         <DrawingBrush.Drawing>
             <DrawingGroup>
-                <GeometryDrawing Brush="#1B1F27" Geometry="M0,0 L2,0 2,2 0,2Z" />
-                <GeometryDrawing Brush="#232833" Geometry="M0,0 L1,0 1,1 0,1Z M1,1 L2,1 2,2 1,2Z" />
+                <GeometryDrawing Brush="#141C2C" Geometry="M0,0 L2,0 2,2 0,2Z" />
+                <GeometryDrawing Brush="#1C2538" Geometry="M0,0 L1,0 1,1 0,1Z M1,1 L2,1 2,2 1,2Z" />
             </DrawingGroup>
         </DrawingBrush.Drawing>
     </DrawingBrush>
@@ -170,7 +173,7 @@
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="{StaticResource GoalGradient}" />
         <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="Foreground" Value="White" />
+        <Setter Property="Foreground" Value="{StaticResource Navy}" />
     </Style>
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="{StaticResource DangerSoft}" />

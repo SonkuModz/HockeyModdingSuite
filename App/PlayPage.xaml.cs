@@ -322,7 +322,7 @@ public partial class PlayPage : UserControl
 
     private void OnStop(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(Window.GetWindow(this), "Stop NHL 27? Anything not saved in game is lost.", "NHL27Kit",
+        if (MessageBox.Show(Window.GetWindow(this), "Stop NHL 27? Anything not saved in game is lost.", "HMS",
                             MessageBoxButton.OKCancel, MessageBoxImage.Warning) == MessageBoxResult.OK)
             _run?.Stop();
     }

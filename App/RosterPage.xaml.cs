@@ -316,7 +316,7 @@ public partial class RosterPage : UserControl
         if (_current == null || _busy) return;
         if (ModService.GameRunning)
         {
-            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var changes = _fields.Where(f => f.IsChanged).ToList();
@@ -346,7 +346,7 @@ public partial class RosterPage : UserControl
         catch (Exception ex)
         {
             StatusChanged?.Invoke("Save failed: " + ex.Message);
-            MessageBox.Show(Window.GetWindow(this), ex.Message, "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Window.GetWindow(this), ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -506,7 +506,7 @@ public partial class RosterPage : UserControl
         if (_currentText == null || _busy) return;
         if (ModService.GameRunning)
         {
-            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var row = _currentText;
@@ -528,7 +528,7 @@ public partial class RosterPage : UserControl
         catch (Exception ex)
         {
             StatusChanged?.Invoke("Save failed: " + ex.Message);
-            MessageBox.Show(Window.GetWindow(this), ex.Message, "NHL27Kit", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Window.GetWindow(this), ex.Message, "HMS", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
