@@ -1064,3 +1064,95 @@ A generator for a new design:
 - To come back to it: keep the ad sections on their own materials and find how the live game picks which sections
   get the sponsor ads (the dynamic-ads slot map at object +0x7d0 in the eboot), or put the ad quads in the logo's
   section itself.
+
+## 28. NHL 24 support (plan, 2026-11-03)
+
+The user's request: NHL 24 (PS4) in the same kit, every page. NHL24Kit (`C:\dev\NHL24Kit`) is only a reference for
+what's where; everything is written fresh in NHL27Kit (24Kit was slow: FMT, a worker process, append-only writes).
+Nothing has been written to the NHL 24 dump yet.
+
+### What there is
+
+- **The dump**: `NHL 24 Dump` (next to `NHL27Kit`). NHL 24 v1.00, US, CUSA37933 (`sce_sys/param.sfo`, no
+  `param.json`). `Patch\` is empty. Data under `Data\Gen4b\`: 9 TOCs (contentlaunchsb, contentsb, globals,
+  globalsfull, levels/game/game, movies, ui, worldssb), 36 CAS files in `superbundlelayout/nhl_installpackage_00`–`06`,
+  34 GB. Every TOC is signed (`00 D1 CE 01`, data at 556). `eboot.bin` is a fake-signed PS4 SELF (magic 0x1D3D154F)
+  with 17 bytes patched against `eboot.bin.orig`.
+- **It's modded already.** 24Kit applied 2,004 textures (mostly `ui/textures/common/teamlogos/*`) and 5 legacy files
+  (databases), appending to 13 CAS files and repointing and FMT re-signing 3 TOCs (contentlaunchsb, contentsb,
+  globals). `__FMTBackup\` holds stock TOCs and initfs. 24Kit's state is at the dump's old place,
+  `Downloads\nhl24patch-…\NHL 24 Extracted\CUSA37933-kit\`: `stock.json` (stock length of each CAS it appended to),
+  `stock_toc\` (stock TOCs), `applied.json` (fingerprints and items). The kit treats the dump as it is now as the
+  starting point; those files are the way back to stock if ever needed.
+- **The emulator**: `NHL24-PC-v0.9.2b`, nhl24pc (github.com/HajDEO/nhl24pc), a shadPS4 fork for NHL 24 only
+  (native x86, Vulkan). `launcher.exe` (.NET 4 WinForms) keeps the game folder in `game_path.txt`, installs PKGs with
+  `nhl24.exe --extract-pkg`, and runs `nhl24.exe`. Settings: `user\config.json` (shadPS4's: GPU resolution, FSR,
+  fullscreen, present mode, …), keys in `user\input_config\*.ini`, eboot patches in `user\patches\nhl24.xml`
+  (shadPS4 MemoryPatcher; Address = 0x400000 + image offset; per AppVer). Saves and the shader cache under `user\`.
+  Red-zone protection fixes a crash while a match loads. A `<game>-mods` folder is shadPS4's per-file overlay of
+  `/app0`; never leave a `commandline.txt` in the game folder (the game reads it).
+
+### What NHL27Kit already reads for PS4 (from its 24Kit beginnings)
+
+Signed TOCs (`DbObject.DataStart`), PS4 location groups (4 bytes, `[unk][patch][catalog][cas]`, 12-byte chunk
+entries, bundle flag 1 starts a group: `SuperBundleToc`), `layout.toc` catalogs, EBX (the type table in
+`Core/Data/typetables.json` is NHL 24's), Oodle blocks, t3db databases with the meta XML (`T3Db`), SPS Opus decoding
+(codec 12/14/15, `Audio.cs`).
+
+### What's different (from 24Kit's notes; check each on the dump)
+
+- **Textures**: the RES is NHL 27's minus the two u8s at +32/+33: chunk id at +32, mip sizes at +48, chunk size at
+  +108, name hash at +112, texture group at +116. Swizzle flag 0x800 = PS4 8×8 Morton tiling per mip (not
+  `Ps5Swizzle`). `firstMip > 0`: the chunk table's copy holds all mips, the bundle copy is its tail from
+  mipOffsets[0]; read the full one. A RES can be in several bundles (menu and gameplay): patch every copy. Pixel
+  format ids through the same type table.
+- **Sounds**: `NewWaveAsset` EBX (9,374, 7,534 commentary); chunk ids by scanning the EBX for known chunk GUIDs (a u32
+  size follows each). EA SPS + Opus, 48 kHz, 20 ms packets, first block 648 samples (preskip 312). Audio chunks stay
+  **stored** (uncompressed 256 KB blocks) or they play silent. Sample banks (`hornbank`: 439 goal horns) use DSET
+  tables (`.OFF`, `.SIZ`, `.SRC`). Goal songs are picked in Harmony logic, not a table (on hold in 24Kit).
+- **Databases**: `gamemodes/database/t3db/nhl_game.db` (119 tables) and `gamemodes/roster/initial_experience.db`
+  (Play Now reads it too), `loc/<lang>.db`. Rules confirmed in 24Kit: added rows are ignored in many tables (take
+  over unused rows); `exhibitionrostertable` key = team × 40 + slot; team names come from loc by artabbr (hash:
+  reflected CRC-32 of each byte & 0xDF, ^ 0x80000000); player ids 27019–56499 are free, 56818–59999 are custom
+  players and crash if reused. The legacy index chunk holds `[u64 raw size][guid]` per data chunk: a stale size
+  crashes the first loading screen.
+- **Logos**: `ui/textures/common/teamlogos/<variant>/t<artid>`, 18 variants (80–1024 px, `hutcardbw` 332×464), BC3.
+  New art ids need loose GNFs (`kettle_assets/teamlogos/<variant>/t<id>.gnf`) in the emulator's user data.
+- **Portraits**: `ui/textures/common/playerportraits/p<artid>`, 512×340 BC3 cut-outs; `artid`/`hasportrait` in
+  `exhibitionplayerbiotable`.
+- **Gameplay values**: ~25,500 tweakables, a linked list from static initializers (head at 0xAB83918 in the image);
+  object +0x18 name, +0x20 kind, value block +0x38 (value, min, max). Defaults change by patching the loading
+  instruction (floats: repoint the `vmovss` displacement at existing bytes holding the wanted float, since the
+  constants are shared; ints imm32; bools imm8) as `<Line>`s in `nhl24.xml`. Confirmed in game (wrist shot power).
+- **Scorebug**: `nhl/ui/swf_assets/kettle/overlays/scoreclock/scoreclock.gfx` (and `score_clock.gfx`), Scaleform
+  CFX; the AS3 class `ScoreClock` draws everything; overlay textures are GNFs. Not NHL 27's `tin_nhl.swf`.
+- **UI scripts**: `.nav`/`.menu`/`.lua` legacy files under `nhl/ui/features/...` (the UI debug menu via
+  `mainmenu.lua`).
+- **Meshes**: NHL composite meshes; a composite with zero parts has no part-table offsets (Pittsburgh's and San
+  Jose's lower bowls, Seattle's upper bowl). Vertex streams stream-major. Check `MeshSet` against them.
+
+### The open question: TOC signatures
+
+Any write that changes a TOC (a new location or size, a grown chunk, bundle-record SHA1s) touches signed bytes. 24Kit
+always had FMT re-sign (an RSA signature over an HMAC-SHA1 of the TOC body with FMT's private key; not ours to
+copy), and never tested whether the game checks it. NHL27Kit mostly writes into the original byte range, which
+changes no TOC at all; that's the default for NHL 24. **First write test** (with the user's OK): one small change
+that touches a TOC, signature left as it is, and see whether NHL 24 loads. If it's rejected, only writes that fit the
+original ranges are possible (pad smaller data; refuse bigger), until another way is found.
+
+### Steps
+
+1. **Foundation**: a game profile (NHL 27 PS5 / NHL 24 PS4) detected from the folder (`param.json` or
+   `param.sfo`, title id), a game switcher in Settings, and per-game cache (`cache/<title>/index.bin`), mod store
+   and settings. NHL 27 keeps working exactly as now.
+2. **Reading**: index the NHL 24 dump (time it: 24Kit's FMT index matched 482,971 EBX, 193,291 RES, 180,802 chunks),
+   Explorer, Textures (PS4 header, Morton untile, firstMip), Sounds (EBX GUID scan, Opus, banks), Videos, Database
+   and Roster (both roster files), Teams. Screenshots of each.
+3. **The signature test** (above), with the user's OK.
+4. **Writing**: textures (Morton retile, BC encode, every RES copy), databases and loc (sizes in the index chunk),
+   sounds (stored blocks; banks), logos, all through the mod store so Restore undoes them.
+5. **NHL 24 extras**: Play page for nhl24pc (config.json, game_path.txt, launch, patches), Tuning that edits
+   (`nhl24.xml`, the kit's own block), scorebug (`scoreclock.gfx`), portraits.
+6. **3D pages**: Uniforms, Studio, Unused, Arenas once PS4 meshes and kit folders are checked on the dump.
+
+Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide when NHL 24 is picked.
