@@ -46,6 +46,18 @@ public partial class MainWindow : Window
         // --game DIR opens another game for this run without changing the saved choice (scripted shots)
         GameDir.Text = App.Args.TryGetValue("game", out var argGame) ? argGame
             : KitPaths.IsGame(_settings.GameDir) ? _settings.GameDir : KitPaths.FindGame() ?? _settings.GameDir ?? "";
+        AskGame.IsChecked = _settings.AskForGame;
+        // --picker shows the game picker (a scripted shot of it ends there)
+        if (App.Args.ContainsKey("picker") || (argGame == null && !App.Args.ContainsKey("shot") && _settings.AskForGame && KnownGames().Count > 1))
+        {
+            var pick = PickGameAsync();
+            if (App.Args.ContainsKey("shot"))
+            {
+                await Shot();
+                return;
+            }
+            OpenPicked(await pick);
+        }
         ShowGameInfo();
         PlayPage.StateChanged += SetState;
         PlayPage.StatusChanged += text => Status.Text = text;
@@ -698,6 +710,82 @@ public partial class MainWindow : Window
     {
         if (_suppress || GamePicker.SelectedItem is not GameChoice g || g.Dir.Equals(Game, StringComparison.OrdinalIgnoreCase)) return;
         SwitchGame(g.Dir);
+    }
+
+    /// <summary>A game on the startup picker.</summary>
+    public sealed record GameCard(string Dir, GameProfile Profile, ImageSource Icon)
+    {
+        public string Name => Profile.Name;
+        public string Short => Profile.Kind switch { GameKind.Nhl27 => "27", GameKind.Nhl24 => "24", _ => "?" };
+        public string Platform => Profile.Platform;
+        public string Detail => string.IsNullOrEmpty(Profile.Version) ? Profile.TitleId ?? "" : $"{Profile.TitleId}  ·  v{Profile.Version}";
+        public string Folder => Dir;
+    }
+
+    private TaskCompletionSource<string> _pick;
+
+    /// <summary>Shows the game cards on the startup screen; the task ends with the folder picked.</summary>
+    private Task<string> PickGameAsync()
+    {
+        GameCards.ItemsSource = KnownGames().Select(g => new GameCard(g.Dir, g.Profile, Cover(g.Dir))).ToList();
+        SplashGame.Text = "MODDING KIT";
+        SplashLoading.Visibility = Visibility.Collapsed;
+        GamePick.Visibility = Visibility.Visible;
+        _pick = new TaskCompletionSource<string>();
+        return _pick.Task;
+    }
+
+    /// <summary>The game's cover (sce_sys/icon0.png), or null.</summary>
+    private static ImageSource Cover(string dir)
+    {
+        string file = Path.Combine(dir, "sce_sys", "icon0.png");
+        if (!File.Exists(file)) return null;
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = 412;
+            bmp.UriSource = new Uri(file);
+            bmp.EndInit();
+            bmp.Freeze();
+            return bmp;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or UriFormatException) { return null; }
+    }
+
+    private void OnGameCard(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is GameCard card) _pick?.TrySetResult(card.Dir);
+    }
+
+    private void OnPickBrowse(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFolderDialog { Title = "Choose the extracted game folder (NHL 27 or NHL 24)" };
+        if (dlg.ShowDialog(this) != true) return;
+        if (KitPaths.IsGame(dlg.FolderName)) _pick?.TrySetResult(dlg.FolderName);
+        else MessageBox.Show(this, "That folder has no Data\\layout.toc. Pick the extracted game folder, the one with eboot.bin and Data.", "NHL27Kit",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    /// <summary>Opens the game picked at startup and remembers it (and "don't ask again").</summary>
+    private void OpenPicked(string dir)
+    {
+        GameDir.Text = dir;
+        _settings.GameDir = Game;
+        if (!_settings.Games.Contains(Game, StringComparer.OrdinalIgnoreCase)) _settings.Games.Add(Game);
+        if (PickRemember.IsChecked == true) _settings.AskForGame = false;
+        _settings.Save();
+        AskGame.IsChecked = _settings.AskForGame;
+        GamePick.Visibility = Visibility.Collapsed;
+        SplashLoading.Visibility = Visibility.Visible;
+    }
+
+    private void OnAskGame(object sender, RoutedEventArgs e)
+    {
+        if (_settings.AskForGame == (AskGame.IsChecked == true)) return;
+        _settings.AskForGame = AskGame.IsChecked == true;
+        _settings.Save();
     }
 
     /// <summary>The title bar's game: a menu of the known games, and Browse.</summary>

@@ -43,7 +43,7 @@ public static class KitPaths
     }
 
     /// <summary>
-    /// Game folders near the kit: in or below (two levels) each of the four folders above the program, so a dump next to
+    /// Game folders near the kit: in or below (two levels) each of the five folders above the program, so a dump next to
     /// the kit folder ("NHL 27 dump/NHL", "NHL 24 Dump") is found. NHL 27 first.
     /// </summary>
     public static List<string> FindGames()
@@ -51,7 +51,8 @@ public static class KitPaths
         var found = new List<string>();
         void Add(string d)
         {
-            if (!IsGame(d)) return;
+            // a dump has its eboot; FMT's __FMTBackup (a copy of Data) doesn't
+            if (!IsGame(d) || !File.Exists(Path.Combine(d, "eboot.bin"))) return;
             string full = Path.GetFullPath(d).TrimEnd('\\', '/');
             if (!found.Contains(full, StringComparer.OrdinalIgnoreCase)) found.Add(full);
         }
@@ -61,7 +62,7 @@ public static class KitPaths
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return Array.Empty<string>(); }
         }
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int up = 0; dir != null && up < 4; dir = dir.Parent, up++)
+        for (int up = 0; dir != null && up < 5; dir = dir.Parent, up++)
             foreach (string child in Dirs(dir.FullName))
             {
                 Add(child);
