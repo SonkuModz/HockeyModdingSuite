@@ -8,8 +8,35 @@ namespace NHL27Kit.Core;
 public enum TunableType { Bool, Int, Float }
 
 /// <summary>One gameplay tuning value compiled into the eboot: its default and range, group path and readable label.</summary>
+/// <summary>What the bytes a PS4 value comes from hold.</summary>
+public enum ValueKind
+{
+    /// <summary>A byte immediate (a bool).</summary>
+    Imm8,
+    /// <summary>A 4-byte immediate that is the value (any upper half is left as it is, or zeroed).</summary>
+    Imm32,
+    /// <summary>A 4-byte immediate sign-extended into the next field (the minimum).</summary>
+    Imm32Sx,
+    /// <summary>An 8-byte immediate: the value, then the minimum.</summary>
+    Imm64,
+    /// <summary>A 4-byte load from read-only data (rip-relative displacement).</summary>
+    Load4,
+    /// <summary>An 8-byte load: the value, then the minimum.</summary>
+    Load8,
+}
+
+/// <summary>
+/// Where a PS4 value is set (<see cref="Field"/> 0x38 the value, 0x40 the maximum): <see cref="Va"/> is the address of
+/// the immediate, or of a load's displacement, whose instruction ends at <see cref="End"/>; <see cref="Const"/> is
+/// what a load reads.
+/// </summary>
+public sealed record ValueSource(int Field, ValueKind Kind, long Va, long End, long Const);
+
 public sealed record Tunable(string Name, TunableType Type, double? Default, double? Min, double? Max, string Group, string Label, long Site)
 {
+    /// <summary>NHL 24 only: the instructions that set the value and maximum (for patching them).</summary>
+    public IReadOnlyList<ValueSource> Sources { get; init; }
+
     public string TypeText => Type switch { TunableType.Bool => "bool", TunableType.Int => "int", _ => "float" };
     public string DefaultText => Show(Default);
     public string MinText => Show(Min);
@@ -37,11 +64,13 @@ public sealed record Tunable(string Name, TunableType Type, double? Default, dou
 /// </summary>
 public static class Tunables
 {
-    private sealed class Segment { public long Va, Size, Offset; }
+    internal sealed class Segment { public long Va, Size, Offset; public uint Flags; public bool Writable => (Flags & 2) != 0; }
 
-    public static List<Tunable> Read(string eboot)
+    public static List<Tunable> Read(string eboot) => Read(File.ReadAllBytes(eboot));
+
+    /// <summary>Reads the values from an eboot.bin's bytes.</summary>
+    public static List<Tunable> Read(byte[] b)
     {
-        byte[] b = File.ReadAllBytes(eboot);
         var segs = Segments(b);
         var code = segs.FirstOrDefault(s => s.Va == 0) ?? throw new InvalidDataException("eboot.bin has no code segment at address 0 (is it decrypted?)");
 
@@ -240,13 +269,15 @@ public static class Tunables
             TunableType? kind = null;
             long? group = null, label = null;
             bool sameLabel = false;
-            var xmm = new Dictionary<Register, (long Addr, int Size)>();
-            var imm = new Dictionary<Register, long>();
+            var xmm = new Dictionary<Register, (long Addr, int Size, long Va, long End)>();
+            var imm = new Dictionary<Register, (long Value, long Va, int Size, bool Sx)>();
+            var sources = new List<ValueSource>();
             double? value = null, min = null, max = null;
             while (d.IP < (ulong)(site + len))
             {
                 var x = d.Decode();
                 if (x.IsInvalid) break;
+                var co = d.GetConstantOffsets(x);
                 bool rip = x.Op0Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand;
                 ulong m = rip ? x.IPRelativeMemoryAddress : 0;
                 Register r1 = x.OpCount > 1 && x.Op1Kind == OpKind.Register ? x.Op1Register : Register.None;
@@ -257,18 +288,19 @@ public static class Tunables
                 }
                 if (x.Mnemonic == Mnemonic.Mov && x.Op0Kind == OpKind.Register && x.Op1Kind is OpKind.Immediate64 or OpKind.Immediate32 or OpKind.Immediate32to64)
                 {
-                    imm[x.Op0Register.GetFullRegister()] = (long)x.GetImmediate(1);
+                    imm[x.Op0Register.GetFullRegister()] = ((long)x.GetImmediate(1), (long)x.IP + co.ImmediateOffset, co.ImmediateSize,
+                        x.Op1Kind == OpKind.Immediate32to64);
                     continue;
                 }
                 // an xmm loaded from read-only data, or zeroed
                 if (x.Mnemonic is Mnemonic.Vmovss or Mnemonic.Vmovsd or Mnemonic.Vmovq && x.Op0Kind == OpKind.Register && x.OpCount == 2 && x.Op1Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand)
                 {
-                    xmm[x.Op0Register] = ((long)x.IPRelativeMemoryAddress, x.Mnemonic == Mnemonic.Vmovss ? 4 : 8);
+                    xmm[x.Op0Register] = ((long)x.IPRelativeMemoryAddress, x.Mnemonic == Mnemonic.Vmovss ? 4 : 8, (long)x.IP + co.DisplacementOffset, (long)x.NextIP);
                     continue;
                 }
                 if (x.Mnemonic is Mnemonic.Vxorps or Mnemonic.Vxorpd && x.OpCount == 3 && x.Op1Kind == OpKind.Register && x.Op2Kind == OpKind.Register && x.Op1Register == x.Op2Register)
                 {
-                    xmm[x.Op0Register] = (0, 16);
+                    xmm[x.Op0Register] = (0, 16, 0, 0);
                     continue;
                 }
                 // the head of the list (a store of rax outside the object): the first links this object, the second is the next one's
@@ -280,13 +312,26 @@ public static class Tunables
                     var full = r1.GetFullRegister();
                     if (off == 8) group = ptr.TryGetValue(full, out var g) ? g : null;
                     else if (off == 0x18) { sameLabel = full == Register.RCX; label = ptr.TryGetValue(full, out var l) ? l : null; }
-                    else if (off == 0x38 && imm.TryGetValue(full, out var q)) { value = (int)q; min = (int)(q >> 32); }
+                    else if (off is 0x38 or 0x40 && imm.TryGetValue(full, out var q))
+                    {
+                        if (off == 0x38) { value = (int)q.Value; min = (int)(q.Value >> 32); }
+                        bool qw = x.MemorySize is MemorySize.UInt64 or MemorySize.Int64;
+                        ValueKind? k = q.Size == 8 ? (qw ? ValueKind.Imm64 : ValueKind.Imm32) : q.Size == 4 ? (qw && q.Sx ? ValueKind.Imm32Sx : ValueKind.Imm32) : null;
+                        if (k is ValueKind vk) sources.Add(new ValueSource((int)off, vk, q.Va, 0, 0));
+                    }
                     continue;
                 }
                 if (x.Mnemonic == Mnemonic.Mov && x.Op1Kind is OpKind.Immediate8 or OpKind.Immediate32 or OpKind.Immediate32to64)
                 {
                     long v = x.Op1Kind == OpKind.Immediate8 ? x.Immediate8 : (int)x.Immediate32;
                     bool qword = x.MemorySize == MemorySize.UInt64 || x.MemorySize == MemorySize.Int64;
+                    if (off is 0x38 or 0x40 && co.ImmediateSize is 1 or 4)
+                    {
+                        var k = co.ImmediateSize == 1 ? ValueKind.Imm8 : qword ? ValueKind.Imm32Sx : ValueKind.Imm32;
+                        // a byte immediate sign-extended into a wider store isn't a bool's byte
+                        if (k != ValueKind.Imm8 || x.MemorySize == MemorySize.UInt8)
+                            sources.Add(new ValueSource((int)off, k, (long)x.IP + co.ImmediateOffset, 0, 0));
+                    }
                     if (off == 0x20)
                     {
                         kind = v switch { 1 => TunableType.Bool, 2 => TunableType.Int, 4 => TunableType.Float, _ => null };
@@ -309,6 +354,10 @@ public static class Tunables
                 if (x.Mnemonic is Mnemonic.Vmovlps or Mnemonic.Vmovss or Mnemonic.Vmovq or Mnemonic.Vmovsd && x.OpCount == 2 && r1 != Register.None)
                 {
                     bool known = xmm.TryGetValue(r1, out var src);
+                    // the value is the first 4 bytes the load reads; an 8-byte load stored whole also carries the minimum
+                    // (a 4-byte load stored as 8 bytes leaves the minimum 0)
+                    if (known && src.Va != 0 && off is 0x38 or 0x40)
+                        sources.Add(new ValueSource((int)off, src.Size == 8 && x.MemorySize != MemorySize.Float32 ? ValueKind.Load8 : ValueKind.Load4, src.Va, src.End, src.Addr));
                     float? F(int at) => !known ? null : src.Addr == 0 || at >= src.Size ? 0f : f32(src.Addr + at);
                     if (off == 0x38)
                     {
@@ -323,7 +372,7 @@ public static class Tunables
             string groupText = group is long gp ? cstr(gp) : null;
             string labelText = sameLabel || label == null ? null : cstr(label.Value);
             if (labelText == name) labelText = null;
-            rows.Add(new Tunable(name, kind.Value, value, kind == TunableType.Bool ? null : min, kind == TunableType.Bool ? null : max, groupText, labelText, site));
+            rows.Add(new Tunable(name, kind.Value, value, kind == TunableType.Bool ? null : min, kind == TunableType.Bool ? null : max, groupText, labelText, site) { Sources = sources });
         }
         return rows;
 
@@ -369,7 +418,7 @@ public static class Tunables
     }
 
     /// <summary>The loaded segments: the SELF's segment table gives each program header's place in the file.</summary>
-    private static List<Segment> Segments(byte[] b)
+    internal static List<Segment> Segments(byte[] b)
     {
         // PS5 and PS4 (NHL 24) SELFs share the layout: a 0x20 header, 0x20-byte segment entries, then the ELF
         uint magic = BinaryPrimitives.ReadUInt32LittleEndian(b);
@@ -393,7 +442,7 @@ public static class Tunables
             long va = BinaryPrimitives.ReadInt64LittleEndian(b.AsSpan(p + 0x10));
             long fileSize = BinaryPrimitives.ReadInt64LittleEndian(b.AsSpan(p + 0x20));
             if (packed != size) throw new InvalidDataException("eboot.bin has compressed segments");
-            list.Add(new Segment { Va = va, Size = Math.Min(size, fileSize), Offset = off });
+            list.Add(new Segment { Va = va, Size = Math.Min(size, fileSize), Offset = off, Flags = BinaryPrimitives.ReadUInt32LittleEndian(b.AsSpan(p + 4)) });
         }
         return list;
     }

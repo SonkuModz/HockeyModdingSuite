@@ -1,0 +1,428 @@
+# NHL 24 gameplay tuning set to NHL 27's values (tunables-match, mod entry cd4d63a12bd9 in mods-nhl24)
+# changed
+gAllowGoalieNetAfterWhistle: value 1 -> 0
+gAnalysisHeatMapTeammateRoomOnlyPuckCarrier: value 1 -> 0
+gAnalysisHeatMapUpdateIntervalTeammateRoom: value 1 -> 0
+gAntiTimeWastingScoreDiff: max 10 -> 100
+gBankLPDMidIceMinSpeed: max 10000 -> 10
+gBreakoutDtoD_AvoidPC: value 0 -> 1
+gCapturePuckMaxOpponentDistanceToAttemptLungingCover: value 10 -> 20
+gChopPuckAbortOnGoalieCollision: value 1 -> 0
+gChopPuckAbortOnNetCollision: value 1 -> 0
+gClearOffGlassMaxFeetFromBoards: max 100 -> 50
+gControllerShortcutsForSI: value 1 -> 0
+gDTree_24_HumanUpdatePassScore: value 0 -> 1
+gDefense_D_BalanceWorkload: max 100 -> 7
+gDisablePickupsByNonHumanTeammateOfIntendedReceiver: value 1 -> 0
+gDynamicD_HoldBlue_DefD_ZBuffer: max 50 -> 20
+gDynamicD_HoldBlue_OffD_ZBuffer: max 50 -> 20
+gDynamicD_HoldBlue_Other_Enable: value 0 -> 1
+gDynamicD_HoldBlue_WSD_Bump: max 50 -> 10
+gDynamicD_HoldBlue_WSD_Enable: value 0 -> 1
+gEnableDeflectionTelemetry: value 1 -> 0
+gEvaluatorBestStratDCarries: max 3 -> 5
+gEvaluatorBestStratHighFarSide: max 3 -> 5
+gEvaluatorBestStratLongBombs: max 3 -> 5
+gEvaluatorBestStratUpBoards: max 3 -> 5
+gEvaluatorBestStratUpMiddle: max 3 -> 5
+gEvaluatorSecondBestDCarries: max 3 -> 5
+gEvaluatorSecondBestHighFarSide: max 3 -> 5
+gEvaluatorSecondBestStratLongBombs: max 3 -> 5
+gEvaluatorSecondBestStratUpBoards: max 3 -> 5
+gEvaluatorSecondBestStratUpMiddle: max 3 -> 5
+gFaceoffBlendFrames: value 6 -> 10
+gFaceoffBlendFrames: max 10 -> 20
+gFacingAngleBlendStopTurnMaxSpeed: max 0.5 -> 50
+gFacingAngleBlendStopTurnMinSpeed: max 0.5 -> 50
+gFadeColourHoldMaxFrames: value 100 -> 300
+gFadeColourHoldMaxFrames: max 150 -> 300
+gFightGoofoffTime: value 200 -> 40
+gFlexCam_DefaultMovingSkaterCeleb: max 200 -> 400
+gForecheck_DenyMaxStrategy: max 4 -> 6
+gFramesToGetPuckToConsiderOneTimer: value 5 -> 8
+gGeneralVaryProtectPosEnabled: value 1 -> 0
+gGetUpEnergyForMaxSpeed: max 2 -> 200
+gGetUpEnergyForMinSpeed: max 2 -> 200
+gGoalieAbortSavePuckChangeMinFramesPassingGoalie: value 1 -> 2
+gGoalieApplySkillLevelModifierToRatingsCPU: value 1 -> 0
+gGoalieAttemptSaveOnShotReleaseFramesToGoalie: value 4 -> 3
+gGoalieButterflyAccelFramesWantsToStopForSaveHeldPose: value 1 -> 2
+gGoalieDesperationDivesMaxFramesUntilPuckPassesGoalie: value 5 -> 20
+gGoalieFreeSkateBaseAccelFactor: max 1.5 -> 2
+gGoalieFreeSkateBaseSpeedFactor: max 1.5 -> 2
+gGoalieMaxFramesPuckCrossesGoallineForGuessedSave: value 8 -> 4
+gGoalieMaxFramesPuckCrossesGoallineForGuessedSaveWaitMore: value 5 -> 2
+gGoalieMaxFramesPuckPassesGoalieForGuessedSave: value 8 -> 4
+gGoalieMaxFramesPuckPassesGoalieForGuessedSaveWaitMore: value 6 -> 3
+gGoalieMaxFramesToStayOnSideInThreateningSituation: value 500 -> 20
+gGoaliePreventSavesIfCanWaitCPU: value 0 -> 1
+gGoalieSprawlingFramesToPlantButterfly: value 4 -> 3
+gGoalieSprawlingFramesToPlantSet: value 4 -> 2
+gGoalieSprawlingFramesToPushButterfly: value 7 -> 6
+gGoalieSprawlingFramesToPushSet: value 6 -> 4
+gGuardHigh_AdjBL: max 1 -> 50
+gGuardHigh_AdjGL: max 1 -> 50
+gGuardHigh_OZoneTol: max 1 -> 10
+gGuardTargets_NoGTs_Backcheck: value 1 -> 0
+gHIKGloveSaveWarpPuckEnable: value 1 -> 0
+gHugPostGoalLineOffsetButterfly: max 5 -> 20
+gInterferenceMinStressTick: value 3 -> 8
+gInterferenceMinStressTick: max 0 -> 100
+gLacrossePassMaxLAngleDeg: max 180 -> 360
+gLacrossePassMaxRAngleDeg: max 180 -> 360
+gLastManBackTime: value 15 -> 60
+gLineChange_TL_DesperationLevel_High: max 1.1 -> 2
+gLineChange_TL_DesperationLevel_Low: max 1.1 -> 2
+gLineChange_TL_DesperationLevel_Mid: max 1.1 -> 2
+gMaxDeltaAngle: max 10 -> 1
+gMaxGoalieCoverPuckFramesBeforeWhistle3on3: value 90 -> 70
+gMaxGoalieCoverPuckFramesBeforeWhistlePP: value 90 -> 70
+gMaxGoalieCoverPuckFramesBeforeWhistleProAm: value 90 -> 70
+gMaxStrategySuggestionsSecondPeriod: value 2 -> 4
+gMaxStrategySuggestionsThirdPeriod: value 2 -> 6
+gMaxTickAfterInteractionStartDiscardInterferenceValidAction: max 0 -> 100
+gMaxTickBeforeReleaseGoalieInteractionAllowed: max 0 -> 100
+gMaxTickOnIceBlockedByPlayerMagnet: value 10 -> 3
+gMaxTicksSinceFwdForCharging: value 4 -> 2
+gMinTickWithoutInterferenceResetPossesedPuckOpponent: max 0 -> 100
+gMinTickWithoutInterferenceResetPuckOutOfCrease: max 0 -> 100
+gNoChopPuckTimer: value 30 -> 0
+gOTSecondsOfRealTime: value 30 -> 60
+gPadMagnitudeToEstablishVisConTransState: max 20 -> 1
+gPenaltyDoorOpenTimeGoofoff: value 300 -> 600
+gPenaltyDoorOpenTimeGoofoff: max 300 -> 1000
+gPickAssist_StopIntent: value 0 -> 2
+gPlaySystemAnticipatePuckWinIn5on5: value 0 -> 1
+gPlaySystemMaintainPossessionIn5on5: value 0 -> 1
+gPlayerAvoidanceNoAvoidInGetPuck: value 0 -> 1
+gPlayerAvoidance_NHL24_NoDMutual: value 1 -> 0
+gPokeCheck_do_body2puck_check: value 0 -> 1
+gPostWhistle_TolerableTeamEvents: max 20 -> 40
+gPressureMeterFall: value 260 -> 3000
+gPressureMeterFall: max 1000 -> 10000
+gPressureMeterOutOfZoneDecrement: value 1 -> 4
+gPressureMeterOutOfZoneDecrement: max 10 -> 1000
+gPressureMeterShotDesperationSaveAttempt: value 160 -> 4250
+gPressureMeterShotDesperationSaveAttempt: max 1000 -> 10000
+gPressureMeterStumbleFall: value 170 -> 750
+gPressureMeterStumbleFall: max 1000 -> 10000
+gReplayCrossFadeTime: value 5 -> 15
+gScoreModifierContainedForecheck_PinchEnabled: value 0 -> 1
+gSkateEffortEdgeDeadZone: max 15 -> 1
+gTeamStrategy_FaceoffCenterAttackerTicks: value 60 -> 0
+gTeamStrategy_OrderBasedOnBackCheckList: value 60 -> 0
+gUsePlayerPositionAsPassOrigin: value 0 -> 1
+gVisConDropPass: value 1 -> 0
+gAIJumpOverAttribMaxChance: value 4 -> 3.8 (existing constant at 0x8DFC86C)
+gAbortSavePuckHeadedToSafetyFactor: value 0.5 -> 0 (existing constant at 0x14)
+gAdrenalineEnergyLossMultiplier: value 0.5 -> 1 (existing constant at 0x19BE34)
+gAngleForLowPokeScore: value 140 -> 100 (existing constant at 0x468798)
+gAngleLimitForClose: value 0 -> 0.07 (new constant at 0x114)
+gAutoAimMaxSafetyBufferHuman: value 18 -> 4.5 (existing constant at 0x8D98744)
+gBAPChangePassReceiverMultiplier: value 0 -> 0.1 (existing constant at 0x8DF9190)
+gBAPSubPassReceiverMultiplier: value 0 -> 0.1 (existing constant at 0x8DF9190)
+gBankLPDBoardDistanceThreshold: value 18 -> 10 (existing constant at 0x3D2020)
+gBankOffNetMaxXOffset: value 0.6 -> 0.9 (existing constant at 0x8E85330)
+gBankOffNetMinXOffset: value 0.4 -> 0.7 (existing constant at 0x8E85350)
+gBlockShot_BaseBlockAngleEmptyNet: value 20 -> 14 (existing constant at 0x9897DC)
+gBlockShot_ShooterDistFromGoalline: value 10 -> 7 (existing constant at 0x48EA54)
+gButterflyVelMaxSpeedForSlowHuman: value 0.08 -> 0.5 (existing constant at 0x3CA7F4)
+gButterflyVelMaxSpeedForStoppedHuman: value 0.02 -> 0.35 (existing constant at 0x30853A4)
+gCapturePuckMinXFeetToCoverBesideNet: value 1.8 -> 1 (existing constant at 0x19BE34)
+gChecking_MovingPokes_MaxDist: value 10.5 -> 10 (existing constant at 0x3D2020)
+gClearOffGlass_OwnZoneBase: value -0.1 -> -0.08 (existing constant at 0x8E95DC0)
+gClearOffGlass_OwnZoneRetrieveWeight: value 0.15 -> 0.06 (existing constant at 0x8EA02C0)
+gClearOffGlass_PkOwnZoneBaseDump: value 0.02 -> 0.12 (existing constant at 0x8E22720)
+gCloseToNetPowerMaxPenalty: value 0.5 -> 0 (existing constant at 0x14)
+gCloseToNetRadius: value 35 -> 15 (existing constant at 0x45A2D4)
+gCollisionTouchTestPadding: value 0.03 -> 0.02 (existing constant at 0x6876D1C)
+gDSK_MaxDistToApproachIZ: value 15 -> 12 (existing constant at 0x121660)
+gDSK_MaxDistToApproachRush: value 30 -> 12 (existing constant at 0x121660)
+gDSK_MaxZDistDiff: value 25 -> 20 (existing constant at 0x4574DC)
+gDatsyukDekeFlipMaxDistanceToTargetNet: value 5 -> 6 (existing constant at 0x4905D4)
+gDecEnergyForHitScale_1Player_Hittee: value 0.75 -> 0.5 (existing constant at 0x3CA7F4)
+gDefenceEnergyDropScale: value 0.9 -> 1 (existing constant at 0x19BE34)
+gDefenseBackCheck_BiasPuckSide: value 1.5 -> 1 (existing constant at 0x8DF8240)
+gDefensePlayBetweenZAdj: value 6 -> 2 (existing constant at 0x61990)
+gDefense_Ensure_OF_TrailTolerance: value 15 -> 20 (existing constant at 0x4574DC)
+gDeflectionSMTargetInchesMaxHorizontalError: value 9 -> 16 (existing constant at 0x1A6C44)
+gDeflectionSMTargetInchesMaxVerticalError: value 10 -> 15 (existing constant at 0x45A2D4)
+gDeltaHandNotOnStickShot: value 0.04 -> 0.2 (existing constant at 0x1B25EC)
+gDescriptorSkateSolveOffsideBufferFeet: value 2 -> 1 (existing constant at 0x19BE34)
+gDestDistToNetToNotTryTurning: value 15 -> 2 (existing constant at 0x61990)
+gDistFromNearestDefenderToPivotAway: value 12 -> 6 (existing constant at 0x4905D4)
+gDragSkateSkaterPosTolerance: value 3.4 -> 4 (existing constant at 0x8E7EC50)
+gDynamicD_HoldBlue_DefD_ZBuffer: value 21 -> 5 (existing constant at 0x43B080)
+gDynamicD_HoldBlue_OffD_ZBuffer: value 17 -> 5 (existing constant at 0x43B080)
+gDynamicD_HoldBlue_WSD_Bump: value 10 -> -2 (existing constant at 0x26697C)
+gEnergyDecRateFromAccel_BAP_Online: value 2 -> 2.4 (existing constant at 0x8DEF66C)
+gFacingAngleBlendPerFramePivot: value 12 -> 18 (new constant at 0x2BD4)
+gFacingAngleBlendPerFramePivotMin: value 12 -> 18 (existing constant at 0x2BD4)
+gFacingAngleBlendStopTurnMaxSpeed: value 0.15 -> 10 (existing constant at 0x3D2020)
+gFacingAngleBlendStopTurnMinSpeed: value 0.06 -> 4 (existing constant at 0x48FC70)
+gFatigueMultPK_BAP_Auth_CPU: value 1.2 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPK_BAP_Auth_Human: value 1.2 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPK_BAP_Class: value 1.2 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPK_BAP_Online: value 1.2 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPK_BeAGM: value 1.2 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPK_General: value 1.2 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPP_BAP_Auth_CPU: value 0.5 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPP_BAP_Auth_Human: value 0.5 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPP_BAP_Class: value 0.5 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPP_BAP_Online: value 0.5 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPP_BeAGM: value 0.5 -> 1 (existing constant at 0x19BE34)
+gFatigueMultPP_General: value 0.5 -> 1 (existing constant at 0x19BE34)
+gFeetForNoWidthScale: value 20 -> 10 (existing constant at 0x3D2020)
+gFeetFromNetToForceSmartStop: value 15 -> 7.015 (new constant at 0x2BDC)
+gFilterOutSpinShotRelativeBackAngle: value 30 -> 40 (existing constant at 0x496AA0)
+gFilteredTurnAngleOffplay: value 30 -> 20 (existing constant at 0x4574DC)
+gFlexCam_GP_AvoidanceRadiusTeammateStart_FEET: value 10 -> 15 (existing constant at 0x45A2D4)
+gFlexCam_GP_AvoidanceRadiusTeammate_FEET: value 5 -> 18 (existing constant at 0x2B6AFFC)
+gFlipIntoOffensiveZone_LossWeight: value 0.01 -> 0.08 (existing constant at 0x8E21990)
+gFlipIntoOffensiveZone_RetrieveWeight: value 0.025 -> 0.05 (existing constant at 0x8E226D0)
+gForecheckSSDPinch_DistToPinch: value -1 -> 20 (existing constant at 0x8DFB304)
+gForecheckStepUpOnWingerXFromTarget: value 4.7 -> 2 (existing constant at 0x61990)
+gForecheckZonesMaxZFeetFromRedLine: value 6 -> 0 (existing constant at 0x14)
+gGPPhysicalPreparednessHasPuck: value 0.7 -> 0.8 (existing constant at 0x1CEB700)
+gGPPhysicalPreparednessHasPuckBackSkating: value 0.4 -> 0.1 (existing constant at 0x391D2C)
+gGPPhysicalPreparednessHasPuckGliding: value 0.55 -> 0.825 (existing constant at 0x8DEEE28)
+gGPPhysicalPreparednessHasPuckGlidingBehind: value 0.6 -> 0.85 (existing constant at 0x2E04CB0)
+gGPPhysicalPreparednessHasPuckPivoting: value 0.4 -> 0.1 (existing constant at 0x391D2C)
+gGapControl_ST_GapDistRelZBonus: value 12 -> 1 (existing constant at 0x8DEC550)
+gGenericClear_neutralRetrieveWeight: value 0.03 -> 0.04 (existing constant at 0x8E95D30)
+gGenericClear_ownZoneRetrieveWeight: value 0.03 -> 0.04 (existing constant at 0x8E95D30)
+gGenericClear_pkNeutralZoneBaseDump: value 0.01 -> 0.025 (existing constant at 0x8E226E0)
+gGenericClear_pkOwnZoneBaseDump: value 0.025 -> 0.15 (existing constant at 0x8E85670)
+gGetUpEnergyForMaxSpeed: value 1.2 -> 120 (existing constant at 0x4955F0)
+gGetUpEnergyForMinSpeed: value 0.2 -> 20 (existing constant at 0x4574DC)
+gGlassBreakCheckProbability: value 0.15 -> 0.005 (existing constant at 0x1157580)
+gGlassBreakPuckMinSpeed: value 0.5 -> 1.2 (existing constant at 0x2DDE918)
+gGlassBreakPuckProbability: value 0.15 -> 0.05 (existing constant at 0x166BED0)
+gGoalieButterflyFootToLeftPostBehindNetUpIceFacingX: value 32.5 -> 20 (existing constant at 0x4574DC)
+gGoalieButterflyFootToLeftPostUpIceFacingX: value 32.5 -> 20 (existing constant at 0x4574DC)
+gGoalieButterflyFootToRightPostBehindNetUpIceFacingX: value 32.5 -> 18 (existing constant at 0x2B6AFFC)
+gGoalieButterflyFootToRightPostUpIceFacingX: value 32.5 -> 18 (existing constant at 0x2B6AFFC)
+gGoalieButterflyPostLeanPositionLeftPostXOffset: value 8.3 -> 14.5 (new constant at 0x2EA8)
+gGoalieButterflyPostLeanPositionLeftPostZOffset: value 20 -> 15 (new constant at 0x5614)
+gGoalieButterflyPostLeanPositionRightPostXOffset: value 6.7 -> 15 (existing constant at 0x5614)
+gGoalieButterflyPostLeanPositionRightPostZOffset: value 19.3 -> 16 (new constant at 0x57C8)
+gGoalieCPUAnticipatingPassReadinessMult: value 0.9 -> 0.8 (existing constant at 0x1CEB700)
+gGoalieCPUAnticipatingShotPrecisionMult: value 1.25 -> 1.05 (existing constant at 0x8DEED08)
+gGoalieCPUAnticipatingShotReadinessMult: value 1.25 -> 1.07 (existing constant at 0x8DEE444)
+gGoalieCPUMinDesiredXFeetToStartHeldPosePush: value 1.66 -> 1.46 (new constant at 0x5828)
+gGoalieCPUMinDesiredXFeetToUpgradeRegularPushToHeldPosePuckOwned: value 2.1 -> 1.65 (existing constant at 0x8DFC0E8)
+gGoalieCapabilityControlledSaveChanceFactorForThreatOfDeflection: value 0.33 -> 0.7 (existing constant at 0xBB40F4)
+gGoalieCornerSkateChance: value 0.25 -> 0.15 (existing constant at 0x72F7278)
+gGoalieDiveGloveSideSaveFrame: value 30 -> 14 (existing constant at 0x9897DC)
+gGoalieDivingMaxAccel: value 0.0125 -> 0.025 (existing constant at 0x17B5CB0)
+gGoalieDivingMaxMoveSpeed: value 0.105 -> 0.12 (existing constant at 0x8DEED3C)
+gGoalieDumpHeightVary: value 0.2 -> 0.3 (existing constant at 0x462D8C)
+gGoalieFatigueBaseEnergyReductionOnSaveAttemptCPU: value 25 -> 23 (existing constant at 0x26F4914)
+gGoalieFatigueBaseEnergyReductionOnSaveAttemptHuman: value 25 -> 23 (existing constant at 0x26F4914)
+gGoalieFatigueBoostInOffensiveZoneCPU: value 2 -> 3 (existing constant at 0x8DF03DC)
+gGoalieFatigueBoostInOffensiveZoneHuman: value 2 -> 3 (existing constant at 0x8DF03DC)
+gGoalieFatigueEnergyReductionOnReactingSaveAttemptCPU: value 30 -> 29 (existing constant at 0x34918)
+gGoalieFatigueEnergyReductionOnReactingSaveAttemptHuman: value 30 -> 29 (existing constant at 0x34918)
+gGoalieFatiguePenaltyWhenDefendingCPU: value -1 -> 0 (existing constant at 0x8E836B0)
+gGoalieFatiguePenaltyWhenDefendingHuman: value -1 -> 0 (existing constant at 0x8E836B0)
+gGoalieFreeSkateBaseAccelFactor: value 0.9 -> 1.5 (existing constant at 0x46900C)
+gGoalieFreeSkateBaseSpeedFactor: value 0.95 -> 1.55 (new constant at 0x582C)
+gGoalieGetupMaxTimeScaleFromDesperationSide: value 1.15 -> 1.75 (existing constant at 0x8DEEC14)
+gGoalieGetupMinTimeScaleFromDesperationSide: value 0.85 -> 1.5 (existing constant at 0x46900C)
+gGoalieHugPostMinSpeedPerFrameInches: value 1 -> 0.01 (existing constant at 0x6AB4A4)
+gGoalieHumanSaveTargetCloseGuessPrecisionMultiplier: value 1.5 -> 1 (existing constant at 0x19BE34)
+gGoalieHumanSaveTargetCloseGuessReadinessMultiplier: value 1.5 -> 1 (existing constant at 0x19BE34)
+gGoalieHumanSaveTargetCorrectGuessPrecisionMultiplier: value 5 -> 1.5 (existing constant at 0x46900C)
+gGoalieHumanSaveTargetCorrectGuessReadinessMultiplier: value 5 -> 1.5 (existing constant at 0x46900C)
+gGoalieLacrosseDekeReactChance: value 0.3 -> 0.9 (existing constant at 0xF72360)
+gGoalieLacrosseDekeReactChanceHuman: value 0.8 -> 0.9 (existing constant at 0xF72360)
+gGoalieLookingAroundCorrectSidePrecisionFactorCPU: value 1.2 -> 1.15 (existing constant at 0xA9899C)
+gGoalieLookingAroundCorrectSidePrecisionMinPenaltyCPU: value 0.05 -> 0.07 (new constant at 0x9ED8)
+gGoalieLookingAroundCorrectSidePrecisionMinPenaltyHuman: value 0 -> 0.02 (existing constant at 0x8ECBB34)
+gGoalieLookingAroundCorrectSideReadinessFactorCPU: value 1.2 -> 1.15 (existing constant at 0xA9899C)
+gGoalieLookingAroundCorrectSideReadinessFactorHuman: value 1.1 -> 1.15 (existing constant at 0xA9899C)
+gGoalieLookingAroundCorrectSideReadinessMinPenaltyCPU: value 0.05 -> 0.07 (existing constant at 0x9ED8)
+gGoalieLookingAroundCorrectSideReadinessMinPenaltyHuman: value 0 -> 0.02 (existing constant at 0x8ECBB34)
+gGoalieLookingAroundWrongSidePrecisionFactorCPU: value 0.5 -> 0.25 (existing constant at 0x825B4)
+gGoalieLookingAroundWrongSidePrecisionFactorHuman: value 0.95 -> 0.9 (existing constant at 0xF72360)
+gGoalieLookingAroundWrongSideReadinessFactorCPU: value 0.5 -> 0.25 (existing constant at 0x825B4)
+gGoalieLookingAroundWrongSideReadinessFactorHuman: value 0.7 -> 0.6 (existing constant at 0x253C64C)
+gGoalieMaxChallengeFeetAggressiveGoalie: value 8.25 -> 10 (existing constant at 0x3D2020)
+gGoalieMaxFeetFromGoallineForPuckCrossingPostLine: value 1.6 -> 0 (existing constant at 0x14)
+gGoalieMaxXInchesPassingGoalieForAtHim: value 12 -> 4 (existing constant at 0x48FC70)
+gGoalieMinAngleDegreesForPuckPassedGoalie: value 100 -> 70 (existing constant at 0xCD7D1C)
+gGoalieMinDesiredDistFeetToBeMovingTowardsDesired: value 0.75 -> 0.1 (existing constant at 0x391D2C)
+gGoalieMinDistFromGoalLinePuckBehindNet: value 0.6 -> 1.2 (existing constant at 0x2DDE918)
+gGoalieMinDistFromGoalLinePuckBehindNetWider: value 0.7 -> 1.2 (existing constant at 0x2DDE918)
+gGoalieMinSpeedForMovingTowardsDesiredMPH: value 1 -> 0.5 (existing constant at 0x3CA7F4)
+gGoaliePostLeanFootPostInchDistForMinLean: value 32 -> 24 (existing constant at 0x282964)
+gGoalieSaveModelBoostForPoseHighLowCPU: value 1.05 -> 1 (existing constant at 0x19BE34)
+gGoalieSaveModelBoostForPoseHighLowHuman: value 1.15 -> 1 (existing constant at 0x19BE34)
+gGoalieSaveModelPenaltyForPoseHighLowCPU: value 0.95 -> 0.9 (existing constant at 0xF72360)
+gGoalieSaveModelPenaltyForPoseHighLowHuman: value 0.85 -> 0.9 (existing constant at 0xF72360)
+gGoalieSpreadVMaxAccel: value 0.011 -> 0.013 (existing constant at 0x8F2FB2C)
+gGoalieSpreadVMaxMoveSpeed: value 0.095 -> 0.105 (existing constant at 0x8DEED4C)
+gGoalieWhistleRefreshMultiplierCPU: value 1 -> 0.25 (existing constant at 0x825B4)
+gGoalieWhistleRefreshMultiplierHuman: value 1 -> 0.25 (existing constant at 0x825B4)
+gGrabPuckDesperationSaveChance: value 0.5 -> 0.65 (existing constant at 0x8DEEC04)
+gHardClear_neutralZoneBaseDump: value -0.1 -> -0.09 (new constant at 0xFE74)
+gHardClear_ownZoneBaseDump: value -0.12 -> -0.08 (existing constant at 0x8E95DC0)
+gHardClear_ownZoneRetrieveWeight: value 0.02 -> 0.03 (existing constant at 0x8E95DE0)
+gHardClear_pkNeutralZoneBaseDump: value 0.01 -> 0.025 (existing constant at 0x8E226E0)
+gHardClear_pkOwnZoneBaseDump: value 0.02 -> 0.125 (existing constant at 0x8DF2698)
+gHardDumpAroundOffensiveZone_BaseDumpValue: value 0.025 -> 0.01 (existing constant at 0x8DF6C8C)
+gHardDumpAroundOffensiveZone_LossWeight: value 0.02 -> 0.08 (existing constant at 0x8F34F60)
+gHardPickupsOffsideModifier: value 0.5 -> 0.975 (new constant at 0xFFA4)
+gHighDekeFriction: value 0.008 -> 0.07 (existing constant at 0x8DEEE90)
+gHighSpeedDropScale: value 0.62 -> 0.06 (existing constant at 0x8DEEDA0)
+gHipCheckOtherSpeedMul: value 2 -> 1.7 (existing constant at 0x8DF0160)
+gHipCheckTicksToStartLoweringControl: value 10 -> 0 (existing constant at 0x14)
+gHipCheckTicksToStartLoweringControlHipCheckTrait: value 20 -> 10 (existing constant at 0x3D2020)
+gHowDoIStepUpBoardPin: value 0.5 -> 2 (existing constant at 0x61990)
+gHowDoIStepUpChecking: value 1 -> 0.75 (existing constant at 0xF7D768)
+gHugPostDistFromGoallineAtBoardsButterfly: value 9 -> 14 (existing constant at 0x9897DC)
+gHugPostDistFromMidForMinDistFromGoallineButterfly: value 8 -> 1 (existing constant at 0x19BE34)
+gHugPostGoalLineOffsetButterfly: value 4.6 -> 8 (existing constant at 0x8E915E0)
+gHustleForecheckMinFeetFromDestForHustleMaybe: value 28 -> 24 (existing constant at 0x282964)
+gHustleForecheckMinFeetFromDestForHustleYes: value 20 -> 18 (existing constant at 0x2B6AFFC)
+gHustleMaxFeetOverBlueForHustleMaybe: value 25 -> 35 (new constant at 0x10014)
+gHustleMaxFeetOverBlueForHustleYes: value 50 -> 55 (new constant at 0x10034)
+gIZDoVisionControlOffPuck23: value 10 -> 22 (existing constant at 0x42440C)
+gInterceptTimeToInhibitIt_Backskate: value 22 -> 14 (existing constant at 0x9897DC)
+gInterferenceMinStrees: value 0.15 -> 0.5 (existing constant at 0x3CA7F4)
+gInterferenceMinStress: value 0.15 -> 0.5 (existing constant at 0x3CA7F4)
+gInzoneStratFrontNet_MinDistToPuck_ToDeflect: value 20 -> 18 (existing constant at 0x2B6AFFC)
+gInzoneStratFrontNet_MinDistToPuck_ToScreen: value 30 -> 24 (existing constant at 0x282964)
+gIsDestReachableInTimePlayerBoardRadius: value 1.5 -> 2 (existing constant at 0x61990)
+gLRVHitDirectionValueAtMin: value 0.4 -> 0.3 (existing constant at 0x462D8C)
+gLacrosseDekeSkillMax: value 0.8 -> 0.7 (existing constant at 0xBB40F4)
+gLacrosseDekeSkillMin: value 0.6 -> 0.3 (existing constant at 0x462D8C)
+gLacrosseDekeStickMin: value 1 -> 0.7 (existing constant at 0xBB40F4)
+gLacrossePassMaxLAngleDeg: value 90 -> 50 (existing constant at 0x8E0D808)
+gLacrossePassMaxRAngleDeg: value 270 -> 300 (existing constant at 0x8E66718)
+gLatAccelMinFriction: value 0.01 -> 0.014 (existing constant at 0x8DEFDB4)
+gLateralFriction: value 0.82 -> 0.9 (existing constant at 0xF72360)
+gLeavePuckForTeammateMinControlSecs: value 0.03 -> 0.2 (existing constant at 0x1B25EC)
+gLeftStickAngleThresholdForStationaryStraightAheadToeDrag: value 90 -> 67.5 (existing constant at 0x850B38)
+gLineChange_TL_DesperationLevel_High: value 0.8 -> 1.8 (existing constant at 0x32BADC)
+gLineChange_TL_DesperationLevel_Low: value 0.25 -> 1.25 (existing constant at 0x4CFFC0)
+gLineChange_TL_DesperationLevel_Mid: value 0.5 -> 1.5 (existing constant at 0x46900C)
+gMaxContactDistSqAlwaysAcceptContact: value 0.0225 -> 4 (existing constant at 0x48FC70)
+gMaxDeltaAngle: value 0.5 -> 0.06 (existing constant at 0x8DEEDA0)
+gMaxDeltaStickBottomhandRecover: value 0.08 -> 0.28 (existing constant at 0x8DEEDF4)
+gMaxDeltaStickBottomhandRecoverStumbleFall: value 0.03 -> 0.17 (existing constant at 0x8DFC7B4)
+gMaxDeltaStickStrongPhysicsDrive: value 0.08 -> 0.12 (existing constant at 0x8DEED3C)
+gMaxDeltaTightBottomHandStick: value 0.015 -> 0.12 (existing constant at 0x8DEED3C)
+gMaxDistanceEverButterfly: value 18 -> 12 (existing constant at 0x121660)
+gMaxDistanceEverButterflyBreakaway: value 11.8 -> 7 (existing constant at 0x48EA54)
+gMaxDistanceEverButterflyBreakawayCarrierClosingIn: value 9.4 -> 5 (existing constant at 0x43B080)
+gMaxDistanceToButterflyOnShotTriggered: value 32 -> 30 (existing constant at 0x101034)
+gMaxDistanceToButterflyOnShotTriggeredHybrid: value 29 -> 25 (existing constant at 0x26D4C30)
+gMaxFaceDirChangePerTickForCharging: value 0.2 -> 0.05 (existing constant at 0x166BED0)
+gMaxFlipPuckChargeTicks: value 20 -> 12 (existing constant at 0x121660)
+gMaxGetUpTimeScale: value 1.15 -> 0.9 (existing constant at 0xF72360)
+gMaxGoalieSpeedToNotMoveForSave: value 4.5 -> 6 (existing constant at 0x4905D4)
+gMaxMagnitudeForInjuryImpact: value 1.6 -> 2 (existing constant at 0x61990)
+gMaxOffplayEffortPostGoalD: value 0.2 -> 1 (existing constant at 0x19BE34)
+gMaxPostWhistleEffort: value 0.75 -> 1 (existing constant at 0x19BE34)
+gMaxPrevDeltaStickNoBottomHand: value 0.1 -> 0.25 (existing constant at 0x825B4)
+gMaxPrevDeltaStickNoBottomHandWasNoPrev: value 0.3 -> 0.35 (existing constant at 0x30853A4)
+gMaxStrengthPassDist: value 65 -> 100 (existing constant at 0x468798)
+gMaxTotalRotationForUperBodyCheck: value 85 -> 75 (existing constant at 0x27A6AAC)
+gMaxTurningFriction: value 0.02 -> 0.01 (existing constant at 0x6AB4A4)
+gMinDeltaStickTooFar: value 2 -> 1.5 (existing constant at 0x46900C)
+gMinDistForDestinationFiltering: value 24 -> 0 (existing constant at 0x14)
+gMinDistForDestinationFilteringOffplay: value 5 -> 0 (existing constant at 0x14)
+gMinDistanceAlwaysButterfly: value 12 -> 6 (existing constant at 0x4905D4)
+gMinDistanceAlwaysButterflyBreakaway: value 8.4 -> 5 (existing constant at 0x43B080)
+gMinDistanceAlwaysButterflyBreakawayCarrierClosingIn: value 6.9 -> 2.5 (existing constant at 0xCFBE88)
+gMinDistanceAlwaysButterflyHybridGoalie: value 10.9 -> 4.5 (existing constant at 0x8D98744)
+gMinDistanceAlwaysButterflyInVH: value 19 -> 25 (existing constant at 0x26D4C30)
+gMinDistanceAlwaysButterflyStandupGoalie: value 9.5 -> 3 (existing constant at 0x426340)
+gMinDistanceToButterflyOnShotTriggeredHybrid: value 18 -> 15 (existing constant at 0x45A2D4)
+gMinEnergyForNoEffect: value 0.5 -> 0.25 (existing constant at 0x825B4)
+gMinEnergyForNoEffectPK: value 0.75 -> 0.25 (existing constant at 0x825B4)
+gMinGetUpTimeScale: value 0.85 -> 0.75 (existing constant at 0xF7D768)
+gMinOnsideChanceForTargetedPass: value -1 -> 0.1 (existing constant at 0x8DF4E7C)
+gMinSpeedForDestinationFiltering: value 4 -> 2 (existing constant at 0x61990)
+gMinStrengthPassDist: value 20 -> 10 (existing constant at 0x3D2020)
+gMinStressMagnitudeGoalieToDetachNet: value 5 -> 999 (existing constant at 0x288A0EC)
+gMinStressMagnitudeToDetachNet: value 5 -> 999 (existing constant at 0x288A0EC)
+gNumFramesForFuturePuckPos: value 20 -> 6 (existing constant at 0x4905D4)
+gOffenseSoftToCorner_BaseDumpValue: value 0.02 -> 0.005 (existing constant at 0x8F4BE64)
+gOffenseSoftToCorner_LossWeight: value 0.02 -> 0.08 (existing constant at 0x8E21990)
+gOffenseSoftToCorner_RetrieveWeight: value 0.02 -> 0.05 (existing constant at 0x8E226D0)
+gOverBoardDeltaToRink: value 1 -> 0.7 (existing constant at 0xBB40F4)
+gPadMagnitudeToEstablishVisConTransState: value 3 -> 0.2 (existing constant at 0x1B25EC)
+gPaddingForBenchContact: value -0.25 -> 0.1 (existing constant at 0x8DF9190)
+gPassSelection_SecondScoreModifier: value 0.25 -> 1 (existing constant at 0x19BE34)
+gPassWorksFaceDirMinCosToPasserToAllowBehind: value 0.6 -> -0.7 (existing constant at 0x8E85240)
+gPassWorksSkateDirMaxCosToPasserToAllowBehind: value -0.7 -> 0.7 (existing constant at 0x8E06FC4)
+gPassingTestDistanceFadeDistMaxFade: value 70 -> 60 (existing constant at 0x458B28)
+gPassingTestDistanceFadeDistNoFade: value 35 -> 20 (existing constant at 0x4574DC)
+gPenaltyChanceHighStick: value 1 -> 0.33 (existing constant at 0x8DEE2F8)
+gPenaltyChanceHook: value 1 -> 0.33 (existing constant at 0x8DEE2F8)
+gPenaltyChanceSlash: value 1 -> 0.33 (existing constant at 0x8DEE2F8)
+gPhysicsBlendRateUpperBodyLayer: value 0.2 -> 0.33 (existing constant at 0x8DEE2F8)
+gPickupStickCompetitionBoardsRadius: value 1.2 -> 1 (existing constant at 0x19BE34)
+gPinnedRatingMultiplier: value 0.8 -> 1 (existing constant at 0x19BE34)
+gPlaySystemIntentionErrorScaling: value 1.5 -> 2.25 (existing constant at 0x1484A88)
+gPlaySystemPositionScopeErrorScaling: value 1.2 -> 1.44 (new constant at 0x1003C)
+gPlaySystemPositionScopeErrorScalingDefenseSwap: value 1.05 -> 1.1025 (new constant at 0x23ED8)
+gPlaySystemPositionScopeErrorScalingSameJobFamily: value 1.15 -> 1.3225 (new constant at 0x23EDC)
+gPlaySystemPriorityHighErrorScaling: value 3 -> 9 (existing constant at 0x14845B4)
+gPlaySystemPriorityMediumErrorScaling: value 1.5 -> 2.25 (existing constant at 0x1484A88)
+gPlayerAvoidanceRelVelRadiusScaleAtMinNonActive: value 1 -> 0.2 (existing constant at 0x1B25EC)
+gPokeCheck_WidthFactor: value 0.5 -> 1.2 (existing constant at 0x8E7EBF0)
+gPreemptivePokeChanceFactorCarrierHeadingAwayFromNet: value 1.33 -> 1.15 (existing constant at 0xA9899C)
+gPreemptivePokeCheckBonusChanceForRating: value 0.5 -> 0.35 (existing constant at 0x30853A4)
+gPreemptivePokeCheckChance: value 0.3 -> 0.2 (existing constant at 0x1B25EC)
+gProtectPosShiftWhenComingOffPostToChallengeShooterMaxBackhand: value 1 -> 1.1 (existing constant at 0x270965C)
+gProtectPosShiftWhenComingOffPostToChallengeShooterMinBackhand: value 0.3 -> 0.45 (existing constant at 0x8DED34C)
+gPuckDistToStickToTriggerDropForNet: value 1 -> 1.1 (existing constant at 0x270965C)
+gShortPassMinStrengthThresholdPct: value 1.25 -> 3 (existing constant at 0x426340)
+gShotQualityPowerInfluenceScale: value 1 -> 0.7 (existing constant at 0xBB40F4)
+gSkateEffortEdgeDeadZone: value 12 -> 0.8 (existing constant at 0x1CEB700)
+gSkateModelLateralAcc: value 0.09 -> 0.115 (new constant at 0x24188)
+gSkateModelMaxFatigueEffectBackwardAccel: value 0.2 -> 0.1 (existing constant at 0x391D2C)
+gSkateModelMaxFatigueEffectForwardAccel: value 0.2 -> 0.1 (existing constant at 0x391D2C)
+gSkateModelMaxFatigueEffectLateralAccel: value 0.01 -> 0.1 (existing constant at 0x391D2C)
+gSkateModelMaxFatigueEffectMaxSpeed: value 0.3 -> 0.33 (new constant at 0x25E14)
+gSpecDriveNetRushSkateAwayNetBias: value 0.8 -> 1 (existing constant at 0x19BE34)
+gSpecDriveNetRushSkateTowardsNetBias: value 2 -> 1 (existing constant at 0x19BE34)
+gSpecializationSlapShotLongMinDistFeet: value 45 -> 35 (existing constant at 0x27331B4)
+gSpecializationWristShotLongMinDistFeet: value 35 -> 25 (existing constant at 0x26D4C30)
+gSpecializationWristShotLongMinDistFeetOnes: value 35 -> 25 (existing constant at 0x26D4C30)
+gSpecializationWristShotLongMinDistFeetSmallRink: value 35 -> 25 (existing constant at 0x26D4C30)
+gSpeedBoostEnergyForMaxSpeed: value 0.6 -> 0.66 (existing constant at 0x8DEED20)
+gSpeedBoostEnergyMinSpeedScale: value 0.5 -> 0 (existing constant at 0x14)
+gSpeedBoostTopFatigueRate: value 2.2 -> 2.3 (new constant at 0x25E38)
+gSpeedForMaxAccel: value 0.32 -> 0.199 (new constant at 0x25E78)
+gSpeedForMaxBkwdAccel: value 0.24 -> 0.179 (new constant at 0x25E7C)
+gSpeedForMaxLatAccel: value 0.2 -> 0.189 (existing constant at 0x94DD2A4)
+gSpeedForMinBkwdAccel: value 0.15 -> 0.18 (existing constant at 0x8DEEDF8)
+gSpeedForMinLatAccel: value 0.28 -> 0.19 (existing constant at 0x8DFEDC0)
+gStepUp_BoardPin_UseBodyCheckBias: value 1 -> 0 (existing constant at 0x14)
+gStickActionLinear: value 1500 -> 1000 (existing constant at 0x6E1554)
+gStickPenetrationCorrectionBoardsAvoidanceTrajPushWeight: value 1 -> 0 (existing constant at 0x14)
+gStickPenetrationCorrectionRotationXZIdealRange1HandedForehand: value 100 -> 110 (new constant at 0x28A84)
+gStickPenetrationCorrectionRotationXZIdealRange2HandedForehand: value 60 -> 70 (existing constant at 0x8E930B0)
+gStickPhysicsLinearWeak: value 150 -> 180 (existing constant at 0x43B8F0)
+gStickStickActionLinear: value 1100 -> 850 (existing constant at 0x8E15464)
+gStickWeakLinear: value 75 -> 25 (existing constant at 0x26D4C30)
+gSupportGoalieDist_Far: value 35 -> 25 (existing constant at 0x26D4C30)
+gSweetSpot_BHand_BaseAngle: value 165 -> 345 (new constant at 0x28A8C)
+gTirednessEffect: value 0.1 -> 0 (existing constant at 0x14)
+gVelFracDecreaseForVelUpdateInPhysicsLock: value 0.8 -> 0.5 (existing constant at 0x3CA7F4)
+gWhoWillGetPuckReachFeet: value 6 -> 8 (existing constant at 0xAC4)
+gWindUpShotMinPower: value 0.6 -> 0.8 (existing constant at 0x1CEB700)
+gWomensHowDoIStepUpChecking: value -1 -> 0 (existing constant at 0x14)
+
+# skipped
+gFlexCam_AutoConditionsGoalDiffMax: its value -1 can't be set the way the game sets it (Imm32Sx)
+gGoalieCapabilityRedirectSaveChanceFactorForThreatOfDeflection: its value isn't set by one instruction that can be changed
+gGoalieRedirectedMaxXErrorAtMinPrecision: its value isn't set by one instruction that can be changed
+gGoalieRedirectedMaxYErrorAtMinPrecision: its value isn't set by one instruction that can be changed
+gMinSaucePassStrength: its value isn't set by one instruction that can be changed
+gSpeedBoostEnergyForMinSpeed: its value isn't set by one instruction that can be changed
+gSpeedForMinAccel: its value isn't set by one instruction that can be changed

@@ -1205,3 +1205,9 @@ Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide w
   - Unused jerseys: works as on NHL 27.
   - Skipped for NHL 24 (user's call, 2026-11-03): Arenas, Be A Pro (no career saves in NHL24 PC's
     user\home\1000\savedata\CUSA37933 anyway), Jersey Studio. Their nav buttons stay hidden on NHL 24.
+- **Tuning written (2026-11-03)**: `tunables-match --from NHL27 --write` set NHL 24's gameplay values (AI, Physics,
+  Animation; not the coaching/OTF feedback) that NHL 27 also has to NHL 27's: 391 of 427 differing values, one mod
+  entry on eboot.bin (427 small ranges). `TunablePatcher`: immediates rewritten; float loads repointed at read-only
+  bytes holding the new value, else at 4-byte slots in nop padding after a ret (23). The patched eboot is read back
+  before writing (every change as wanted, every other value unchanged). Skipped 7 (zeroed registers, a sign change);
+  29 differ only in their minimum. List: docs/nhl24/tuning-from-nhl27.txt. Awaiting an in-game check.

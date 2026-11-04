@@ -52,6 +52,7 @@ public static class Program
                 "jersey-template" => JerseyTemplateCmd(game, opts),
                 "collar" => CollarCmd(game, opts),
                 "tunables" => TunablesCmd(game, opts),
+                "tunables-match" => TunablesMatchCmd(game, opts),
                 "bap" => BeAProCmd(opts),
                 "arena" => ArenaCmd(game, opts),
                 "ebx-probe" => EbxProbeCmd(game, opts),
@@ -1868,6 +1869,91 @@ public static class Program
     }
 
     /// <summary>tunables --out FILE.csv: every tuning value the eboot registers (default, range, group, label), read from eboot.bin.</summary>
+    /// <summary>
+    /// tunables-match --from GAME27 [--out DIR] [--write]: sets NHL 24's tuning values that NHL 27 also has (same name
+    /// and type, set once in each) to NHL 27's value, maximum and minimum where they differ. The patched eboot is read
+    /// back in memory first: every changed value must read as NHL 27's and every other value as it was. --write puts it
+    /// in the game as one mod entry (restorable from the Mods page).
+    /// </summary>
+    private static int TunablesMatchCmd(string game, Options opts)
+    {
+        string from = opts.Get("from") ?? throw new ArgumentException("tunables-match needs --from (the NHL 27 game folder)");
+        string ebootPath = Path.Combine(game, "eboot.bin");
+        byte[] eboot = File.ReadAllBytes(ebootPath);
+        var mine = Tunables.Read(eboot);
+        var theirs = Tunables.Read(Path.Combine(from, "eboot.bin"));
+        var one = mine.GroupBy(t => t.Name).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.First());
+        var other = theirs.GroupBy(t => t.Name).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.First());
+        // gameplay only: the AI, Physics and Animation groups, less the coaching and on-the-fly feedback messages
+        // (--groups / --skip-groups change the lists)
+        var groups = (opts.Get("groups") ?? "AI,Physics,Animation").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var skipGroups = (opts.Get("skip-groups") ?? "AI/CoachingFeedback,AI/OTFFeedback").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        bool Under(string g, string p) => g != null && (g.Equals(p, StringComparison.OrdinalIgnoreCase) || g.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase));
+        bool Gameplay(Tunable t) => groups.Any(p => Under(t.Group, p)) && !skipGroups.Any(p => Under(t.Group, p));
+        var changes = new List<TunablePatcher.Change>();
+        int common = 0, same = 0, typeDiff = 0, noValue = 0, notGameplay = 0;
+        foreach (var (name, t) in one)
+        {
+            if (!other.TryGetValue(name, out var o)) continue;
+            common++;
+            if (!Gameplay(t)) { notGameplay++; continue; }
+            if (t.Type != o.Type) { typeDiff++; continue; }
+            if (t.Default == null || o.Default == null) { noValue++; continue; }
+            if (t.Default == o.Default && t.Max == o.Max && t.Min == o.Min) { same++; continue; }
+            changes.Add(new TunablePatcher.Change(name, o.Default.Value, o.Min, o.Max));
+        }
+        Console.WriteLine($"{mine.Count} values here, {theirs.Count} in {from}; {common} in both (set once in each): {notGameplay} not gameplay; of the rest {same} the same, {changes.Count} different, {typeDiff} of another type, {noValue} unread");
+
+        var plan = TunablePatcher.Make(eboot, changes);
+        string outDir = opts.Get("out");
+        if (outDir != null)
+        {
+            Directory.CreateDirectory(outDir);
+            File.WriteAllLines(Path.Combine(outDir, "changed.txt"), plan.Done);
+            File.WriteAllLines(Path.Combine(outDir, "skipped.txt"), plan.Skipped);
+        }
+        Console.WriteLine($"{plan.Done.Count} fields of {plan.Changed.Count} values changed, {plan.Skipped.Count} skipped; {plan.Patches.Count} ranges, {plan.Patches.Sum(p => p.New.Length)} bytes");
+
+        // read it back: changed values are NHL 27's, everything else is as it was
+        var after = Tunables.Read(plan.Patched);
+        var before = mine.ToDictionary(t => (t.Name, t.Site));
+        var want = changes.ToDictionary(c => c.Name);
+        int good = 0, bad = 0;
+        foreach (var t in after)
+        {
+            var b = before[(t.Name, t.Site)];
+            if (plan.Changed.Contains(t.Name))
+            {
+                var c = want[t.Name];
+                bool okValue = t.Default == c.Value || t.Default == b.Default && plan.Done.All(d => !d.StartsWith(t.Name + ": value"));
+                bool okMax = t.Max == b.Max || t.Max == c.Max;
+                if (okValue && okMax) good++;
+                else { bad++; Console.WriteLine($"  WRONG {t.Name}: reads {t.Default} (max {t.Max}), wanted {c.Value} (max {c.Max})"); }
+            }
+            else if (t.Default != b.Default || t.Max != b.Max || t.Min != b.Min || t.Type != b.Type)
+            {
+                bad++;
+                Console.WriteLine($"  MOVED {t.Name}: {b.Default}/{b.Min}/{b.Max} -> {t.Default}/{t.Min}/{t.Max}");
+            }
+        }
+        Console.WriteLine($"read back: {good} changed as wanted, {after.Count - good - bad} others unchanged, {bad} wrong");
+        if (bad > 0) throw new InvalidOperationException("the patched eboot doesn't read back as planned; nothing was written");
+        if (!opts.Has("write")) return 0;
+
+        RefuseWhileRunning();
+        var store = Mods();
+        if (store.Find("tuning", "eboot.bin") is { } old)
+        {
+            store.Restore(old, game, Console.WriteLine);
+            store.Remove(old);
+        }
+        var entry = store.Add("tuning", "eboot.bin", Path.Combine(from, "eboot.bin"),
+            $"{plan.Changed.Count} tuning values set to NHL 27's", plan.Patches);
+        store.Apply(entry, game, Console.WriteLine);
+        Console.WriteLine($"written: mod entry {entry.Id}, state {store.State(entry, game)}");
+        return 0;
+    }
+
     private static int TunablesCmd(string game, Options opts)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
