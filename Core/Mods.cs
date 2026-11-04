@@ -13,7 +13,10 @@ public sealed class RangePatch
     public string OldSha1 { get; set; }
     public string NewSha1 { get; set; }
     public string Note { get; set; }
-    /// <summary>The range is added at the end of the file (Offset = its length before); restoring cuts the file back.</summary>
+    /// <summary>
+    /// The range is added at the end of the file (Offset = its length before). Restoring cuts the file back when the range
+    /// is at the end; otherwise it stays, unused, until what was added after it is restored too (<see cref="ModStore"/>).
+    /// </summary>
     public bool Append { get; set; }
 }
 
@@ -54,12 +57,20 @@ public sealed class ModStore
     }
 
     private string ListFile => Path.Combine(Dir, "mods.json");
+    private string LeftoverFile => Path.Combine(Dir, "leftovers.json");
+
+    /// <summary>
+    /// Data that removed mods added at the end of game files and that may still be there (a restore leaves added data
+    /// that isn't at the end of its file): trimmed like the list's own once it reaches the end.
+    /// </summary>
+    private List<RangePatch> _leftovers = new();
 
     private void Load()
     {
         try
         {
             Entries = File.Exists(ListFile) ? JsonSerializer.Deserialize<List<ModEntry>>(File.ReadAllText(ListFile)) ?? new() : new();
+            _leftovers = File.Exists(LeftoverFile) ? JsonSerializer.Deserialize<List<RangePatch>>(File.ReadAllText(LeftoverFile)) ?? new() : new();
         }
         catch (Exception e)
         {
@@ -72,6 +83,11 @@ public sealed class ModStore
         Directory.CreateDirectory(Dir);
         File.WriteAllText(ListFile + ".tmp", JsonSerializer.Serialize(Entries, Json));
         File.Move(ListFile + ".tmp", ListFile, overwrite: true);
+        if (_leftovers.Count > 0 || File.Exists(LeftoverFile))
+        {
+            File.WriteAllText(LeftoverFile + ".tmp", JsonSerializer.Serialize(_leftovers, Json));
+            File.Move(LeftoverFile + ".tmp", LeftoverFile, overwrite: true);
+        }
     }
 
     public ModEntry Find(string kind, string name) =>
@@ -126,6 +142,7 @@ public sealed class ModStore
     public void Remove(ModEntry e)
     {
         Entries.Remove(e);
+        _leftovers.AddRange(e.Patches.Where(p => p.Append));
         Save();
         try { Directory.Delete(Path.Combine(Dir, e.Id), recursive: true); } catch { /* leftovers are harmless */ }
     }
@@ -160,8 +177,11 @@ public sealed class ModStore
     public ModState State(ModEntry e, string game)
     {
         int old = 0, neu = 0, other = 0;
+        // added data says nothing on its own (it may stay after a restore); the ranges that point at it decide
+        bool appendsCount = e.Patches.All(p => p.Append);
         foreach (var p in e.Patches)
         {
+            if (p.Append && !appendsCount) continue;
             string file = Path_(game, p);
             if (!File.Exists(file)) return ModState.Missing;
             string h = Current(file, p);
@@ -195,9 +215,6 @@ public sealed class ModStore
             string h = Current(file, p) ?? throw new InvalidDataException($"Can't {verb} {e.Name}: {p.File} is shorter than the patch expects.");
             if (h != p.OldSha1 && h != p.NewSha1)
                 throw new InvalidDataException($"Can't {verb} {e.Name}: {p.File} at 0x{p.Offset:X} holds neither the original nor the replacement. The game files changed since this mod was made; nothing was written.");
-            // appended ranges come off by cutting the file, so nothing may have been added after this mod's last one
-            if (p.Append && !toNew && h == p.NewSha1 && new FileInfo(file).Length != e.Patches.Where(q => q.Append && q.File == p.File && Current(file, q) == q.NewSha1).Max(q => q.Offset + q.Length))
-                throw new InvalidDataException($"Can't restore {e.Name}: more was added to {p.File} after its data, so it can't be cut back. Restore that first; nothing was written.");
         }
         int written = 0;
         // restoring goes backwards, so appended ranges are cut off last-added first
@@ -207,14 +224,8 @@ public sealed class ModStore
             string file = Path_(game, p);
             string want = toNew ? p.NewSha1 : p.OldSha1;
             if (Current(file, p) == want) continue;
-            if (p.Append && !toNew)
-            {
-                using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)) { fs.SetLength(p.Offset); fs.Flush(true); }
-                if (new FileInfo(file).Length != p.Offset) throw new IOException($"{p.File} was not cut back to 0x{p.Offset:X}.");
-                written++;
-                log?.Invoke($"{p.Note ?? "range"}: cut {p.File} back to 0x{p.Offset:X}");
-                continue;
-            }
+            // added data comes off after the ranges pointing at it are back (TrimAdded)
+            if (p.Append && !toNew) continue;
             var data = File.ReadAllBytes(toNew ? New(e, i) : Old(e, i));
             if (Hex(SHA1.HashData(data)) != want) throw new InvalidDataException($"The stored {(toNew ? "new" : "old")} bytes of {e.Name} (patch {i}) are damaged.");
             using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
@@ -228,6 +239,50 @@ public sealed class ModStore
             written++;
             log?.Invoke($"{p.Note ?? "range"}: {p.Length:N0} bytes at 0x{p.Offset:X} in {p.File}");
         }
+        if (!toNew)
+            foreach (var f in e.Patches.Where(p => p.Append).Select(p => p.File).Distinct(StringComparer.OrdinalIgnoreCase))
+                written += TrimAdded(game, f, log);
         log?.Invoke($"{e.Name}: {written} range(s) written, {e.Patches.Count - written} already as wanted");
+    }
+
+    /// <summary>
+    /// Cuts data the mod list added off the end of <paramref name="rel"/> while the data at the end belongs to a mod
+    /// that isn't applied (nothing points at it any more), so restoring every mod gives back the original file even
+    /// when they were restored out of order. Returns how many ranges were cut.
+    /// </summary>
+    private int TrimAdded(string game, string rel, Action<string> log)
+    {
+        string file = Path.Combine(game, rel.Replace('/', Path.DirectorySeparatorChar));
+        int cut = 0;
+        while (true)
+        {
+            long length = new FileInfo(file).Length;
+            bool Here(RangePatch p) => p.Append && string.Equals(p.File, rel, StringComparison.OrdinalIgnoreCase);
+            // leftovers that were cut, or whose place a listed mod uses now, are forgotten
+            int dropped = _leftovers.RemoveAll(p => Here(p) && (p.Offset >= length || Entries.Any(x => x.Patches.Any(q => Here(q) && q.Offset == p.Offset))));
+            if (dropped > 0) Save();
+            var last = Entries.SelectMany(x => x.Patches.Select(p => (Entry: x, Patch: p)))
+                .Concat(_leftovers.Select(p => (Entry: (ModEntry)null, Patch: p)))
+                .FirstOrDefault(t => Here(t.Patch) && t.Patch.Offset + t.Patch.Length == length && t.Patch.Offset < length);
+            if (last.Patch == null) break;
+            if (last.Entry == null)
+            {
+                if (Current(file, last.Patch) != last.Patch.NewSha1) break;
+                using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)) { fs.SetLength(last.Patch.Offset); fs.Flush(true); }
+                _leftovers.Remove(last.Patch);
+                Save();
+                log?.Invoke($"{last.Patch.Note ?? "range"}: cut {rel} back to 0x{last.Patch.Offset:X} (left by an earlier save)");
+                cut++;
+                continue;
+            }
+            // only when nothing of its mod points at it, and it's the data the mod added
+            if (last.Entry.Patches.Any(p => !p.Append && File.Exists(Path_(game, p)) && Current(Path_(game, p), p) is { } h && h != p.OldSha1)) break;
+            if (Current(file, last.Patch) != last.Patch.NewSha1) break;
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)) { fs.SetLength(last.Patch.Offset); fs.Flush(true); }
+            if (new FileInfo(file).Length != last.Patch.Offset) throw new IOException($"{rel} was not cut back to 0x{last.Patch.Offset:X}.");
+            log?.Invoke($"{last.Patch.Note ?? "range"}: cut {rel} back to 0x{last.Patch.Offset:X} ({last.Entry.Name})");
+            cut++;
+        }
+        return cut;
     }
 }

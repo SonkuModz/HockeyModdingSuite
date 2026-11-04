@@ -91,6 +91,8 @@ public static class Program
                 "movies" => MoviesCmd(game, opts),
                 "nhl24pc" => Nhl24PcCmd(opts),
                 "ps4-sigtest" => Ps4SigTestCmd(game, opts),
+                "modstore-selftest" => ModStoreSelfTest(),
+                "scorebug24" => Scorebug24Cmd(game, opts),
                 "movie-replace" => MovieReplaceCmd(game, opts),
                 _ => Unknown(args[0]),
             };
@@ -696,6 +698,75 @@ public static class Program
         File.WriteAllBytes(Path.Combine(KitPaths.Export, "a9_original.wav"), orig.ToWav(stereo: true));
         File.WriteAllBytes(Path.Combine(KitPaths.Export, "a9_reencoded.wav"), back.ToWav(stereo: true));
         return 0;
+    }
+
+    /// <summary>scorebug24 [--set "key=value;key=value"]: an NHL 24 score clock's settings, read now; --set writes them.</summary>
+    private static int Scorebug24Cmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var sb = Scorebug24.Load(index);
+        Console.WriteLine($"{Scorebug24.File} ({sb.Style ?? "custom"}), {sb.Settings.Count} settings");
+        foreach (var g in sb.Settings.GroupBy(s => s.Group))
+        {
+            Console.WriteLine(g.Key);
+            foreach (var s in g) Console.WriteLine($"  {s.Key,-18} {s.Label,-26} {sb.Value(s),-14} (default {s.Default})");
+        }
+        if (opts.Get("set") is { } set)
+        {
+            RefuseWhileRunning();
+            var values = set.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Split('=', 2)).ToDictionary(p => p[0].Trim(), p => p[1].Trim());
+            var entry = sb.Save(index, Mods(), game, values, Console.WriteLine);
+            Console.WriteLine(entry.Summary);
+            Console.WriteLine($"state: {Mods().State(entry, game)}");
+            var back = Scorebug24.Load(index);
+            Console.WriteLine("read back: " + string.Join(", ", values.Keys.Select(k => $"{k}={back.Value(back.Settings.First(s => s.Key == k))}")));
+        }
+        return 0;
+    }
+
+    /// <summary>modstore-selftest: restoring mods that added data to one file, out of order, in a scratch folder.</summary>
+    private static int ModStoreSelfTest()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hms-modstore-" + Guid.NewGuid().ToString("N")[..6]);
+        string game = Path.Combine(root, "game");
+        Directory.CreateDirectory(game);
+        File.WriteAllBytes(Path.Combine(game, "t.toc"), new byte[16]);
+        File.WriteAllBytes(Path.Combine(game, "a.cas"), Enumerable.Repeat((byte)7, 100).ToArray());
+        byte[] Read(string f) => File.ReadAllBytes(Path.Combine(game, f));
+        var origToc = Read("t.toc"); var origCas = Read("a.cas");
+        var store = new ModStore(Path.Combine(root, "mods"));
+        int fails = 0;
+        void Check(string what, bool ok) { Console.WriteLine($"{(ok ? "ok  " : "FAIL")} {what}"); if (!ok) fails++; }
+        PatchData Add(long at, int n, byte v) => new("a.cas", at, Array.Empty<byte>(), Enumerable.Repeat(v, n).ToArray(), "added", Append: true);
+        PatchData Toc(int at, byte v) => new("t.toc", at, new byte[4], new byte[] { v, v, v, v }, "toc");
+        var e1 = store.Add("x", "one", "", "", new[] { Add(100, 50, 1), Toc(0, 1) });
+        store.Apply(e1, game);
+        var e2 = store.Add("x", "two", "", "", new[] { Add(150, 30, 2), Toc(4, 2) });
+        store.Apply(e2, game);
+        Check("both applied", store.State(e1, game) == ModState.Applied && store.State(e2, game) == ModState.Applied && Read("a.cas").Length == 180);
+        store.Restore(e1, game);
+        Check("first restored out of order: its data stays, its TOC is back", Read("a.cas").Length == 180 && Read("t.toc")[0] == 0 && store.State(e1, game) == ModState.NotApplied && store.State(e2, game) == ModState.Applied);
+        store.Apply(e1, game);
+        Check("first applied again over its own data", store.State(e1, game) == ModState.Applied && Read("a.cas").Length == 180);
+        store.Restore(e1, game);
+        store.Restore(e2, game);
+        Check("second restored: both cut off, files original", Read("a.cas").AsSpan().SequenceEqual(origCas) && Read("t.toc").AsSpan().SequenceEqual(origToc));
+        // a re-save: the first is restored (data left) and replaced by a new entry
+        e1 = store.Add("x", "one", "", "", new[] { Add(100, 50, 1), Toc(0, 1) });
+        store.Apply(e1, game);
+        e2 = store.Add("x", "two", "", "", new[] { Add(150, 30, 2), Toc(4, 2) });
+        store.Apply(e2, game);
+        store.Restore(e1, game);
+        var e1b = store.Add("x", "one", "", "", new[] { Add(180, 40, 3), Toc(0, 3) });
+        store.Apply(e1b, game);
+        Check("re-saved first added after the second", Read("a.cas").Length == 220 && store.State(e1b, game) == ModState.Applied && store.State(e2, game) == ModState.Applied);
+        store.Restore(e1b, game);
+        Check("re-save restored: its data cut, the old leftover stays under the second", Read("a.cas").Length == 180);
+        store.Restore(e2, game);
+        Check("second restored: everything cut, files original", Read("a.cas").AsSpan().SequenceEqual(origCas) && Read("t.toc").AsSpan().SequenceEqual(origToc));
+        Directory.Delete(root, true);
+        Console.WriteLine(fails == 0 ? "all passed" : $"{fails} failed");
+        return fails == 0 ? 0 : 1;
     }
 
     private static ModStore Mods() => new ModStore(KitPaths.ModsFor(_profile));

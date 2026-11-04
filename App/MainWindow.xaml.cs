@@ -77,6 +77,7 @@ public partial class MainWindow : Window
         UnusedPage.StatusChanged += text => Status.Text = text;
         UnusedPage.SlotsChanged += UniformsPage.SlotsChangedElsewhere;
         ScorebugPage.StatusChanged += text => Status.Text = text;
+        Scorebug24Page.StatusChanged += text => Status.Text = text;
         DatabasePage.StatusChanged += text => Status.Text = text;
         TuningPage.StatusChanged += text => Status.Text = text;
         TuningPage.GameDir = Game;
@@ -213,6 +214,7 @@ public partial class MainWindow : Window
                 StudioPage.SetMods(mods);
                 UnusedPage.SetMods(mods);
                 ScorebugPage.SetMods(mods);
+                Scorebug24Page.SetMods(mods);
                 DatabasePage.SetMods(mods);
                 if (NavDatabase.IsChecked == true) _ = DatabasePage.Shown();
                 TeamsPage.SetMods(mods);
@@ -646,7 +648,7 @@ public partial class MainWindow : Window
         // the rail scrolls when the window is short: keep the picked page's button in sight
         (sender as FrameworkElement)?.BringIntoView();
         // the page that's now showing glides in
-        Motion.Enter(new FrameworkElement[] { ExplorerPage, TexturePage, SoundPage, VideoPage, ModsPage, RosterPage, UniformsPage, StudioPage, UnusedPage, ScorebugPage,
+        Motion.Enter(new FrameworkElement[] { ExplorerPage, TexturePage, SoundPage, VideoPage, ModsPage, RosterPage, UniformsPage, StudioPage, UnusedPage, ScorebugPage, Scorebug24Page,
             DatabasePage, TuningPage, BeAProPage, ArenasPage, TeamsPage, PlayPage, Play24Page, SettingsPage }.FirstOrDefault(p => p.Visibility == Visibility.Visible));
     }
 
@@ -663,7 +665,9 @@ public partial class MainWindow : Window
         StudioPage.Visibility = sender == NavStudio ? Visibility.Visible : Visibility.Collapsed;
         UnusedPage.Visibility = sender == NavUnused ? Visibility.Visible : Visibility.Collapsed;
         if (sender == NavUnused) _ = UnusedPage.Shown();
-        ScorebugPage.Visibility = sender == NavScorebug ? Visibility.Visible : Visibility.Collapsed;
+        bool nhl24 = _profile?.Kind == GameKind.Nhl24;
+        ScorebugPage.Visibility = sender == NavScorebug && !nhl24 ? Visibility.Visible : Visibility.Collapsed;
+        Scorebug24Page.Visibility = sender == NavScorebug && nhl24 ? Visibility.Visible : Visibility.Collapsed;
         DatabasePage.Visibility = sender == NavDatabase ? Visibility.Visible : Visibility.Collapsed;
         if (sender == NavDatabase) _ = DatabasePage.Shown();
         TuningPage.Visibility = sender == NavTuning ? Visibility.Visible : Visibility.Collapsed;
@@ -675,7 +679,7 @@ public partial class MainWindow : Window
         TeamsPage.Visibility = sender == NavTeams ? Visibility.Visible : Visibility.Collapsed;
         if (sender == NavTeams) _ = TeamsPage.Shown();
         if (sender == NavRoster) _ = RosterPage.Shown();
-        if (sender == NavScorebug) _ = ScorebugPage.Shown();
+        if (sender == NavScorebug) _ = nhl24 ? Scorebug24Page.Shown() : ScorebugPage.Shown();
         // leaving a page stops what it was playing
         if (sender != NavSounds) SoundPage.StopPlayback();
         if (sender != NavVideos) VideoPage.StopPlayback();
@@ -840,16 +844,18 @@ public partial class MainWindow : Window
         bool ps4 = _profile.Kind == GameKind.Nhl24;
         var all = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTuning, NavTeams, NavArenas,
             NavBeAPro, NavUniforms, NavStudio, NavUnused, NavScorebug, NavMods, NavSettings };
-        var nhl24 = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTeams, NavMods, NavSettings };
+        var nhl24 = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTeams, NavScorebug, NavMods, NavSettings };
         foreach (var nav in all)
             nav.Visibility = !ps4 || nhl24.Contains(nav) ? Visibility.Visible : Visibility.Collapsed;
         ComingSoonArenas.Visibility = ps4 ? Visibility.Collapsed : Visibility.Visible;
         // the page that's open may have gone
         if (all.FirstOrDefault(n => n.IsChecked == true) is { Visibility: Visibility.Collapsed })
             NavExplorer.IsChecked = true;
-        // Play is for both games, but each has its own page
+        // Play and Scorebug are for both games, but each game has its own page
         else if (NavPlay.IsChecked == true)
             ShowPage(NavPlay);
+        else if (NavScorebug.IsChecked == true)
+            ShowPage(NavScorebug);
         FillGamePicker();
     }
 
@@ -1137,7 +1143,15 @@ public partial class MainWindow : Window
             // thumbnails
             await Task.Delay(4000);
         }
-        if (a.TryGetValue("page", out var sbPage) && sbPage == "scorebug")
+        if (a.TryGetValue("page", out var sb24Page) && sb24Page == "scorebug" && _profile.Kind == GameKind.Nhl24)
+        {
+            // FFDec reads the movie's settings code first
+            await Task.Delay(9000);
+            if (a.TryGetValue("sb24group", out var sbg)) { Scorebug24Page.SelectGroup(sbg); await Task.Delay(400); }
+            if (a.TryGetValue("sb24set", out var sbs)) { Scorebug24Page.SetValues(sbs); await Task.Delay(600); }
+            if (a.ContainsKey("sb24save")) { await Scorebug24Page.SaveAsync(); await Task.Delay(1500); }
+        }
+        else if (a.TryGetValue("page", out var sbPage) && sbPage == "scorebug")
         {
             // the page decompiles the score clock with FFDec first
             await Task.Delay(12000);

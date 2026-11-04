@@ -395,6 +395,7 @@
                 <local:JerseyStudioPage x:Name="StudioPage" Grid.Column="1" Visibility="Collapsed" />
                 <local:UnusedPage x:Name="UnusedPage" Grid.Column="1" Visibility="Collapsed" />
                 <local:ScorebugPage x:Name="ScorebugPage" Grid.Column="1" Visibility="Collapsed" />
+                <local:Scorebug24Page x:Name="Scorebug24Page" Grid.Column="1" Visibility="Collapsed" />
                 <local:DatabasePage x:Name="DatabasePage" Grid.Column="1" Visibility="Collapsed" />
                 <local:TuningPage x:Name="TuningPage" Grid.Column="1" Visibility="Collapsed" />
                 <local:TeamsPage x:Name="TeamsPage" Grid.Column="1" Visibility="Collapsed" />

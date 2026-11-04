@@ -99,48 +99,54 @@ public static class LegacyEditor
     /// game doesn't check NHL 24's TOC signatures). Every entry of that chunk gets its stored range in the new blocks, and
     /// the index chunk is stored the same way. Restore cuts both back off.
     /// </summary>
-    public static List<PatchData> PlanPs4(AssetIndex index, Legacy legacy, LegacyFile f, byte[] data, List<string> notes, Action<string> log)
-    {
-        var raw = legacy.ReadChunk(f.ChunkId);
-        int offset = f.Offset;
-        if (data.Length > f.Size)
-        {
-            // at the end of the chunk, 16-byte aligned
-            offset = (raw.Length + 15) & ~15;
-            var grown = new byte[offset + data.Length];
-            raw.CopyTo(grown, 0);
-            raw = grown;
-            notes.Add($"grew by {data.Length - f.Size:N0} bytes: moved to the end of its data chunk");
-        }
-        else if (data.Length < f.Size) Array.Clear(raw, offset + data.Length, f.Size - data.Length);
-        data.CopyTo(raw, offset);
+    public static List<PatchData> PlanPs4(AssetIndex index, Legacy legacy, LegacyFile f, byte[] data, List<string> notes, Action<string> log) =>
+        PlanPs4(index, legacy, new[] { (f, data) }, notes, log);
 
+    /// <summary>Several files of one collector at once (one mod entry; their chunks and the index chunk are added once).</summary>
+    public static List<PatchData> PlanPs4(AssetIndex index, Legacy legacy, IReadOnlyList<(LegacyFile File, byte[] Data)> files, List<string> notes, Action<string> log)
+    {
         var idx = legacy.ReadChunk(legacy.IndexChunk);
         long L(int p) => BinaryPrimitives.ReadInt64LittleEndian(idx.AsSpan(p));
         void W(int p, long v) => BinaryPrimitives.WriteInt64LittleEndian(idx.AsSpan(p), v);
-        // every entry in this data chunk: its range of the new stored blocks
-        int moved = 0;
-        foreach (var x in legacy.Files().Where(x => x.ChunkId == f.ChunkId).GroupBy(x => x.Entry).Select(g => g.First()))
-        {
-            bool self = x.Entry == f.Entry;
-            long o = self ? offset : L(x.Entry + 24), n = self ? data.Length : L(x.Entry + 32);
-            if (o < 0 || o + n > raw.Length) throw new InvalidDataException($"{x.Name}'s index entry points past its data chunk; not writing.");
-            var (start, end) = Legacy.StoredRange((int)o, (int)n);
-            W(x.Entry + 8, start);
-            W(x.Entry + 16, end);
-            W(x.Entry + 24, o);
-            W(x.Entry + 32, n);
-            moved++;
-        }
-        notes.Add($"data chunk stored uncompressed ({raw.Length:N0} bytes) at the end of its CAS file; {moved} index entr{(moved == 1 ? "y" : "ies")} updated");
-
         var tocs = new TocCache(index);
         var locations = LocationIndex.Build(index, tocs);
         var ends = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        var dataPlan = ChunkGrower.Plan(index, f.ChunkId, FrostbiteBlocks.Store(raw), locations, tocs, ends);
-        var indexPlan = ChunkGrower.Plan(index, legacy.IndexChunk, FrostbiteBlocks.Store(idx), locations, tocs, ends);
-        var patches = new List<PatchData>(dataPlan.Patches);
-        patches.AddRange(indexPlan.Patches);
+        var patches = new List<PatchData>();
+        foreach (var group in files.GroupBy(x => x.File.ChunkId))
+        {
+            var raw = legacy.ReadChunk(group.Key);
+            // where each edited file goes: in place, or at the end of the chunk when it grew
+            var placed = new Dictionary<int, (long Offset, long Size)>();
+            foreach (var (f, data) in group)
+            {
+                int offset = f.Offset;
+                if (data.Length > f.Size)
+                {
+                    offset = (raw.Length + 15) & ~15;
+                    Array.Resize(ref raw, offset + data.Length);
+                    notes.Add($"{f.Name} grew by {data.Length - f.Size:N0} bytes: moved to the end of its data chunk");
+                }
+                else if (data.Length < f.Size) Array.Clear(raw, offset + data.Length, f.Size - data.Length);
+                data.CopyTo(raw, offset);
+                placed[f.Entry] = (offset, data.Length);
+            }
+            // every entry in this data chunk: its range of the new stored blocks
+            int moved = 0;
+            foreach (var x in legacy.Files().Where(x => x.ChunkId == group.Key).GroupBy(x => x.Entry).Select(g => g.First()))
+            {
+                var (o, n) = placed.TryGetValue(x.Entry, out var at) ? at : (L(x.Entry + 24), L(x.Entry + 32));
+                if (o < 0 || o + n > raw.Length) throw new InvalidDataException($"{x.Name}'s index entry points past its data chunk; not writing.");
+                var (start, end) = Legacy.StoredRange((int)o, (int)n);
+                W(x.Entry + 8, start);
+                W(x.Entry + 16, end);
+                W(x.Entry + 24, o);
+                W(x.Entry + 32, n);
+                moved++;
+            }
+            notes.Add($"data chunk stored uncompressed ({raw.Length:N0} bytes) at the end of its CAS file; {moved} index entr{(moved == 1 ? "y" : "ies")} updated");
+            patches.AddRange(ChunkGrower.Plan(index, group.Key, FrostbiteBlocks.Store(raw), locations, tocs, ends).Patches);
+        }
+        patches.AddRange(ChunkGrower.Plan(index, legacy.IndexChunk, FrostbiteBlocks.Store(idx), locations, tocs, ends).Patches);
         return patches;
     }
 

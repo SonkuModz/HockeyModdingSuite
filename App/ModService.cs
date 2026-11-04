@@ -245,6 +245,14 @@ public sealed class ModService
         finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
+    /// <summary>Writes NHL 24 score clock settings into the game (both movies, one mod entry).</summary>
+    public async Task SaveScorebug24Async(Scorebug24 sb, IReadOnlyDictionary<string, string> values)
+    {
+        RefuseWrite();
+        try { await Run(() => sb.Save(Index, Store, Game, values)); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
+    }
+
     /// <summary>A database as the game has it right now (never cached: edits made anywhere show up).</summary>
     public Task<T3Db> OpenDbAsync(string name) => Run(() => new Legacy(Index).OpenDb(name));
 

@@ -123,7 +123,7 @@ public sealed class Scorebug
             ?? throw new FileNotFoundException("FFDec isn't installed: put it in ThirdParty\\ffdec (ffdec-cli.exe) or set NHL27KIT_FFDEC.");
     }
 
-    private static void Run(params string[] args)
+    internal static void Run(params string[] args)
     {
         var psi = new ProcessStartInfo(Ffdec()) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var a in args) psi.ArgumentList.Add(a);
