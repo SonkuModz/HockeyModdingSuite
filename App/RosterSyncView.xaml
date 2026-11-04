@@ -21,12 +21,14 @@
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="Sync with the NHL" Foreground="{StaticResource Text}" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock x:Name="FetchStatus" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
-                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and compares them with the game. Nothing changes until you press Apply." />
+                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and, when ticked, Iowa Wild's roster from the AHL (theahl.com). Nothing changes until you press Apply." />
                     </StackPanel>
                 </DockPanel>
-                <DockPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="False">
+                <DockPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="True">
                     <CheckBox x:Name="SizesBox" DockPanel.Dock="Right" Content="Also heights and weights" VerticalAlignment="Center" Margin="12,0,0,0"
                               Checked="OnSizes" Unchecked="OnSizes" Foreground="{StaticResource TextDim}" />
+                    <CheckBox x:Name="AhlBox" DockPanel.Dock="Right" Content="Also AHL — Iowa Wild" VerticalAlignment="Center" Margin="12,0,0,0"
+                              Checked="OnAhl" Unchecked="OnAhl" Foreground="{StaticResource TextDim}" />
                     <TextBox x:Name="SyncSearch" DockPanel.Dock="Right" Width="220" Style="{StaticResource SearchBox}" Tag="Name or team" TextChanged="OnFilter" />
                     <Border CornerRadius="9" Padding="3" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
                         <StackPanel Orientation="Horizontal">

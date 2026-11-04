@@ -57,6 +57,7 @@ public static class Program
                 "arena" => ArenaCmd(game, opts),
                 "ebx-probe" => EbxProbeCmd(game, opts),
                 "roster-sync" => RosterSyncCmd(game, opts),
+                "ahl-sync" => AhlSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -2926,6 +2927,32 @@ public static class Program
             Console.WriteLine(RosterSync.Apply(db, changes.Where(c => c.Selected)));
             var (ok, total) = db.CheckCrcs();
             var again = RosterSync.Compare(db, api, opts.Has("sizes"));
+            Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
+        }
+        return 0;
+    }
+
+    /// <summary>ahl-sync [--sizes] [--dry 1] [--all]: compares the game's rosters with Iowa Wild's current AHL roster (read only, unless --dry applies in memory). Iowa only, hard-coded in AhlApi.</summary>
+    private static int AhlSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var api = AhlApi.RosterAsync().GetAwaiter().GetResult();
+        int ahlTeam = RosterSync.ResolveIowaTeamIndex(db);
+        var changes = RosterSync.CompareAhl(db, api, ahlTeam, opts.Has("sizes"));
+        Console.WriteLine($"{api.Count} players on Iowa Wild's AHL roster; {changes.Count} differences");
+        foreach (var g in changes.GroupBy(c => c.Kind))
+        {
+            Console.WriteLine($"{g.Key}: {g.Count()}");
+            foreach (var c in g.Take(opts.Has("all") ? 10000 : 12))
+                Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Name,-26} {c.Position,-2} {c.Description}{(c.NameOnly ? "  (name match only)" : "")}");
+        }
+        if (opts.Has("dry"))
+        {
+            // applies the ticked changes to the database in memory only, then compares again
+            Console.WriteLine(RosterSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, total) = db.CheckCrcs();
+            var again = RosterSync.CompareAhl(db, api, ahlTeam, opts.Has("sizes"));
             Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
         }
         return 0;

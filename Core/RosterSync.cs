@@ -22,6 +22,10 @@ public sealed class SyncChange
 {
     public SyncKind Kind { get; init; }
     public NhlPlayer Api { get; init; }
+    /// <summary>The AHL player, for changes from CompareAhl. Null for NHL changes; Api is null for AHL changes.</summary>
+    public AhlPlayer Ahl { get; init; }
+    /// <summary>True when this change came from the AHL roster (Iowa Wild), not an NHL roster.</summary>
+    public bool IsAhl => Ahl != null;
     public int GameId { get; init; } = -1;
     public string Name { get; init; }
     public string Position { get; init; }
@@ -56,7 +60,7 @@ public sealed class SyncChange
         SyncKind.Join => $"{FromTeamName} → {ToTeamName}" + Extra(),
         SyncKind.Update => Extra().TrimStart(' ', '·'),
         SyncKind.Left => $"not on {FromTeamName}'s NHL roster" + (ToTeam >= 0 ? $" → {ToTeamName}" : ""),
-        _ => $"on {Api?.Team}'s roster, not in the game",
+        _ => $"on {(Api?.Team ?? Ahl?.TeamName ?? "?")}'s roster, not in the game",
     };
 
     /// <summary>Whether the description and Apply include height and weight.</summary>
@@ -238,6 +242,116 @@ public static class RosterSync
             });
         }
         return changes.OrderBy(c => c.Kind).ThenBy(c => c.ToTeamName ?? c.FromTeamName).ThenBy(c => c.Name).ToList();
+    }
+
+    /// <summary>
+    /// Iowa Wild's exhibitionteams index, resolved from the database at runtime — never hard-coded. Minnesota's AHL
+    /// affiliate first (exhibitionteams.ahlaffiliate), then a team named "Iowa Wild". Throws a clear error when
+    /// Iowa isn't in the game's teams, so the AHL sync fails loudly instead of writing to the wrong team.
+    /// </summary>
+    public static int ResolveIowaTeamIndex(T3Db db)
+    {
+        var roster = new Roster(db);
+        var teams = TeamIndex(db);
+        var ahl = AhlAffiliates(db);
+        if (teams.TryGetValue("MIN", out int min) && ahl.TryGetValue(min, out int aff) && roster.Teams.ContainsKey(aff)) return aff;
+        foreach (var (idx, tm) in roster.Teams)
+            if (string.Equals(tm.Name, AhlApi.TeamName, StringComparison.OrdinalIgnoreCase)) return idx;
+        throw new InvalidOperationException("Iowa Wild not found in the game's teams (exhibitionteams). The AHL sync needs the Iowa Wild team in nhl_game.db.");
+    }
+
+    /// <summary>
+    /// Compares the game's rosters with Iowa Wild's current AHL roster (AhlApi, Iowa only, hard-coded in AhlApi).
+    /// Same matcher as Compare: normalised name + birth date, then last name + birth date, then a single name-only
+    /// match, flagged. Same Join/Move/Update/Missing kinds, same ticking (Join/Move/Update ticked, Missing not).
+    /// Position is never compared or written: the AHL feed lists many forwards as generic "F", and Apply never
+    /// writes position anyway. Height/weight work the same as the NHL path (WithSizes + NewHeight/NewWeight, so
+    /// Apply's size code applies unchanged). No reverse Left direction in this prototype: players on Iowa in the
+    /// game who are no longer on Iowa's roster are not listed.
+    /// </summary>
+    /// <param name="ahlTeam">Iowa Wild's exhibitionteams index: use ResolveIowaTeamIndex(db).</param>
+    /// <param name="sizes">Also list players whose only difference is height or weight.</param>
+    public static List<SyncChange> CompareAhl(T3Db db, IReadOnlyList<AhlPlayer> api, int ahlTeam, bool sizes = false)
+    {
+        var teams = TeamIndex(db);
+        var nhlTeams = teams.Values.ToHashSet();
+        var roster = new Roster(db);
+        var bio = db.Table(Roster.BioTable);
+        var rt = db.Table(Roster.RosterTable);
+        var bf = bio.Fields.ToDictionary(x => x.Name);
+        var rf = rt.Fields.ToDictionary(x => x.Name);
+        string TeamName(int i) => roster.Teams.TryGetValue(i, out var tm) && !string.IsNullOrEmpty(tm.Name) ? tm.Name : $"team {i}";
+
+        // the game's players by normalised name. Every bio player is a candidate, not only players
+        // with a roster row: a bio-only free agent (RosterRow -1) is a Join, not a Missing.
+        var byName = new Dictionary<string, List<RosterPlayer>>();
+        foreach (var p in roster.Players)
+        {
+            string k = Key(p.FirstName, p.LastName);
+            if (!byName.TryGetValue(k, out var l)) byName[k] = l = new List<RosterPlayer>();
+            l.Add(p);
+        }
+        DateTime? Born(RosterPlayer p)
+        {
+            int y = (int)db.Get(bio, p.BioRow, bf["year"]) + 1900, m = (int)db.Get(bio, p.BioRow, bf["month"]) + 1, d = (int)db.Get(bio, p.BioRow, bf["day"]) + 1;
+            return y > 1900 && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m) ? new DateTime(y, m, d) : null;
+        }
+        // last-name-only index for players the API spells differently (Teddy / Teodors)
+        var byLast = roster.Players.GroupBy(p => Norm(p.LastName)).ToDictionary(g => g.Key, g => g.ToList());
+
+        // what the game shows: the online roster copy's row, else the exhibition one
+        var tables = RosterTables(db);
+        var piField = rf["playerindex"];
+        (T3Table T, int Row) Shown(int exhibitionRow)
+        {
+            int pi = (int)db.Get(rt, exhibitionRow, piField);
+            for (int i = tables.Count - 1; i >= 0; i--)
+                if (tables[i].RowOf.TryGetValue(pi, out int r)) return (tables[i].Table, r);
+            return (rt, exhibitionRow);
+        }
+        int TeamOf(int row) { var (t, r) = Shown(row); return (int)db.Get(t, r, t.Fields.First(f => f.Name == "team")); }
+        int JerseyOf(int row) { var (t, r) = Shown(row); return (int)db.Get(t, r, t.Fields.First(f => f.Name == "jersey")); }
+
+        var changes = new List<SyncChange>();
+        var matched = new HashSet<int>();
+        foreach (var a in api)
+        {
+            RosterPlayer p = null;
+            bool nameOnly = false;
+            var cands = byName.GetValueOrDefault(Key(a.First, a.Last)) ?? new List<RosterPlayer>();
+            p = cands.FirstOrDefault(c => Born(c) == a.Born);
+            if (p == null && a.Born != null)
+                p = byLast.GetValueOrDefault(Norm(a.Last))?.FirstOrDefault(c => Born(c) == a.Born);
+            if (p == null && cands.Count == 1) { p = cands[0]; nameOnly = true; }
+            if (p == null || matched.Contains(p.GameId))
+            {
+                changes.Add(new SyncChange { Kind = SyncKind.Missing, Ahl = a, Name = a.Name, Position = a.Position, ToTeam = ahlTeam, ToTeamName = TeamName(ahlTeam) });
+                continue;
+            }
+            matched.Add(p.GameId);
+            // A player with no roster row has no team/jersey in a roster table: his bio team is where he came from.
+            int from, oldNo;
+            string fromName;
+            if (p.RosterRow >= 0) { from = TeamOf(p.RosterRow); oldNo = JerseyOf(p.RosterRow); fromName = TeamName(from); }
+            else { from = p.Team; oldNo = -1; fromName = roster.Teams.TryGetValue(from, out var ft) && !string.IsNullOrEmpty(ft.Name) ? ft.Name : "Free agent"; }
+            int oldH = (int)db.Get(bio, p.BioRow, bf["height"]) + HeightOffset, oldW = (int)db.Get(bio, p.BioRow, bf["weight"]) + WeightOffset;
+            // A player with no roster row is always a Join, even if his bio team already equals Iowa:
+            // an Update with no number/size change would otherwise be skipped and he would stay without a roster row.
+            var kind = p.RosterRow < 0 ? SyncKind.Join : from == ahlTeam ? SyncKind.Update : nhlTeams.Contains(from) ? SyncKind.Move : SyncKind.Join;
+            var c = new SyncChange
+            {
+                Kind = kind, Ahl = a, GameId = p.GameId, Name = p.Name, Position = a.Position, RosterRow = p.RosterRow, BioRow = p.BioRow,
+                PlayerIndex = p.PlayerIndex,
+                FromTeam = from, ToTeam = ahlTeam, FromTeamName = fromName, ToTeamName = TeamName(ahlTeam),
+                OldNumber = oldNo, NewNumber = a.Number, OldHeight = oldH, NewHeight = a.HeightIn, OldWeight = oldW, NewWeight = a.WeightLb,
+                NameOnly = nameOnly, WithSizes = sizes,
+            };
+            bool sizeDiffers = (a.HeightIn > 0 && a.HeightIn != oldH) || (a.WeightLb > 0 && a.WeightLb != oldW);
+            if (kind == SyncKind.Update && !c.NumberChanges && !(sizes && sizeDiffers)) continue;
+            c.Selected = true;
+            changes.Add(c);
+        }
+        return changes.OrderBy(c => c.Kind).ThenBy(c => c.Name).ToList();
     }
 
     /// <summary>
