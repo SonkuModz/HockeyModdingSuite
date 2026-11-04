@@ -252,15 +252,17 @@ public static class Tunables
                 }
             int len = (int)Math.Min(0x300, codeSize - site);
             var d = Decoder.Create(64, new ByteArrayCodeReader(b, c0 + (int)site, len), (ulong)site);
-            // the object: where the name (rcx) is stored, minus 0x10
+            // the object: where the name is stored (from the register the site's lea loads, usually rcx), minus 0x10
             ulong a = 0;
+            Register nameReg = Register.None;
             {
                 var pre = Decoder.Create(64, new ByteArrayCodeReader(b, c0 + (int)site, Math.Min(0x60, len)), (ulong)site);
                 while (pre.IP < (ulong)site + 0x60 && a == 0)
                 {
                     var x = pre.Decode();
                     if (x.IsInvalid) break;
-                    if (x.Mnemonic == Mnemonic.Mov && x.Op0Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand && x.Op1Kind == OpKind.Register && x.Op1Register == Register.RCX)
+                    if (nameReg == Register.None) { nameReg = x.Op0Register.GetFullRegister(); continue; }
+                    if (x.Mnemonic == Mnemonic.Mov && x.Op0Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand && x.Op1Kind == OpKind.Register && x.Op1Register == nameReg)
                         a = x.IPRelativeMemoryAddress - 0x10;
                 }
             }
@@ -311,7 +313,7 @@ public static class Tunables
                 {
                     var full = r1.GetFullRegister();
                     if (off == 8) group = ptr.TryGetValue(full, out var g) ? g : null;
-                    else if (off == 0x18) { sameLabel = full == Register.RCX; label = ptr.TryGetValue(full, out var l) ? l : null; }
+                    else if (off == 0x18) { sameLabel = full == nameReg; label = ptr.TryGetValue(full, out var l) ? l : null; }
                     else if (off is 0x38 or 0x40 && imm.TryGetValue(full, out var q))
                     {
                         if (off == 0x38) { value = (int)q.Value; min = (int)(q.Value >> 32); }
