@@ -241,7 +241,7 @@ public partial class RosterSyncView : UserControl
         var ahl = _ahl;
         bool sizes = SizesBox.IsChecked == true;
         StatusChanged?.Invoke($"Writing {picked.Count} roster change(s) into the game…");
-        bool wrote = false;
+        string summary = null;
         try
         {
             await _mods.SaveDbAsync(Roster.Database, db =>
@@ -264,12 +264,12 @@ public partial class RosterSyncView : UserControl
                 }
                 fresh = deduped;
                 if (fresh.Count == 0) return null;
-                wrote = true;
-                return RosterSync.Apply(db, fresh) + $" ({DateTime.Now:yyyy-MM-dd})";
+                summary = RosterSync.Apply(db, fresh);
+                return summary + $" ({DateTime.Now:yyyy-MM-dd})";
             }, "Roster sync");
-            if (wrote)
+            if (summary != null)
             {
-                StatusChanged?.Invoke($"{picked.Count} roster change(s) written into the game. The Mods page can restore the original.");
+                StatusChanged?.Invoke($"{summary}. The Mods page can restore the original.");
                 Applied?.Invoke();
             }
             else

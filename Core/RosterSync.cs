@@ -162,7 +162,6 @@ public static class RosterSync
         string TeamName(int i) => roster.Teams.TryGetValue(i, out var tm) && !string.IsNullOrEmpty(tm.Name) ? tm.Name : $"team {i}";
         var ahl = AhlAffiliates(db);
 
-        // the game's players by normalised name
         var byName = new Dictionary<string, List<RosterPlayer>>();
         // the game's players by normalised name. Every bio player is a candidate, not only players
         // with a roster row: a bio-only free agent (RosterRow -1) is a Join, not a Missing.
@@ -282,14 +281,6 @@ public static class RosterSync
         return hits == 1 ? found : -1;
     }
 
-    /// <summary>Iowa Wild's exhibitionteams index (thin wrapper kept from the Iowa-only prototype). Throws a clear error when Iowa isn't in the game's teams.</summary>
-    public static int ResolveIowaTeamIndex(T3Db db)
-    {
-        int idx = ResolveAhlTeamIndex(db, AhlApi.TeamName);
-        if (idx < 0) throw new InvalidOperationException("Iowa Wild not found in the game's teams (exhibitionteams). The AHL sync needs the Iowa Wild team in nhl_game.db.");
-        return idx;
-    }
-
     /// <summary>
     /// Compares the game's rosters with one AHL team's current AHL roster.
     /// Same matcher as Compare: normalised name + birth date, then last name + birth date, then a single name-only
@@ -374,7 +365,7 @@ public static class RosterSync
             if (p.RosterRow >= 0) { from = TeamOf(p.RosterRow); oldNo = JerseyOf(p.RosterRow); fromName = TeamName(from); }
             else { from = p.Team; oldNo = -1; fromName = roster.Teams.TryGetValue(from, out var ft) && !string.IsNullOrEmpty(ft.Name) ? ft.Name : "Free agent"; }
             int oldH = (int)db.Get(bio, p.BioRow, bf["height"]) + HeightOffset, oldW = (int)db.Get(bio, p.BioRow, bf["weight"]) + WeightOffset;
-            // A player with no roster row is always a Join, even if his bio team already equals Iowa:
+            // A player with no roster row is always a Join, even if his bio team already equals this one:
             // an Update with no number/size change would otherwise be skipped and he would stay without a roster row.
             var kind = p.RosterRow < 0 ? SyncKind.Join : from == ahlTeam ? SyncKind.Update : nhlTeams.Contains(from) ? SyncKind.Move : SyncKind.Join;
             var c = new SyncChange
@@ -463,6 +454,9 @@ public static class RosterSync
         var arrivals = new HashSet<int>();
         var touched = new HashSet<int>();
         var createdPis = new HashSet<int>();
+        var full = new List<string>();
+        bool ArrivesIn(T3Table t, Dictionary<int, int> rowOf, int pi, SyncChange c) =>
+            rowOf.TryGetValue(pi, out int at) ? (int)db.Get(t, at, t.Fields.First(f => f.Name == "team")) != c.ToTeam : c.RosterRow < 0;
         int moved = 0, numbers = 0, sizes = 0;
         void SetIn(T3Table t, int row, T3Field f, int v)
         {
@@ -483,12 +477,20 @@ public static class RosterSync
             // stayed. Only when he has no roster row (a bio-only free agent) is there no row to
             // read from, and PlayerIndex is the only source for creating one.
             int pi = c.RosterRow >= 0 ? (int)db.Get(rt, c.RosterRow, rf["playerindex"]) : c.PlayerIndex;
+            // a team with 40 players takes no more: he stays where he is, the other changes still go in
+            if (tables.Any(x => ArrivesIn(x.Table, x.RowOf, pi, c) && !HasFreeSlot(db, x.Table, c.ToTeam)))
+            {
+                full.Add(c.Name);
+                continue;
+            }
             bool teamChanged = false, numberChanged = false;
             foreach (var (t, rowOf) in tables)
             {
                 bool createdRow = false;
                 if (!rowOf.TryGetValue(pi, out int row))
                 {
+                    // a player who has a roster row elsewhere stays out of the copies he isn't in
+                    if (c.RosterRow >= 0) continue;
                     row = CreateRosterRow(db, t, pi, c);
                     rowOf[pi] = row;
                     createdRow = true;
@@ -554,7 +556,8 @@ public static class RosterSync
             foreach (int team in touched) RosterLines.Build(db, t, team);
             SortByKey(db, t);
         }
-        return $"NHL roster sync: {moved} moved, {numbers} numbers, {sizes} heights/weights, {createdPis.Count} new roster rows, lines rebuilt for {touched.Count} teams";
+        string left = full.Count == 0 ? "" : $"; {full.Count} not moved, their team has 40 players ({string.Join(", ", full.Take(5))}{(full.Count > 5 ? ", ..." : "")})";
+        return $"Roster sync: {moved} moved, {numbers} numbers, {sizes} heights/weights, {createdPis.Count} new roster rows, lines rebuilt for {touched.Count} teams{left}";
     }
 
     /// <summary>
@@ -620,6 +623,15 @@ public static class RosterSync
         for (int s = 0; s < 40; s++)
             if (!used.Contains(s)) return team * 40 + s;
         throw new InvalidOperationException($"Team {team} already has 40 players.");
+    }
+
+    private static bool HasFreeSlot(T3Db db, T3Table t, int team)
+    {
+        var kf = t.Fields.First(f => f.Name == "key");
+        int used = 0;
+        for (int r = 0; r < t.WrittenRecords; r++)
+            if (!db.IsInvalid(t, r) && (int)db.Get(t, r, kf) / 40 == team) used++;
+        return used < 40;
     }
 
     /// <summary>Puts the table's rows back in key order (moved whole, nothing else changes).</summary>

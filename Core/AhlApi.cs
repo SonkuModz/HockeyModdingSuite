@@ -26,10 +26,7 @@ public sealed record AhlTeam(int Id, string Code, string Name);
 /// </summary>
 public static class AhlApi
 {
-    /// <summary>Iowa Wild, kept as the single-team default (the AHL team Nick follows first): RosterAsync() with no arguments still fetches Iowa.</summary>
-    public const int TeamId = 389;
-    public const string TeamName = "Iowa Wild";
-    /// <summary>2026-27 Regular Season. This WILL go stale: next season the current season_id changes and this constant must be updated, or resolved from the feed's bootstrap view.</summary>
+    /// <summary>The season to fall back on when the feed doesn't say which is current (2026-27).</summary>
     public const int SeasonId = 94;
     public const int LeagueId = 4;
 
@@ -58,6 +55,20 @@ public static class AhlApi
         return list;
     }
 
+    /// <summary>The newest regular season, from the feed's bootstrap view (what theahl.com's pages start from); <see cref="SeasonId"/> if that fails.</summary>
+    public static async Task<int> CurrentSeasonAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            string json = await GetAsync($"{FeedBase}&view=bootstrap&season=latest&pageName=roster&key={Key}&client_code={ClientCode}&site_id={SiteId}&league_id={LeagueId}&lang=en", ct);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("regularSeasons", out var seasons) && seasons.GetArrayLength() > 0 && int.TryParse(Str(seasons[0], "id"), out int id))
+                return id;
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or TaskCanceledException && !ct.IsCancellationRequested) { }
+        return SeasonId;
+    }
+
     /// <summary>
     /// Every AHL team's current roster, one team at a time (the feed turns away bursts with 429, so there is a
     /// 250 ms pause between teams, like NhlApi.AllRostersAsync). Progress is reported per team (team name).
@@ -65,20 +76,17 @@ public static class AhlApi
     /// </summary>
     public static async Task<List<(AhlTeam Team, List<AhlPlayer> Players)>> AllRostersAsync(Action<string> progress = null, CancellationToken ct = default)
     {
-        var teams = await TeamsAsync(SeasonId, ct);
+        int season = await CurrentSeasonAsync(ct);
+        var teams = await TeamsAsync(season, ct);
         var all = new List<(AhlTeam, List<AhlPlayer>)>();
         foreach (var t in teams)
         {
-            all.Add((t, await RosterAsync(t.Id, SeasonId, t.Name, ct)));
+            all.Add((t, await RosterAsync(t.Id, season, t.Name, ct)));
             progress?.Invoke(t.Name);
             await Task.Delay(250, ct);
         }
         return all;
     }
-
-    /// <summary>Iowa Wild's current roster (25 players in 2026-27: 15 forwards, 8 defenders, 2 goalies).</summary>
-    public static Task<List<AhlPlayer>> RosterAsync(int teamId = TeamId, int seasonId = SeasonId, CancellationToken ct = default) =>
-        RosterAsync(teamId, seasonId, TeamName, ct);
 
     /// <summary>One team's current roster from the feed. The team name is only used for display (the feed's teamName is not trusted for matching).</summary>
     public static async Task<List<AhlPlayer>> RosterAsync(int teamId, int seasonId, string teamName, CancellationToken ct = default)

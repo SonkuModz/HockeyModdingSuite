@@ -252,7 +252,7 @@ public partial class RosterPage : UserControl
         // Draft: year (stored as year-1900), round, pick, and the team that drafted him
         var draftFields = new List<FieldEdit>();
         Add(draftFields, bio, p.BioRow, "draftyear", 1900);
-        Add(draftFields, bio, p.BioRow, "draftround", minValue: 0, maxValue: 7);
+        Add(draftFields, bio, p.BioRow, "draftround", minValue: 0); // the game's older players go past round 7
         Add(draftFields, bio, p.BioRow, "draftposition", minValue: 0);
         _draftRoundField = draftFields.FirstOrDefault(f => f.Field == "draftround");
         _draftPickField = draftFields.FirstOrDefault(f => f.Field == "draftposition");
@@ -394,7 +394,9 @@ public partial class RosterPage : UserControl
     private string CrossFieldError()
     {
         if (_current == null) return null;
+        // only when the draft is being edited: the game's own data has players who wouldn't pass (a round but no team)
         if (_draftTeamField != null && _draftRoundField != null && _draftPickField != null
+            && (_draftTeamField.IsChanged || _draftRoundField.IsChanged || _draftPickField.IsChanged)
             && !_draftTeamField.HasError && !_draftRoundField.HasError && !_draftPickField.HasError)
         {
             int team = int.Parse(_draftTeamField.Text, CultureInfo.InvariantCulture);
@@ -404,7 +406,7 @@ public partial class RosterPage : UserControl
             if (team >= 0 && (round < 1 || pick < 1)) return "Drafted: the draft round and pick must be at least 1.";
         }
         foreach (var c in _clauses)
-            if (c.CrossError != null) return c.CrossError;
+            if (c.IsChanged && c.CrossError != null) return c.CrossError;
         if (_positionEdit != null && _positionEdit.IsChanged && (_positionEdit.PrimaryValue == 5) != _current.IsGoalie)
             return "A skater can't become a goalie (or the reverse) here: the ratings wouldn't match the position.";
         return null;
