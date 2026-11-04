@@ -14,6 +14,7 @@ public sealed class RosterPlayer
     public T3Table RatingsTable { get; init; }
     public int RatingsRow { get; init; } = -1;
     public int RosterRow { get; init; } = -1;
+    public int PlayerIndex { get; init; } = -1;
     public string FirstName { get; init; }
     public string LastName { get; init; }
     public int Team { get; init; }
@@ -67,7 +68,13 @@ public sealed class Roster
         // roster row by player id: exhibitionrostertable.playerindex → exhibitionplayers.index → playerid
         var players = db.Table(PlayersTable);
         var idOfIndex = new Dictionary<int, int>();
-        foreach (int r in Rows(players)) idOfIndex[Int(players, r, "index")] = Int(players, r, "playerid");
+        var indexOfId = new Dictionary<int, int>();
+        foreach (int r in Rows(players))
+        {
+            int index = Int(players, r, "index"), id = Int(players, r, "playerid");
+            idOfIndex[index] = id;
+            indexOfId.TryAdd(id, index);
+        }
         var roster = db.Table(RosterTable);
         var rosterOf = new Dictionary<int, int>();
         foreach (int r in Rows(roster))
@@ -85,6 +92,7 @@ public sealed class Roster
                 GameId = id, BioRow = r,
                 RatingsTable = rt.Item1, RatingsRow = rt.Item1 == null ? -1 : rt.Item2,
                 RosterRow = rosterRow,
+                PlayerIndex = indexOfId.GetValueOrDefault(id, -1),
                 FirstName = Str(bio, r, "firstname"), LastName = Str(bio, r, "lastname"),
                 Team = team, TeamAbbr = Teams.TryGetValue(team, out var tm) ? tm.Abbr : "FA",
                 Position = Int(bio, r, "position"),

@@ -24,6 +24,7 @@ public sealed class SyncRow : Observable
     public string Description => Change.Description;
     public bool CanApply => Change.CanApply;
     public string Note => Change.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." :
+        Change.Kind == SyncKind.Join && Change.NeedsNewRow ? "In the game as a free agent with no roster row — Sync will create one." :
         Change.Kind == SyncKind.Left ? "Unticked: he may be injured, sent down or gone. Tick it to send him to the AHL affiliate." :
         Change.Kind == SyncKind.Missing ? "Not in the game's database, so it can't be applied yet." : "";
     public string KindText => Change.Kind switch

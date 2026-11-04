@@ -27,6 +27,10 @@ public sealed class SyncChange
     public string Position { get; init; }
     public int RosterRow { get; init; } = -1;
     public int BioRow { get; init; } = -1;
+    /// <summary>The player's index in exhibitionplayers. -1 when he has no players row, so no roster row can be created for him.</summary>
+    public int PlayerIndex { get; init; } = -1;
+    /// <summary>True when the player is in the game (bio + players row) but has no roster row yet: Apply creates one.</summary>
+    public bool NeedsNewRow => RosterRow < 0;
     public int FromTeam { get; init; } = -1;
     public int ToTeam { get; init; } = -1;
     public string FromTeamName { get; init; }
@@ -42,7 +46,7 @@ public sealed class SyncChange
     /// <summary>Ticked by default: moves, joins and number changes are; departures and unmatched players aren't.</summary>
     public bool Selected { get; set; }
 
-    public bool CanApply => Kind != SyncKind.Missing && RosterRow >= 0 && ToTeam >= 0;
+    public bool CanApply => Kind != SyncKind.Missing && BioRow >= 0 && ToTeam >= 0 && (RosterRow >= 0 || PlayerIndex >= 0);
     public bool NumberChanges => NewNumber >= 0 && NewNumber != OldNumber;
 
     /// <summary>What applying does, in words.</summary>
@@ -150,7 +154,9 @@ public static class RosterSync
 
         // the game's players by normalised name
         var byName = new Dictionary<string, List<RosterPlayer>>();
-        foreach (var p in roster.Players.Where(p => p.RosterRow >= 0))
+        // the game's players by normalised name. Every bio player is a candidate, not only players
+        // with a roster row: a bio-only free agent (RosterRow -1) is a Join, not a Missing.
+        foreach (var p in roster.Players)
         {
             string k = Key(p.FirstName, p.LastName);
             if (!byName.TryGetValue(k, out var l)) byName[k] = l = new List<RosterPlayer>();
@@ -162,7 +168,7 @@ public static class RosterSync
             return y > 1900 && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m) ? new DateTime(y, m, d) : null;
         }
         // last-name-only index for players the API spells differently (Teddy / Teodors)
-        var byLast = roster.Players.Where(p => p.RosterRow >= 0).GroupBy(p => Norm(p.LastName)).ToDictionary(g => g.Key, g => g.ToList());
+        var byLast = roster.Players.GroupBy(p => Norm(p.LastName)).ToDictionary(g => g.Key, g => g.ToList());
 
         // what the game shows: the online roster copy's row, else the exhibition one
         var tables = RosterTables(db);
@@ -195,14 +201,20 @@ public static class RosterSync
                 continue;
             }
             matched.Add(p.GameId);
-            int from = TeamOf(p.RosterRow);
-            int oldNo = JerseyOf(p.RosterRow);
+            // A player with no roster row has no team/jersey in a roster table: his bio team is where he came from.
+            int from, oldNo;
+            string fromName;
+            if (p.RosterRow >= 0) { from = TeamOf(p.RosterRow); oldNo = JerseyOf(p.RosterRow); fromName = TeamName(from); }
+            else { from = p.Team; oldNo = -1; fromName = roster.Teams.TryGetValue(from, out var ft) && !string.IsNullOrEmpty(ft.Name) ? ft.Name : "Free agent"; }
             int oldH = (int)db.Get(bio, p.BioRow, bf["height"]) + HeightOffset, oldW = (int)db.Get(bio, p.BioRow, bf["weight"]) + WeightOffset;
-            var kind = from == to ? SyncKind.Update : nhlTeams.Contains(from) ? SyncKind.Move : SyncKind.Join;
+            // A player with no roster row is always a Join, even if his bio team already equals the NHL team:
+            // an Update with no number/size change would otherwise be skipped and he would stay without a roster row.
+            var kind = p.RosterRow < 0 ? SyncKind.Join : from == to ? SyncKind.Update : nhlTeams.Contains(from) ? SyncKind.Move : SyncKind.Join;
             var c = new SyncChange
             {
                 Kind = kind, Api = a, GameId = p.GameId, Name = p.Name, Position = a.Position, RosterRow = p.RosterRow, BioRow = p.BioRow,
-                FromTeam = from, ToTeam = to, FromTeamName = TeamName(from), ToTeamName = TeamName(to),
+                PlayerIndex = p.PlayerIndex,
+                FromTeam = from, ToTeam = to, FromTeamName = fromName, ToTeamName = TeamName(to),
                 OldNumber = oldNo, NewNumber = a.Number, OldHeight = oldH, NewHeight = a.HeightIn, OldWeight = oldW, NewWeight = a.WeightLb,
                 NameOnly = nameOnly, WithSizes = sizes,
             };
@@ -220,6 +232,7 @@ public static class RosterSync
             changes.Add(new SyncChange
             {
                 Kind = SyncKind.Left, GameId = p.GameId, Name = p.Name, Position = p.PositionName, RosterRow = p.RosterRow, BioRow = p.BioRow,
+                PlayerIndex = p.PlayerIndex,
                 FromTeam = team, FromTeamName = TeamName(team), ToTeam = to, ToTeamName = to >= 0 ? TeamName(to) : null,
                 OldNumber = JerseyOf(p.RosterRow),
             });
@@ -242,6 +255,7 @@ public static class RosterSync
         var tables = RosterTables(db);
         var arrivals = new HashSet<int>();
         var touched = new HashSet<int>();
+        var createdPis = new HashSet<int>();
         int moved = 0, numbers = 0, sizes = 0;
         void SetIn(T3Table t, int row, T3Field f, int v)
         {
@@ -250,14 +264,31 @@ public static class RosterSync
         }
         foreach (var c in changes.Where(c => c.CanApply))
         {
-            int pi = (int)db.Get(rt, c.RosterRow, rf["playerindex"]);
+            // Prefer the playerindex carried on the change; fall back to the roster row for changes
+            // built before PlayerIndex existed (e.g. Left changes from an older Compare).
+            int pi = c.PlayerIndex >= 0 ? c.PlayerIndex : (int)db.Get(rt, c.RosterRow, rf["playerindex"]);
             bool teamChanged = false, numberChanged = false;
             foreach (var (t, rowOf) in tables)
             {
-                if (!rowOf.TryGetValue(pi, out int row)) continue;
+                bool createdRow = false;
+                if (!rowOf.TryGetValue(pi, out int row))
+                {
+                    row = CreateRosterRow(db, t, pi, c);
+                    rowOf[pi] = row;
+                    createdRow = true;
+                    createdPis.Add(pi);
+                }
                 var f = t.Fields.ToDictionary(x => x.Name);
                 int oldTeam = (int)db.Get(t, row, f["team"]);
-                if (oldTeam != c.ToTeam)
+                if (createdRow)
+                {
+                    // CreateRosterRow already set team, key, jersey and rosterstatus, and cleared the line slots.
+                    arrivals.Add(pi);
+                    touched.Add(c.ToTeam);
+                    teamChanged = true;
+                    if (c.NumberChanges) numberChanged = true;
+                }
+                else if (oldTeam != c.ToTeam)
                 {
                     SetIn(t, row, f["team"], c.ToTeam);
                     SetIn(t, row, f["key"], FreeKey(db, t, c.ToTeam));
@@ -302,8 +333,56 @@ public static class RosterSync
             foreach (int team in touched) RosterLines.Build(db, t, team);
             SortByKey(db, t);
         }
-        return $"NHL roster sync: {moved} moved, {numbers} numbers, {sizes} heights/weights, lines rebuilt for {touched.Count} teams";
+        return $"NHL roster sync: {moved} moved, {numbers} numbers, {sizes} heights/weights, {createdPis.Count} new roster rows, lines rebuilt for {touched.Count} teams";
     }
+
+    /// <summary>
+    /// Creates a roster row for a player who has a bio row and a players row but no roster row yet (a bio-only
+    /// free agent), in one roster table. The row is a copy of a valid row of the destination team if there is one,
+    /// otherwise of any valid row, with playerindex, team, key, jersey, rosterstatus and captaincy set for this
+    /// player and every line-slot flag cleared. The free row is an invalid (empty) row inside the written records
+    /// first; only when there is none is the table grown with SetWritten, as JerseySlots does. Returns the row.
+    /// Throws when the table has no free row, no valid row to copy, or no free key on the team (40 players).
+    /// </summary>
+    private static int CreateRosterRow(T3Db db, T3Table t, int pi, SyncChange c)
+    {
+        var f = t.Fields.ToDictionary(x => x.Name);
+        if (!f.ContainsKey("playerindex") || !f.ContainsKey("team") || !f.ContainsKey("key") || !f.ContainsKey("jersey"))
+            throw new InvalidOperationException($"{t.Name} is missing playerindex, team, key or jersey.");
+        void SetIn(int row, T3Field field, int v)
+        {
+            long max = field.RangeLow + (1L << field.Depth) - 1;
+            if (v >= field.RangeLow && v <= max) db.Set(t, row, field, v);
+        }
+        // FreeKey must be taken before the new row is written: once written, the row itself would count as used.
+        int key = FreeKey(db, t, c.ToTeam);
+        int template = -1;
+        for (int r = 0; r < t.WrittenRecords; r++)
+            if (!db.IsInvalid(t, r) && (int)db.Get(t, r, f["team"]) == c.ToTeam) { template = r; break; }
+        if (template < 0)
+            for (int r = 0; r < t.WrittenRecords; r++)
+                if (!db.IsInvalid(t, r)) { template = r; break; }
+        if (template < 0) throw new InvalidOperationException($"{t.Name} has no valid row to copy for {c.Name}.");
+        int row = -1;
+        for (int r = 0; r < t.WrittenRecords; r++)
+            if (db.IsInvalid(t, r)) { row = r; break; }
+        if (row < 0)
+        {
+            if (t.WrittenRecords >= t.Records) throw new InvalidOperationException($"{t.Name} has no free roster row for {c.Name}.");
+            row = t.WrittenRecords;
+            db.SetWritten(t, row + 1);
+        }
+        db.WriteRecord(t, row, db.RecordBytes(t, template));
+        SetIn(row, f["playerindex"], pi);
+        SetIn(row, f["team"], c.ToTeam);
+        SetIn(row, f["key"], key);
+        if (c.NewNumber is >= 0 and <= 99) SetIn(row, f["jersey"], c.NewNumber);
+        foreach (var s in t.Fields.Where(IsLineSlot)) db.Set(t, row, s, 0);
+        if (f.TryGetValue("captain", out var cap)) SetIn(row, cap, 0);
+        if (f.TryGetValue("rosterstatus", out var st)) SetIn(row, st, 1);
+        return row;
+    }
+
 
     // ---------------------------------------------------------------- keys and lines
 
