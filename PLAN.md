@@ -1211,3 +1211,10 @@ Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide w
   bytes holding the new value, else at 4-byte slots in nop padding after a ret (23). The patched eboot is read back
   before writing (every change as wanted, every other value unchanged). Skipped 7 (zeroed registers, a sign change);
   29 differ only in their minimum. List: docs/nhl24/tuning-from-nhl27.txt. Awaiting an in-game check.
+- **Real-life calibration (on hold, 2026-11-03, user's call)**: NHL EDGE (api-web.nhle.com/v1/edge/..., no key; see
+  github.com/coreyjs/nhl-api-py) plus api.nhle.com/stats team reports. Real per-team-game baselines for 2025-26 and
+  EDGE save % by danger are in docs/nhl24/nhl_baseline_2025-26.json. NHL 24 has no rating-to-mph table: speeds come
+  from ratings through code, sliders (`gSkatingSpeedSlider` 7-point curve 0.85..1.2, `gShotPowerSlider`) and
+  multipliers (`gSlapShotPowerScale` 1.1), so the plan is to match outcomes: the user sims CPU vs CPU games, HMS
+  compares box-score stats to the baselines and adjusts shooting/goalie/penalty tuning. Next step waits on the user's
+  sim results. Also pending: re-run tunables-match now that 2,062 more NHL 24 values are read.
