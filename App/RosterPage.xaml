@@ -137,6 +137,7 @@
                         <RadioButton x:Name="ModeText" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Text" Checked="OnModeChanged" />
                         <RadioButton x:Name="ModeLines" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Lines" Checked="OnModeChanged" />
                         <RadioButton x:Name="ModeSync" Style="{StaticResource Segment}" GroupName="RosterMode" Content="NHL sync" Checked="OnModeChanged" />
+                        <RadioButton x:Name="ModePicks" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Draft Picks" Checked="OnModeChanged" />
                     </StackPanel>
                 </Border>
                 <Button x:Name="ReloadButton" Margin="10,0,0,0" Click="OnReload" ToolTip="Read the database from the game files again">
@@ -155,6 +156,7 @@
         <!-- ============================================================ NHL sync -->
         <local:RosterSyncView x:Name="SyncView" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed" />
         <local:LinesView x:Name="LinesView" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed" />
+        <local:DraftPicksView x:Name="PicksView" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed" />
 
         <Grid x:Name="SearchRow" Grid.Row="1" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
