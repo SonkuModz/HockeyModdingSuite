@@ -57,6 +57,7 @@ public static class Program
                 "arena" => ArenaCmd(game, opts),
                 "ebx-probe" => EbxProbeCmd(game, opts),
                 "roster-sync" => RosterSyncCmd(game, opts),
+                "ahl-sync" => AhlSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -2904,7 +2905,11 @@ public static class Program
         return 0;
     }
 
-    /// <summary>roster-sync [--team TOR] [--all]: compares the game's rosters with the NHL API's current ones (read only).</summary>
+    /// <summary>roster-sync [--team TOR] [--all]: compares the game's rosters with the NHL API's current ones (read only).
+    /// Note: a player who is also on an AHL roster appears here too, showing the NHL side only — the NHL API lists
+    /// players assigned to the AHL (e.g. Ben Jones on CGY while he plays for the Wranglers), so this command alone
+    /// cannot tell which side is right. The UI's combined compare (RosterSync.CompareCombined, AHL wins ties) is
+    /// the deduped view; use that to apply changes for such players.</summary>
     private static int RosterSyncCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);
@@ -2929,6 +2934,60 @@ public static class Program
             Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
         }
         return 0;
+    }
+
+    /// <summary>
+    /// ahl-sync [--team CODE|NAME|ID] [--sizes] [--dry 1] [--all]: compares the game's rosters with the AHL's
+    /// current rosters — all 32 teams by default, one team with --team (e.g. --team IA, --team "Iowa Wild",
+    /// --team 389). Read only, unless --dry applies in memory. Teams with no matching team in the game are
+    /// skipped and listed, not failed.
+    /// Note: a player who is also on an NHL roster appears here too, showing the AHL side only — the NHL API lists
+    /// players assigned to the AHL (e.g. Ben Jones on CGY while he plays for the Wranglers), so this command alone
+    /// cannot tell which side is right. The UI's combined compare (RosterSync.CompareCombined, AHL wins ties) is
+    /// the deduped view; use that to apply changes for such players.
+    /// </summary>
+    private static int AhlSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var all = AhlApi.AllRostersAsync().GetAwaiter().GetResult();
+        string teamArg = opts.Get("team");
+        var selected = teamArg == null ? all : all.Where(t => AhlTeamMatches(t.Team, teamArg)).ToList();
+        if (teamArg != null && selected.Count == 0)
+        {
+            Console.WriteLine($"No AHL team matches '{teamArg}'. Teams: " + string.Join(", ", all.Select(t => $"{t.Team.Code} ({t.Team.Name})")));
+            return 1;
+        }
+        int total = selected.Sum(t => t.Players.Count);
+        var (changes, skipped) = RosterSync.CompareAllAhl(db, selected, opts.Has("sizes"));
+        Console.WriteLine($"{total} players on {selected.Count} AHL team(s); {changes.Count} differences");
+        foreach (var g in changes.GroupBy(c => c.Kind))
+        {
+            Console.WriteLine($"{g.Key}: {g.Count()}");
+            foreach (var c in g.Take(opts.Has("all") ? 10000 : 12))
+                Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Name,-26} {c.Position,-2} {c.Description}{(c.NameOnly ? "  (name match only)" : "")}");
+        }
+        if (skipped.Count > 0)
+            Console.WriteLine("Skipped (no matching team in the game): " + string.Join(", ", skipped));
+        if (opts.Has("dry"))
+        {
+            // applies the ticked changes to the database in memory only, then compares again
+            Console.WriteLine(RosterSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, totalCrcs) = db.CheckCrcs();
+            var (again, _) = RosterSync.CompareAllAhl(db, selected, opts.Has("sizes"));
+            Console.WriteLine($"in memory: CRCs {ok}/{totalCrcs}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
+        }
+        return 0;
+    }
+
+    /// <summary>Matches a --team argument against a feed team: feed id (389), feed code (IA), or name ("Iowa Wild", or a unique part of it, e.g. "Iowa").</summary>
+    private static bool AhlTeamMatches(AhlTeam team, string arg)
+    {
+        if (int.TryParse(arg, out int id)) return team.Id == id;
+        if (string.Equals(team.Code, arg, StringComparison.OrdinalIgnoreCase)) return true;
+        string want = RosterSync.Norm(arg);
+        string name = RosterSync.Norm(team.Name);
+        return name == want || name.Contains(want);
     }
 
     private static int Export(string game, Options opts)

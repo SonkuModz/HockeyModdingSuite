@@ -36,6 +36,90 @@
         <ItemsPanelTemplate x:Key="WrapPanelTemplate">
             <WrapPanel />
         </ItemsPanelTemplate>
+        <!-- one position: primary and secondary dropdowns -->
+        <DataTemplate x:Key="PositionTemplate" DataType="{x:Type local:PositionEdit}">
+            <Border x:Name="Bd" Width="300" Margin="0,0,10,10" Padding="12,9" CornerRadius="9" Background="{StaticResource Surface2}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="Primary position" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <ComboBox ItemsSource="{Binding PrimaryChoices}" SelectedItem="{Binding Primary}" DisplayMemberPath="Name" Margin="0,5,0,10" />
+                    <TextBlock Text="Secondary position" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <ComboBox ItemsSource="{Binding SecondaryChoices}" SelectedItem="{Binding Secondary}" DisplayMemberPath="Name" Margin="0,5,0,6" />
+                    <TextBlock Text="{Binding Display, StringFormat='Plays as {0}'}" Foreground="{StaticResource Muted}" FontSize="11.5" />
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" FontSize="11" Margin="0,3,0,0"
+                               Visibility="{Binding HasError, Converter={StaticResource BoolVisible}}" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Patch}" />
+                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource PatchSoft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasError}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Danger}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <!-- one team picker: the team that drafted the player -->
+        <DataTemplate x:Key="PickTemplate" DataType="{x:Type local:PickEdit}">
+            <Border x:Name="Bd" Width="330" Margin="0,0,10,10" Padding="12,9" CornerRadius="9" Background="{StaticResource Surface2}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <ComboBox ItemsSource="{Binding Picks}" SelectedItem="{Binding Selected}" DisplayMemberPath="Label" Margin="0,6,0,0" />
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" FontSize="11" Margin="0,3,0,0"
+                               Visibility="{Binding HasError, Converter={StaticResource BoolVisible}}" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Patch}" />
+                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource PatchSoft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasError}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Danger}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <!-- one 0/1 flag as a checkbox -->
+        <DataTemplate x:Key="ToggleTemplate" DataType="{x:Type local:ToggleEdit}">
+            <Border x:Name="Bd" Width="236" Margin="0,0,10,10" Padding="12,9" CornerRadius="9" Background="{StaticResource Surface2}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <CheckBox IsChecked="{Binding BoolValue}" Content="{Binding Label}" VerticalAlignment="Center" Foreground="{StaticResource Text}" />
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Patch}" />
+                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource PatchSoft}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <!-- one year of trade protection: clause type + team list -->
+        <DataTemplate x:Key="ClauseTemplate" DataType="{x:Type local:ClauseEdit}">
+            <Border x:Name="Bd" Width="300" Margin="0,0,10,10" Padding="12,9" CornerRadius="9" Background="{StaticResource Surface2}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="{Binding YearLabel}" Foreground="{StaticResource TextDim}" FontSize="12" />
+                    <ComboBox ItemsSource="{x:Static local:ClauseEdit.Choices}" SelectedItem="{Binding Selected}" DisplayMemberPath="Name" Margin="0,5,0,8" />
+                    <DockPanel>
+                        <TextBlock Text="Teams on the list" Foreground="{StaticResource TextDim}" FontSize="12" VerticalAlignment="Center" />
+                        <TextBox DockPanel.Dock="Right" Width="70" Height="30" Text="{Binding TeamsField.Text, UpdateSourceTrigger=PropertyChanged}"
+                                 HorizontalContentAlignment="Right" FontWeight="SemiBold" IsEnabled="{Binding TeamsEnabled}" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" FontSize="11" Margin="0,3,0,0"
+                               Visibility="{Binding HasError, Converter={StaticResource BoolVisible}}" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Patch}" />
+                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource PatchSoft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasError}" Value="True">
+                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Danger}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid Margin="22,18,22,14">
@@ -241,6 +325,26 @@
                                     </StackPanel>
                                     <TextBlock Text="IDENTITY" Style="{StaticResource Overline}" Margin="0,0,0,10" />
                                     <ItemsControl x:Name="IdentityFields" ItemTemplate="{StaticResource FieldTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
+                                    <StackPanel x:Name="PositionSection">
+                                        <TextBlock Text="POSITION" Style="{StaticResource Overline}" Margin="0,12,0,10" />
+                                        <ItemsControl x:Name="PositionList" ItemTemplate="{StaticResource PositionTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
+                                    </StackPanel>
+                                    <StackPanel x:Name="DraftSection">
+                                        <TextBlock Text="DRAFT" Style="{StaticResource Overline}" Margin="0,12,0,10" />
+                                        <ItemsControl x:Name="DraftFields" ItemTemplate="{StaticResource FieldTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
+                                        <ItemsControl x:Name="DraftTeamList" ItemTemplate="{StaticResource PickTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                    <StackPanel x:Name="ContractSection">
+                                        <TextBlock Text="CONTRACT" Style="{StaticResource Overline}" Margin="0,12,0,10" />
+                                        <TextBlock x:Name="ContractStatusText" Style="{StaticResource Caption}" Margin="0,0,0,10" />
+                                        <ItemsControl x:Name="ContractFields" ItemTemplate="{StaticResource FieldTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
+                                        <ItemsControl x:Name="ContractToggles" ItemTemplate="{StaticResource ToggleTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Margin="0,2,0,0" />
+                                        <StackPanel x:Name="ClauseSection">
+                                            <TextBlock Text="TRADE PROTECTION" Style="{StaticResource Overline}" Margin="0,12,0,6" />
+                                            <TextBlock Text="One clause per season, starting with this season — through the contract, then the extension. A team list only applies with a clause." Style="{StaticResource Caption}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                                            <ItemsControl x:Name="ClauseList" ItemTemplate="{StaticResource ClauseTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
+                                        </StackPanel>
+                                    </StackPanel>
                                     <TextBlock x:Name="RatingsTitle" Text="RATINGS" Style="{StaticResource Overline}" Margin="0,12,0,10" />
                                     <ItemsControl x:Name="RatingFields" ItemTemplate="{StaticResource FieldTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
                                 </StackPanel>
