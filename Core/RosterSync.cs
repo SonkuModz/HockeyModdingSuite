@@ -471,9 +471,18 @@ public static class RosterSync
         }
         foreach (var c in changes.Where(c => c.CanApply))
         {
-            // Prefer the playerindex carried on the change; fall back to the roster row for changes
-            // built before PlayerIndex existed (e.g. Left changes from an older Compare).
-            int pi = c.PlayerIndex >= 0 ? c.PlayerIndex : (int)db.Get(rt, c.RosterRow, rf["playerindex"]);
+            // The roster row's playerindex when he has one: that is the row Compare read (its team
+            // and jersey are what FromTeam/OldNumber came from), so it is the row Apply must write.
+            // The playerindex carried on the change comes from exhibitionplayers' first row for the
+            // player (Roster.PlayerIndex = indexOfId, first-wins) and can differ from it: the game
+            // can ship two exhibitionplayers rows for one playerid, and then the roster row can use
+            // the later index while PlayerIndex holds the first. Apply then updated a different,
+            // already-correct row and the change never cleared — Damian Clara, 2026-11-04: his San
+            // Diego rows under the first index were already #35, while the row Compare read (#20)
+            // was under the later index, so an in-memory Apply printed 0 numbers and the Update
+            // stayed. Only when he has no roster row (a bio-only free agent) is there no row to
+            // read from, and PlayerIndex is the only source for creating one.
+            int pi = c.RosterRow >= 0 ? (int)db.Get(rt, c.RosterRow, rf["playerindex"]) : c.PlayerIndex;
             bool teamChanged = false, numberChanged = false;
             foreach (var (t, rowOf) in tables)
             {
