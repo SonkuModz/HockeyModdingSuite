@@ -844,7 +844,7 @@ public partial class MainWindow : Window
         bool ps4 = _profile.Kind == GameKind.Nhl24;
         var all = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTuning, NavTeams, NavArenas,
             NavBeAPro, NavUniforms, NavStudio, NavUnused, NavScorebug, NavMods, NavSettings };
-        var nhl24 = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTuning, NavTeams, NavScorebug, NavMods, NavSettings };
+        var nhl24 = new[] { NavPlay, NavExplorer, NavTextures, NavSounds, NavVideos, NavRoster, NavDatabase, NavTuning, NavTeams, NavUniforms, NavScorebug, NavMods, NavSettings };
         foreach (var nav in all)
             nav.Visibility = !ps4 || nhl24.Contains(nav) ? Visibility.Visible : Visibility.Collapsed;
         ComingSoonArenas.Visibility = ps4 ? Visibility.Collapsed : Visibility.Visible;

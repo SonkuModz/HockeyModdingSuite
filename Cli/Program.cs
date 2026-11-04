@@ -1455,7 +1455,7 @@ public static class Program
         var index = OpenIndex(game, false);
         string name = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("mesh needs a mesh name");
         var res = index.GetRes(name) ?? throw new ArgumentException($"no RES named {name}");
-        var mesh = new MeshSet(index.Read(res), id => index.GetChunk(id) is { } c ? index.Read(c) : null);
+        var mesh = new MeshSet(index.Read(res), id => index.GetChunk(id) is { } c ? index.Read(c) : null, ps4: !index.Layout.IsPs5, meta: res.ResMeta);
         Console.WriteLine($"{mesh.Name}  bounds {string.Join(",", mesh.Bounds.Min.Select(v => v.ToString("0.00")))} .. {string.Join(",", mesh.Bounds.Max.Select(v => v.ToString("0.00")))}  meta {Convert.ToHexString(res.ResMeta ?? Array.Empty<byte>())}");
         for (int l = 0; l < mesh.Lods.Count; l++)
             foreach (var p in mesh.Lods[l].Where(p => p.Uvs != null))

@@ -34,17 +34,24 @@ public sealed class MeshPart
 /// - section (0x170 bytes): u64 material name offset at +8, u8 stride at +0x1E, u32 triangles at +0x20, u32 first index,
 ///   u32 first vertex, u32 vertex count; vertex declaration at +0x70: 16 × [usage, format, 0, index] then 16 × u16 sizes;
 /// - geometry is inline at the end of the resource: per LOD, the vertex buffer then the index buffer.
+/// NHL 24 (PS4) has the same fields with no 16-byte prefix (offsets from byte 0), the LOD's geometry chunk at +0x60 and
+/// inline offset at +0x70, and 0xE0-byte sections whose vertex declaration starts at +0x4C.
 /// </summary>
 public sealed class MeshSet
 {
-    public const int Base = 16;
+    /// <summary>Where the PS5 header's offsets count from.</summary>
+    public const int Ps5Base = 16;
+    private readonly int Base = Ps5Base, ChunkAt = 0x70, InlineAt = 0x80, SectionSize = 0x170, DeclAt = 0x70;
     public string Name { get; private set; }
     public List<List<MeshPart>> Lods { get; } = new();
     public (float[] Min, float[] Max) Bounds { get; private set; }
 
     /// <param name="chunk">Reads a chunk (for LODs whose geometry is not inline), or null to skip those LODs.</param>
-    public MeshSet(byte[] b, Func<Guid, byte[]> chunk = null)
+    /// <param name="ps4">The NHL 24 (PS4) layout.</param>
+    /// <param name="meta">The RES's meta (NHL 24: its first word is where the inline geometry starts).</param>
+    public MeshSet(byte[] b, Func<Guid, byte[]> chunk = null, bool ps4 = false, byte[] meta = null)
     {
+        if (ps4) (Base, ChunkAt, InlineAt, SectionSize, DeclAt) = (0, 0x60, 0x70, 0xE0, 0x4C);
         Bounds = (new[] { F(b, Base), F(b, Base + 4), F(b, Base + 8) }, new[] { F(b, Base + 16), F(b, Base + 20), F(b, Base + 24) });
         var lods = new List<int>();
         for (int i = 0; i < 6; i++)
@@ -58,9 +65,11 @@ public sealed class MeshSet
         // inline geometry: the end of the resource holds exactly the inline LODs' buffers (16-byte aligned). The resource
         // meta's first word is not where it starts in the stored RES, so it isn't used. A LOD whose inline offset is -1
         // keeps its geometry in the chunk named at +0x70 (vertex buffer, then index buffer).
-        var spans = lods.Select(l => (Inline: U32(b, l + 0x80), Index: U32(b, l + 0x58), Vertex: U32(b, l + 0x5C))).ToList();
+        var spans = lods.Select(l => (Inline: U32(b, l + InlineAt), Index: U32(b, l + 0x58), Vertex: U32(b, l + 0x5C))).ToList();
         long total = spans.Where(s => s.Inline != uint.MaxValue).Select(s => (long)s.Inline + ((s.Index + s.Vertex + 15) & ~15)).DefaultIfEmpty(0).Max();
         int inlineStart = (int)(b.Length - total);
+        // NHL 24 keeps a few more bytes after the inline geometry; the meta says where it starts
+        if (ps4 && meta is { Length: >= 4 } && U32(meta, 0) is var start && start + total <= b.Length) inlineStart = (int)start;
 
         for (int li = 0; li < lods.Count; li++)
         {
@@ -73,7 +82,7 @@ public sealed class MeshSet
             int vtx;
             if (spans[li].Inline == uint.MaxValue)
             {
-                var id = new Guid(b.AsSpan(l + 0x70, 16));
+                var id = new Guid(b.AsSpan(l + ChunkAt, 16));
                 geo = chunk?.Invoke(id);
                 if (geo == null) { Lods.Add(parts); continue; }
                 vtx = 0;
@@ -82,14 +91,14 @@ public sealed class MeshSet
             int idx = vtx + (int)spans[li].Vertex;
             for (int s = 0; s < sections; s++)
             {
-                var part = ReadSection(b, sectionsAt + s * 0x170, geo, vtx, idx, wide);
+                var part = ReadSection(b, sectionsAt + s * SectionSize, geo, vtx, idx, wide);
                 if (part != null) parts.Add(part);
             }
             Lods.Add(parts);
         }
     }
 
-    private static MeshPart ReadSection(byte[] b, int sp, byte[] geo, int vtxBuf, int idxBuf, bool wideIndices)
+    private MeshPart ReadSection(byte[] b, int sp, byte[] geo, int vtxBuf, int idxBuf, bool wideIndices)
     {
         long matOff = BinaryPrimitives.ReadInt64LittleEndian(b.AsSpan(sp + 8));
         int stride = b[sp + 0x1E];
@@ -98,7 +107,7 @@ public sealed class MeshSet
 
         // the declaration: element usage, format and size. Each element is its own stream: a section's vertices start at
         // a byte offset in the LOD's vertex buffer and hold all its positions, then all of the next element, and so on.
-        int decl = sp + 0x70, at = vtxBuf + vertexBytes;
+        int decl = sp + DeclAt, at = vtxBuf + vertexBytes;
         (int Start, int Format, int Size) pos = (-1, 0, 0), nrm = (-1, 0, 0), uv = (-1, 0, 0), uv2 = (-1, 0, 0), uv3 = (-1, 0, 0);
         // blend indices (usages 2, 3: 4 × u16 each) and weights (usages 4, 5: 4 × u8 normalized, summing to 255)
         var bones = new List<int>();

@@ -109,7 +109,7 @@ public sealed class NewGeometry
 /// </summary>
 public static class MeshWriter
 {
-    private const int Base = MeshSet.Base;
+    private const int Base = MeshSet.Ps5Base;
 
     public sealed record Section(int Lod, int Index, string Material, int VertexCount, int TriangleCount, int FirstIndex, int VertexOffset,
                                  List<(int Usage, int Format, int Size)> Elements, Guid Chunk, bool WideIndices, int VertexBufferBytes, int At);

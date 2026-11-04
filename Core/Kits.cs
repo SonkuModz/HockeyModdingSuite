@@ -76,10 +76,15 @@ public static class Kits
     /// <summary>The meshes a kit is shown on: the brand's jersey (adidas when the brand has none), common pants and socks, a helmet and gloves.</summary>
     public static List<(string Garment, string Mesh)> Meshes(AssetIndex index, Kit kit)
     {
-        string Jersey(string brand) => $"content/character/skater/player/jersey/{brand}/components/player_jersey_{brand}_notuck_large_mesh";
+        // NHL 24 names each LOD of a jersey (..._large_lod0_mesh); NHL 27 has one mesh with every LOD
+        string Jersey(string brand)
+        {
+            string name = $"content/character/skater/player/jersey/{brand}/components/player_jersey_{brand}_notuck_large";
+            return index.GetRes(name + "_mesh") != null ? name + "_mesh" : index.GetRes(name + "_lod0_mesh") != null ? name + "_lod0_mesh" : null;
+        }
         var list = new List<(string, string)>
         {
-            ("jersey", index.GetRes(Jersey(kit.Brand)) != null ? Jersey(kit.Brand) : Jersey("adidas")),
+            ("jersey", Jersey(kit.Brand) ?? Jersey("adidas")),
             ("pant", "content/character/skater/player/pant/common/components/player_pant_common_looselong_mesh"),
             ("sock", "content/character/skater/player/sock/common/components/player_sock_common_notuck_mesh"),
         };
@@ -87,7 +92,7 @@ public static class Kits
         list.Add(("helmet", KitEquipment.HelmetMesh));
         list.Add(("glove_left", KitEquipment.GloveMesh("left")));
         list.Add(("glove_right", KitEquipment.GloveMesh("right")));
-        return list.Where(m => index.GetRes(m.Item2) != null).ToList();
+        return list.Where(m => m.Item2 != null && index.GetRes(m.Item2) != null).ToList();
     }
 
     /// <summary>
@@ -155,6 +160,6 @@ public static class Kits
     public static MeshSet LoadMesh(AssetIndex index, string name)
     {
         var res = index.GetRes(name) ?? throw new InvalidDataException($"No mesh {name}.");
-        return new MeshSet(index.Read(res), id => index.GetChunk(id) is { } c ? index.Read(c) : null);
+        return new MeshSet(index.Read(res), id => index.GetChunk(id) is { } c ? index.Read(c) : null, ps4: !index.Layout.IsPs5, meta: res.ResMeta);
     }
 }
