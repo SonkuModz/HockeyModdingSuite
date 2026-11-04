@@ -166,12 +166,14 @@ public sealed class ModStore
             if (!File.Exists(file)) return ModState.Missing;
             string h = Current(file, p);
             if (h == null) return ModState.Missing;
+            // a range whose old and new bytes are the same (a size that didn't change) says nothing either way
+            if (p.OldSha1 == p.NewSha1 && h == p.NewSha1) continue;
             if (h == p.NewSha1) neu++;
             else if (h == p.OldSha1) old++;
             else other++;
         }
         if (other > 0) return ModState.Changed;
-        if (neu == e.Patches.Count) return ModState.Applied;
+        if (old == 0) return ModState.Applied;
         return neu == 0 ? ModState.NotApplied : ModState.Partial;
     }
 

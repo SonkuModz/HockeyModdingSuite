@@ -1175,3 +1175,17 @@ Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide w
   - Roster (11,675 players, portraits), Database, Teams (527 teams, logos) read through it.
   - Every write is refused for NHL 24 (`ModService.RefuseWrite`, the CLI's `RefuseWhileRunning`,
     `LegacyEditor`, `TextureBuilder.Unsupported`) until step 3.
+- **Step 3 (signature test, passed)**: NHL 24 does **not** check its TOC signatures. Two textures were written with
+  the signature left stale: the Bruins team logo (`ui/textures/common/teamlogos/large/t2`) and Boston's centre ice
+  (`content/worlds/rink/textures/centerlogo/ice_centerlogo_2_color`, 1024x1024 BC7, 11 mips), colours inverted. Both
+  showed inverted in game (user's screenshot of centre ice). Then both were restored (ice first, then t2: appends
+  are cut back last-added first) and the TOC SHA1, CAS lengths and record bytes matched the before-hashes exactly.
+  - How a PS4 texture is written (`Replacements.PlanTexturePs4`): every mip BC-encoded and Morton-tiled, largest
+    first; stored uncompressed as three parts (mip 0, mip 1, the rest), each starting a block; appended to the CAS
+    (`ChunkGrower`), chunk-table and bundle entries repointed. The RES's first 8 bytes (where mips 1 and 2 start in
+    the stored chunk) are rewritten; a RES copy that no longer fits its compressed space is stored uncompressed at
+    the end of its CAS and its bundle entry repointed (`ResPatcher.Plan(grow:)`).
+  - `ModStore.State`: a range whose old and new bytes are equal no longer makes a restored mod read "Partial".
+- **Step 4 (writing), started**: the general NHL 24 refusals are gone; textures replace from the Textures page.
+  Still refused for NHL 24 until each is tried in game: sounds, videos, EBX saves, score clock
+  (`ModService.RefuseNhl24`) and databases (`LegacyEditor`).

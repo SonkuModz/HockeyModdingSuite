@@ -27,13 +27,18 @@ public sealed class ModService
     public AssetIndex Index { get; }
     /// <summary>Which game the index is of: its mod list is that game's own.</summary>
     /// <summary>
-    /// Throws when the game's files mustn't change now: an emulator is running, or the game is NHL 24, whose signed TOCs
-    /// haven't been write-tested yet (PLAN §28 step 3).
+    /// Throws when the game's files mustn't change now: an emulator is running. (NHL 24's signed TOCs aren't checked by
+    /// the game, so changing them is fine: PLAN §28 step 3.)
     /// </summary>
     private void RefuseWrite()
     {
         if (GameRunning) throw new InvalidOperationException($"{Emulators.Running()} is running. Close the game before changing its files.");
-        if (Profile.Kind == GameKind.Nhl24) throw new InvalidOperationException("NHL 24 can be viewed and exported for now; changing its files isn't ready yet.");
+    }
+
+    /// <summary>Throws for NHL 24 writes that haven't been tried in the game yet (textures have; PLAN §28).</summary>
+    private void RefuseNhl24(string what)
+    {
+        if (Profile.Kind == GameKind.Nhl24) throw new NotSupportedException($"Replacing NHL 24 {what} isn't ready yet: for now they can be viewed and exported.");
     }
 
     public GameProfile Profile { get; }
@@ -125,6 +130,7 @@ public sealed class ModService
 
     public Task<SoundReplacementPlan> PlanSoundAsync(string name, SoundStream stream, string audioFile) => Run(() =>
     {
+        RefuseNhl24("sounds");
         var (pcm, ch, rate) = AudioLoader.Load(audioFile);
         return Replacements.PlanSound(Index, name, stream, pcm, ch, rate, Locations(), _tocs);
     });
@@ -165,6 +171,7 @@ public sealed class ModService
     public async Task<ModEntry> SaveEbxAsync(string name, byte[] data, string summary)
     {
         RefuseWrite();
+        RefuseNhl24("assets this way");
         try
         {
             return await Run(() =>
@@ -202,6 +209,7 @@ public sealed class ModService
     /// <summary>Plans a ready WebM (encoded to fit) over a movie, and keeps a copy of it as the mod's source.</summary>
     public Task<MoviePlan> PlanMovieAsync(Movie m, byte[] webm) => Run(() =>
     {
+        RefuseNhl24("videos");
         var plan = MovieReplacement.Plan(Index, m, webm, Locations(), _tocs);
         string sources = Path.Combine(Store.Dir, "sources");
         Directory.CreateDirectory(sources);
@@ -217,6 +225,7 @@ public sealed class ModService
     public async Task SaveScorebugAsync(Scorebug current, IReadOnlyDictionary<string, string> edits, bool sharpBadge = false)
     {
         RefuseWrite();
+        RefuseNhl24("score clocks");
         try { await Run(() => Scorebug.Save(Index, Store, Game, current, edits, sharpBadge: sharpBadge)); }
         finally { Changed?.Invoke(); }
     }
