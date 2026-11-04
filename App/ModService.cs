@@ -253,6 +253,36 @@ public sealed class ModService
         finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
+    /// <summary>
+    /// NHL 24: sets its gameplay tuning to NHL 27's (<see cref="TuningMatch"/>), read from <paramref name="nhl27"/>'s
+    /// eboot.bin. An earlier match is restored first, so the plan starts from the eboot as it ships. Nothing is
+    /// written unless the patched eboot reads back as planned.
+    /// </summary>
+    public async Task<TuningMatch.Result> MatchTuningAsync(string nhl27)
+    {
+        RefuseWrite();
+        if (Profile.Kind != GameKind.Nhl24) throw new NotSupportedException("Matching NHL 27's tuning is for NHL 24.");
+        string theirs = Path.Combine(nhl27, "eboot.bin");
+        if (!File.Exists(theirs)) throw new FileNotFoundException($"No eboot.bin in {nhl27}.");
+        try
+        {
+            return await Run(() =>
+            {
+                var other = Tunables.Read(theirs);
+                if (Store.Find(TuningMatch.ModKind, TuningMatch.ModName) is { } old && Store.State(old, Game) != ModState.NotApplied)
+                    Store.Restore(old, Game);
+                var r = TuningMatch.Build(File.ReadAllBytes(Path.Combine(Game, "eboot.bin")), other);
+                if (r.Wrong.Count > 0)
+                    throw new InvalidDataException($"The changed eboot didn't read back as planned ({r.Wrong.Count} values), so nothing was written. First: {r.Wrong[0]}");
+                if (r.Plan.Patches.Count == 0) return r;
+                var e = Store.Add(TuningMatch.ModKind, TuningMatch.ModName, theirs, r.Summary, r.Plan.Patches);
+                Store.Apply(e, Game);
+                return r;
+            });
+        }
+        finally { Changed?.Invoke(); }
+    }
+
     /// <summary>A database as the game has it right now (never cached: edits made anywhere show up).</summary>
     public Task<T3Db> OpenDbAsync(string name) => Run(() => new Legacy(Index).OpenDb(name));
 

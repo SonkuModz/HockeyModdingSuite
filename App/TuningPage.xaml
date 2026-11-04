@@ -45,6 +45,13 @@
 
         <DockPanel Margin="0,0,0,14">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="MatchButton" Click="OnMatch" Padding="12,6" Margin="0,0,8,0" Style="{StaticResource Primary}" Visibility="Collapsed"
+                        ToolTip="Set NHL 24's gameplay values (AI, physics, animation) to NHL 27's where both games have them. Undo it on the Mods page.">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE895;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Match NHL 27" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
                 <Button x:Name="ReloadButton" Click="OnReload" Padding="12,6" ToolTip="Read eboot.bin from the game again">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="13" />
@@ -134,7 +141,7 @@
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16,10">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="16,0,0,0"
+                <TextBlock x:Name="FooterNote" DockPanel.Dock="Right" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="16,0,0,0"
                            Text="Read only. The game's online tuner can override these at run time." />
                 <TextBlock x:Name="Detail" Style="{StaticResource Caption}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Text="Pick a value to see where the eboot registers it." />

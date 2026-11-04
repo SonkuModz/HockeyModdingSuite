@@ -24,7 +24,7 @@ public partial class App : Application
     ///   --jspot "8:0.5,0.27,1.2", --jslot "TEAM|kit folder", --jtemplatefile FILE.dds|png, --jturn DEG, --jzoom F [--jup U], --jscroll Y, --jwrite, --jaddteam;
     ///   for the Teams page --tsearch TEXT, --tteam ABBR|INDEX|NAME, --tset "feprimarycolor=#FF0000;arena.arenaname=X",
     ///   --tsave, --tscroll OFFSET, --tlogoexport DIR, --tlogo main|all|STYLE --tlogofile IMAGE;
-    ///   for the Tuning page --tusearch TEXT, --tugroup PATH, --turatings, --tucsv FILE;
+    ///   for the Tuning page --tusearch TEXT, --tugroup PATH, --turatings, --tucsv FILE, --tumatch (NHL 24: Match NHL 27, no dialogs);
     ///   for the Be A Pro page --bapdir SAVES (read another save folder), --bapslot NAME, --bapset "Overall=88;xf2=4:3" (not saved),
     ///   --bapadvanced, --bapscroll Y, --bapsave;
     ///   for the Arenas page --arena LEVEL|NAME, --aview broadcast|end|bowl|overhead|ice, --alook "YAW,PITCH,DIST[,HEIGHT]",

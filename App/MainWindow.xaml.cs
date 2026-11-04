@@ -80,6 +80,7 @@ public partial class MainWindow : Window
         Scorebug24Page.StatusChanged += text => Status.Text = text;
         DatabasePage.StatusChanged += text => Status.Text = text;
         TuningPage.StatusChanged += text => Status.Text = text;
+        TuningPage.FindNhl27 = () => KnownGames().FirstOrDefault(g => g.Profile.Kind == GameKind.Nhl27)?.Dir;
         TuningPage.GameDir = Game;
         BeAProPage.StatusChanged += text => Status.Text = text;
         ArenasPage.StatusChanged += text => Status.Text = text;
@@ -220,6 +221,7 @@ public partial class MainWindow : Window
                 TeamsPage.SetMods(mods);
                 BeAProPage.SetMods(mods);
                 ArenasPage.SetMods(mods);
+                TuningPage.SetMods(mods);
                 if (NavArenas.IsChecked == true) _ = ArenasPage.Shown();
                 if (NavTeams.IsChecked == true) _ = TeamsPage.Shown();
             }
@@ -1072,6 +1074,7 @@ public partial class MainWindow : Window
             await TuningPage.Shown();
             TuningPage.Show(a.GetValueOrDefault("tusearch"), a.GetValueOrDefault("tugroup"), a.ContainsKey("turatings"));
             if (a.TryGetValue("tucsv", out var tucsv)) TuningPage.SaveCsv(tucsv);
+            if (a.ContainsKey("tumatch")) await TuningPage.MatchScripted();
             await Task.Delay(800);
         }
         if (a.TryGetValue("page", out var arPage) && arPage == "arenas")

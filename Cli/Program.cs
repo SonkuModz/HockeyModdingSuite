@@ -1879,76 +1879,34 @@ public static class Program
     {
         string from = opts.Get("from") ?? throw new ArgumentException("tunables-match needs --from (the NHL 27 game folder)");
         string ebootPath = Path.Combine(game, "eboot.bin");
-        byte[] eboot = File.ReadAllBytes(ebootPath);
-        var mine = Tunables.Read(eboot);
-        var theirs = Tunables.Read(Path.Combine(from, "eboot.bin"));
-        var one = mine.GroupBy(t => t.Name).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.First());
-        var other = theirs.GroupBy(t => t.Name).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.First());
-        // gameplay only: the AI, Physics and Animation groups, less the coaching and on-the-fly feedback messages
-        // (--groups / --skip-groups change the lists)
-        var groups = (opts.Get("groups") ?? "AI,Physics,Animation").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var skipGroups = (opts.Get("skip-groups") ?? "AI/CoachingFeedback,AI/OTFFeedback").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        bool Under(string g, string p) => g != null && (g.Equals(p, StringComparison.OrdinalIgnoreCase) || g.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase));
-        bool Gameplay(Tunable t) => groups.Any(p => Under(t.Group, p)) && !skipGroups.Any(p => Under(t.Group, p));
-        var changes = new List<TunablePatcher.Change>();
-        int common = 0, same = 0, typeDiff = 0, noValue = 0, notGameplay = 0;
-        foreach (var (name, t) in one)
+        bool write = opts.Has("write");
+        var store = Mods();
+        var old = store.Find(TuningMatch.ModKind, TuningMatch.ModName);
+        if (old != null && store.State(old, game) != ModState.NotApplied)
         {
-            if (!other.TryGetValue(name, out var o)) continue;
-            common++;
-            if (!Gameplay(t)) { notGameplay++; continue; }
-            if (t.Type != o.Type) { typeDiff++; continue; }
-            if (t.Default == null || o.Default == null) { noValue++; continue; }
-            if (t.Default == o.Default && t.Max == o.Max && t.Min == o.Min) { same++; continue; }
-            changes.Add(new TunablePatcher.Change(name, o.Default.Value, o.Min, o.Max));
+            // plan from the eboot as it ships: the earlier match comes out first
+            if (!write) throw new InvalidOperationException("the tuning mod entry is in the game; plan with --write (it is restored first), or restore it on the Mods page");
+            RefuseWhileRunning();
+            store.Restore(old, game, Console.WriteLine);
         }
-        Console.WriteLine($"{mine.Count} values here, {theirs.Count} in {from}; {common} in both (set once in each): {notGameplay} not gameplay; of the rest {same} the same, {changes.Count} different, {typeDiff} of another type, {noValue} unread");
-
-        var plan = TunablePatcher.Make(eboot, changes);
-        string outDir = opts.Get("out");
-        if (outDir != null)
+        var groups = opts.Get("groups")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var skip = opts.Get("skip-groups")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var r = TuningMatch.Build(File.ReadAllBytes(ebootPath), Tunables.Read(Path.Combine(from, "eboot.bin")), groups, skip);
+        Console.WriteLine($"{r.Common} values in both games (set once in each): {r.NotGameplay} not gameplay; of the rest {r.Same} the same, {r.Different} different, {r.OtherType} of another type, {r.Unread} unread");
+        Console.WriteLine($"{r.Plan.Done.Count} fields of {r.Plan.Changed.Count} values changed, {r.Plan.Skipped.Count} skipped; {r.Plan.Patches.Count} ranges, {r.Plan.Patches.Sum(p => p.New.Length)} bytes");
+        if (opts.Get("out") is { } outDir)
         {
             Directory.CreateDirectory(outDir);
-            File.WriteAllLines(Path.Combine(outDir, "changed.txt"), plan.Done);
-            File.WriteAllLines(Path.Combine(outDir, "skipped.txt"), plan.Skipped);
+            File.WriteAllLines(Path.Combine(outDir, "changed.txt"), r.Plan.Done);
+            File.WriteAllLines(Path.Combine(outDir, "skipped.txt"), r.Plan.Skipped);
         }
-        Console.WriteLine($"{plan.Done.Count} fields of {plan.Changed.Count} values changed, {plan.Skipped.Count} skipped; {plan.Patches.Count} ranges, {plan.Patches.Sum(p => p.New.Length)} bytes");
-
-        // read it back: changed values are NHL 27's, everything else is as it was
-        var after = Tunables.Read(plan.Patched);
-        var before = mine.ToDictionary(t => (t.Name, t.Site));
-        var want = changes.ToDictionary(c => c.Name);
-        int good = 0, bad = 0;
-        foreach (var t in after)
-        {
-            var b = before[(t.Name, t.Site)];
-            if (plan.Changed.Contains(t.Name))
-            {
-                var c = want[t.Name];
-                bool okValue = t.Default == c.Value || t.Default == b.Default && plan.Done.All(d => !d.StartsWith(t.Name + ": value"));
-                bool okMax = t.Max == b.Max || t.Max == c.Max;
-                if (okValue && okMax) good++;
-                else { bad++; Console.WriteLine($"  WRONG {t.Name}: reads {t.Default} (max {t.Max}), wanted {c.Value} (max {c.Max})"); }
-            }
-            else if (t.Default != b.Default || t.Max != b.Max || t.Min != b.Min || t.Type != b.Type)
-            {
-                bad++;
-                Console.WriteLine($"  MOVED {t.Name}: {b.Default}/{b.Min}/{b.Max} -> {t.Default}/{t.Min}/{t.Max}");
-            }
-        }
-        Console.WriteLine($"read back: {good} changed as wanted, {after.Count - good - bad} others unchanged, {bad} wrong");
-        if (bad > 0) throw new InvalidOperationException("the patched eboot doesn't read back as planned; nothing was written");
-        if (!opts.Has("write")) return 0;
+        foreach (var w in r.Wrong.Take(20)) Console.WriteLine("  WRONG " + w);
+        Console.WriteLine($"read back: {r.Good} changed as wanted, {r.Wrong.Count} wrong");
+        if (r.Wrong.Count > 0) throw new InvalidOperationException("the patched eboot doesn't read back as planned; nothing was written");
+        if (!write) return 0;
 
         RefuseWhileRunning();
-        var store = Mods();
-        if (store.Find("tuning", "eboot.bin") is { } old)
-        {
-            store.Restore(old, game, Console.WriteLine);
-            store.Remove(old);
-        }
-        var entry = store.Add("tuning", "eboot.bin", Path.Combine(from, "eboot.bin"),
-            $"{plan.Changed.Count} tuning values set to NHL 27's", plan.Patches);
+        var entry = store.Add(TuningMatch.ModKind, TuningMatch.ModName, Path.Combine(from, "eboot.bin"), r.Summary, r.Plan.Patches);
         store.Apply(entry, game, Console.WriteLine);
         Console.WriteLine($"written: mod entry {entry.Id}, state {store.State(entry, game)}");
         return 0;

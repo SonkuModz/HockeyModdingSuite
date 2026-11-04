@@ -41,6 +41,91 @@ public partial class TuningPage : UserControl
 
     public event Action<string> StatusChanged;
     public string GameDir { get; set; }
+    private ModService _mods;
+    private bool _nhl24;
+
+    /// <summary>Finds an NHL 27 folder among the games HMS knows (for Match NHL 27), or null.</summary>
+    public Func<string> FindNhl27 { get; set; }
+
+    public void SetMods(ModService mods)
+    {
+        _mods = mods;
+        _nhl24 = mods?.Profile.Kind == GameKind.Nhl24;
+        MatchButton.Visibility = _nhl24 ? Visibility.Visible : Visibility.Collapsed;
+        FooterNote.Text = _nhl24 ? "Match NHL 27 changes eboot.bin; restore it on the Mods page. The online tuner can override values at run time."
+            : "Read only. The game's online tuner can override these at run time.";
+    }
+
+    /// <summary>Match NHL 27 without the dialogs (scripted runs, --tumatch): the result goes to the status line.</summary>
+    public async Task MatchScripted()
+    {
+        if (_mods == null || FindNhl27?.Invoke() is not { } nhl27) { StatusChanged?.Invoke("Match NHL 27: no NHL 27 folder known"); return; }
+        try
+        {
+            var r = await _mods.MatchTuningAsync(nhl27);
+            await LoadAsync();
+            StatusChanged?.Invoke(r.Summary);
+        }
+        catch (Exception ex) { StatusChanged?.Invoke("Match NHL 27: " + ex.Message); }
+    }
+
+    private async void OnMatch(object sender, RoutedEventArgs e)
+    {
+        if (_mods == null || _busy) return;
+        var owner = Window.GetWindow(this);
+        if (ModService.GameRunning)
+        {
+            MessageBox.Show(owner, "The game is running. Close it first: eboot.bin can't be changed while it's loaded.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        string nhl27 = FindNhl27?.Invoke();
+        if (nhl27 == null)
+        {
+            var dlg = new OpenFolderDialog { Title = "Choose the extracted NHL 27 folder (the one with eboot.bin)" };
+            if (dlg.ShowDialog(owner) != true) return;
+            nhl27 = dlg.FolderName;
+            if (GameProfile.Detect(nhl27).Kind != GameKind.Nhl27 || !File.Exists(System.IO.Path.Combine(nhl27, "eboot.bin")))
+            {
+                MessageBox.Show(owner, "That folder isn't an extracted NHL 27 game with an eboot.bin.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+        if (MessageBox.Show(owner,
+                "Set NHL 24's gameplay tuning to NHL 27's?\n\n" +
+                "Every AI, physics and animation value both games have that differs is changed to NHL 27's value " +
+                "(coaching and on-the-fly feedback messages are left out). Values NHL 24 sets in a way that can't be changed safely are skipped.\n\n" +
+                $"NHL 27: {nhl27}\n\nThis writes into eboot.bin. Restore the tuning entry on the Mods page to undo it.",
+                "Match NHL 27 tuning", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+
+        _busy = true;
+        MatchButton.IsEnabled = ReloadButton.IsEnabled = ExportButton.IsEnabled = false;
+        RowsBusy.Text = "Matching NHL 27's tuning: reading both games, changing eboot.bin and reading it back…";
+        RowsBusy.Visibility = Visibility.Visible;
+        StatusChanged?.Invoke("Matching NHL 27's tuning…");
+        TuningMatch.Result r = null;
+        string error = null;
+        try { r = await _mods.MatchTuningAsync(nhl27); }
+        catch (Exception ex) { error = ex.Message; }
+        finally
+        {
+            _busy = false;
+            MatchButton.IsEnabled = true;
+            RowsBusy.Text = "Reading eboot.bin from the game…";
+        }
+        if (error != null)
+        {
+            StatusChanged?.Invoke("Match NHL 27: " + error);
+            MessageBox.Show(owner, error, "Match NHL 27 tuning", MessageBoxButton.OK, MessageBoxImage.Error);
+            await LoadAsync();
+            return;
+        }
+        await LoadAsync();
+        StatusChanged?.Invoke(r.Summary);
+        MessageBox.Show(owner,
+            $"{r.Summary}.\n\n{r.Same:N0} gameplay values were already the same. The changed eboot was read back: every changed value reads as NHL 27's, every other value as it was.\n\n" +
+            "Undo it by restoring the tuning entry on the Mods page.",
+            "Match NHL 27 tuning", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
 
     public TuningPage()
     {
