@@ -24,7 +24,7 @@ public sealed class SyncChange
     public NhlPlayer Api { get; init; }
     /// <summary>The AHL player, for changes from CompareAhl. Null for NHL changes; Api is null for AHL changes.</summary>
     public AhlPlayer Ahl { get; init; }
-    /// <summary>True when this change came from the AHL roster (Iowa Wild), not an NHL roster.</summary>
+    /// <summary>True when this change came from an AHL roster (any AHL team), not an NHL roster.</summary>
     public bool IsAhl => Ahl != null;
     public int GameId { get; init; } = -1;
     public string Name { get; init; }
@@ -245,33 +245,58 @@ public static class RosterSync
     }
 
     /// <summary>
-    /// Iowa Wild's exhibitionteams index, resolved from the database at runtime — never hard-coded. Minnesota's AHL
-    /// affiliate first (exhibitionteams.ahlaffiliate), then a team named "Iowa Wild". Throws a clear error when
-    /// Iowa isn't in the game's teams, so the AHL sync fails loudly instead of writing to the wrong team.
+    /// One AHL team's exhibitionteams index, resolved from the database at runtime — never hard-coded. Returns -1
+    /// when the feed team has no matching team in the game (a renamed, relocated or expansion club, for example):
+    /// callers skip such a team and list it, instead of failing the whole sync or writing to the wrong team.
+    /// Match order: (1) exact normalised full-name match (Norm: lower case, accents and punctuation removed);
+    /// (2) a looser contains-match, restricted to teams that are someone's AHL affiliate (the values of
+    /// AhlAffiliates) and only when exactly one such team matches — the affiliates map cannot resolve a name on
+    /// its own, so it is used here only to narrow the candidates for the loose pass.
     /// </summary>
-    public static int ResolveIowaTeamIndex(T3Db db)
+    public static int ResolveAhlTeamIndex(T3Db db, string ahlTeamName)
     {
         var roster = new Roster(db);
-        var teams = TeamIndex(db);
-        var ahl = AhlAffiliates(db);
-        if (teams.TryGetValue("MIN", out int min) && ahl.TryGetValue(min, out int aff) && roster.Teams.ContainsKey(aff)) return aff;
+        string want = Norm(ahlTeamName);
         foreach (var (idx, tm) in roster.Teams)
-            if (string.Equals(tm.Name, AhlApi.TeamName, StringComparison.OrdinalIgnoreCase)) return idx;
-        throw new InvalidOperationException("Iowa Wild not found in the game's teams (exhibitionteams). The AHL sync needs the Iowa Wild team in nhl_game.db.");
+            if (!string.IsNullOrEmpty(tm.Name) && Norm(tm.Name) == want) return idx;
+        var affiliates = AhlAffiliates(db).Values.ToHashSet();
+        int found = -1, hits = 0;
+        foreach (var (idx, tm) in roster.Teams)
+        {
+            if (!affiliates.Contains(idx) || string.IsNullOrEmpty(tm.Name)) continue;
+            string have = Norm(tm.Name);
+            if (have.Contains(want) || want.Contains(have)) { found = idx; hits++; }
+        }
+        return hits == 1 ? found : -1;
+    }
+
+    /// <summary>Iowa Wild's exhibitionteams index (thin wrapper kept from the Iowa-only prototype). Throws a clear error when Iowa isn't in the game's teams.</summary>
+    public static int ResolveIowaTeamIndex(T3Db db)
+    {
+        int idx = ResolveAhlTeamIndex(db, AhlApi.TeamName);
+        if (idx < 0) throw new InvalidOperationException("Iowa Wild not found in the game's teams (exhibitionteams). The AHL sync needs the Iowa Wild team in nhl_game.db.");
+        return idx;
     }
 
     /// <summary>
-    /// Compares the game's rosters with Iowa Wild's current AHL roster (AhlApi, Iowa only, hard-coded in AhlApi).
+    /// Compares the game's rosters with one AHL team's current AHL roster.
     /// Same matcher as Compare: normalised name + birth date, then last name + birth date, then a single name-only
     /// match, flagged. Same Join/Move/Update/Missing kinds, same ticking (Join/Move/Update ticked, Missing not).
     /// Position is never compared or written: the AHL feed lists many forwards as generic "F", and Apply never
     /// writes position anyway. Height/weight work the same as the NHL path (WithSizes + NewHeight/NewWeight, so
-    /// Apply's size code applies unchanged). No reverse Left direction in this prototype: players on Iowa in the
-    /// game who are no longer on Iowa's roster are not listed.
+    /// Apply's size code applies unchanged). No reverse Left direction: players on the AHL team in the game who
+    /// are no longer on its roster are not listed.
     /// </summary>
-    /// <param name="ahlTeam">Iowa Wild's exhibitionteams index: use ResolveIowaTeamIndex(db).</param>
+    /// <param name="ahlTeam">The AHL team's exhibitionteams index: use ResolveAhlTeamIndex(db, teamName).</param>
     /// <param name="sizes">Also list players whose only difference is height or weight.</param>
-    public static List<SyncChange> CompareAhl(T3Db db, IReadOnlyList<AhlPlayer> api, int ahlTeam, bool sizes = false)
+    /// <param name="alreadyMatched">
+    /// Game ids already matched to another AHL team (CompareAllAhl's shared set; null for a single-team compare).
+    /// A feed player whose game player is already in this set is skipped outright — he is in the game and already
+    /// has a change for his first-listed team, so reporting him Missing for a second team would be wrong.
+    /// Within one team, the v1 behaviour is kept: a second feed player matching the same game player is Missing.
+    /// The ids matched by this call are added to the set before returning.
+    /// </param>
+    public static List<SyncChange> CompareAhl(T3Db db, IReadOnlyList<AhlPlayer> api, int ahlTeam, bool sizes = false, HashSet<int> alreadyMatched = null)
     {
         var teams = TeamIndex(db);
         var nhlTeams = teams.Values.ToHashSet();
@@ -323,6 +348,8 @@ public static class RosterSync
             if (p == null && a.Born != null)
                 p = byLast.GetValueOrDefault(Norm(a.Last))?.FirstOrDefault(c => Born(c) == a.Born);
             if (p == null && cands.Count == 1) { p = cands[0]; nameOnly = true; }
+            // Already matched to another AHL team (shared set from CompareAllAhl): skip, don't call him Missing.
+            if (p != null && alreadyMatched != null && alreadyMatched.Contains(p.GameId)) continue;
             if (p == null || matched.Contains(p.GameId))
             {
                 changes.Add(new SyncChange { Kind = SyncKind.Missing, Ahl = a, Name = a.Name, Position = a.Position, ToTeam = ahlTeam, ToTeamName = TeamName(ahlTeam) });
@@ -351,7 +378,30 @@ public static class RosterSync
             c.Selected = true;
             changes.Add(c);
         }
+        if (alreadyMatched != null) alreadyMatched.UnionWith(matched);
         return changes.OrderBy(c => c.Kind).ThenBy(c => c.Name).ToList();
+    }
+
+    /// <summary>
+    /// Compares the game's rosters with every AHL team's current roster (AhlApi.AllRostersAsync). Teams whose feed
+    /// name has no matching team in the game are skipped and their names returned in SkippedTeams — a feed team may
+    /// be a renamed, relocated or expansion club the game does not have (a candidate in 2026-27 is the Hamilton
+    /// Hammers), and one missing team must not fail the other 31. A shared matched set is passed through
+    /// CompareAhl so a player listed for two teams is reported once, for his first-listed team, and never as
+    /// Missing for the second. Returns the changes (ordered by kind, then team, then name) and the skipped teams.
+    /// </summary>
+    public static (List<SyncChange> Changes, List<string> SkippedTeams) CompareAllAhl(T3Db db, IReadOnlyList<(AhlTeam Team, List<AhlPlayer> Players)> allRosters, bool sizes = false)
+    {
+        var changes = new List<SyncChange>();
+        var skipped = new List<string>();
+        var matched = new HashSet<int>();
+        foreach (var (team, players) in allRosters)
+        {
+            int idx = ResolveAhlTeamIndex(db, team.Name);
+            if (idx < 0) { skipped.Add(team.Name); continue; }
+            changes.AddRange(CompareAhl(db, players, idx, sizes, matched));
+        }
+        return (changes.OrderBy(c => c.Kind).ThenBy(c => c.ToTeamName ?? "").ThenBy(c => c.Name).ToList(), skipped);
     }
 
     /// <summary>

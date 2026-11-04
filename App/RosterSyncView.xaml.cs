@@ -45,16 +45,19 @@ public sealed class SyncRow : Observable
 }
 
 /// <summary>
-/// The Roster page's NHL sync: fetches every team's current roster from the NHL API, compares it with the game's
-/// (RosterSync), lists the differences to tick, and writes the ticked ones into nhl_game.db through the database's mod
-/// entry. Applying reads the database from the game again and matches the players afresh, so nothing stale is written.
+/// The Roster page's NHL sync: fetches every team's current roster from the NHL API (and, when ticked, every AHL
+/// team's roster from the AHL feed), compares them with the game's (RosterSync), lists the differences to tick, and
+/// writes the ticked ones into nhl_game.db through the database's mod entry. Applying reads the database from the
+/// game again and matches the players afresh, so nothing stale is written.
 /// </summary>
 public partial class RosterSyncView : UserControl
 {
     private ModService _mods;
     private List<NhlPlayer> _api;
-    /// <summary>Iowa Wild's AHL roster as fetched, or null when the AHL box is unticked or the fetch failed.</summary>
-    private List<AhlPlayer> _ahl;
+    /// <summary>Every AHL team's roster as fetched (team + players), or null when the AHL box is unticked or the fetch failed.</summary>
+    private List<(AhlTeam Team, List<AhlPlayer> Players)> _ahl;
+    /// <summary>Feed teams with no matching team in the game, from the last AHL compare (skipped, not failed).</summary>
+    private List<string> _ahlSkipped = new();
     /// <summary>The last AHL error (fetch or compare), shown in the status line; null when the AHL part is fine.</summary>
     private string _ahlError;
     private List<SyncRow> _rows = new();
@@ -85,21 +88,23 @@ public partial class RosterSyncView : UserControl
             _api = await Task.Run(() => NhlApi.AllRostersAsync(t => sink.Report(t)));
             _ahl = null;
             _ahlError = null;
+            _ahlSkipped = new List<string>();
             if (AhlBox.IsChecked == true)
             {
                 // The AHL fetch must not wipe the NHL results: it has its own try/catch, and a failure
                 // is reported in the status line while the NHL rows are still shown.
                 try
                 {
-                    FetchStatus.Text = "Fetching Iowa Wild's AHL roster…";
-                    _ahl = await Task.Run(() => AhlApi.RosterAsync());
+                    int ahlDone = 0;
+                    var ahlProgress = new Progress<string>(t => FetchStatus.Text = $"Fetching AHL rosters… {++ahlDone}/32 ({t})");
+                    var ahlSink = (IProgress<string>)ahlProgress;
+                    _ahl = await Task.Run(() => AhlApi.AllRostersAsync(t => ahlSink.Report(t)));
                 }
                 catch (Exception ex) { _ahl = null; _ahlError = ex.Message; }
             }
             FetchStatus.Text = "Comparing with the game…";
             await CompareAsync();
-            FetchStatus.Text = $"{_api.Count} players on NHL rosters" + (_ahl == null ? "" : $", {_ahl.Count} on Iowa Wild") +
-                $", fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.");
+            FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.");
             FilterBar.IsEnabled = true;
         }
         catch (Exception ex)
@@ -124,10 +129,11 @@ public partial class RosterSyncView : UserControl
         var changes = await Task.Run(() => RosterSync.Compare(db, api, sizes));
         if (_ahl != null)
         {
-            // An AHL compare failure (e.g. Iowa Wild not in this database) must not wipe the NHL rows:
-            // keep them, remember the error for the status line, and try again on the next fetch.
+            // An AHL compare failure must not wipe the NHL rows: keep them, remember the error for the status
+            // line, and try again on the next fetch. Teams with no game match are skipped by CompareAllAhl
+            // (their names come back in _ahlSkipped) and do not fail the compare.
             var ahl = _ahl;
-            try { changes.AddRange(await Task.Run(() => RosterSync.CompareAhl(db, ahl, RosterSync.ResolveIowaTeamIndex(db), sizes))); _ahlError = null; }
+            try { var (ahlChanges, skipped) = await Task.Run(() => RosterSync.CompareAllAhl(db, ahl, sizes)); changes.AddRange(ahlChanges); _ahlSkipped = skipped; _ahlError = null; }
             catch (Exception ex) { _ahlError = ex.Message; }
         }
         _rows = changes.Select(c => new SyncRow(c, SetButtons)).ToList();
@@ -141,9 +147,13 @@ public partial class RosterSyncView : UserControl
         string s = $"{N(SyncKind.Move)} trades, {N(SyncKind.Join)} call-ups/signings, {N(SyncKind.Update)} number changes, " +
                $"{N(SyncKind.Left)} no longer on an NHL roster, {N(SyncKind.Missing)} not in the game.";
         if (_rows.Any(r => r.Change.IsAhl))
-            s += $" Iowa Wild: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} number changes, {A(SyncKind.Missing)} not in the game.";
+            s += $" AHL: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} number changes, {A(SyncKind.Missing)} not in the game.";
         return s;
     }
+
+    /// <summary>", N players on M AHL teams" for the status line, plus any skipped teams; "" when the AHL box is unticked.</summary>
+    private string AhlSummary() => _ahl == null ? "" : $", {_ahl.Sum(t => t.Players.Count)} on {_ahl.Count} AHL teams" +
+        (_ahlSkipped.Count == 0 ? "" : $" (teams not in the game: {string.Join(", ", _ahlSkipped)})");
 
     private SyncKind? Kind => KindMove.IsChecked == true ? SyncKind.Move : KindJoin.IsChecked == true ? SyncKind.Join :
         KindUpdate.IsChecked == true ? SyncKind.Update : KindLeft.IsChecked == true ? SyncKind.Left : KindMissing.IsChecked == true ? SyncKind.Missing : null;
@@ -172,18 +182,24 @@ public partial class RosterSyncView : UserControl
         await CompareAsync();
     }
 
-    /// <summary>Ticking/unticking the AHL box after a fetch: fetch Iowa only (not all 32 NHL teams again), or drop the AHL rows.</summary>
+    /// <summary>Ticking/unticking the AHL box after a fetch: fetch all 32 AHL teams (not all 32 NHL teams again), or drop the AHL rows.</summary>
     private async void OnAhl(object sender, RoutedEventArgs e)
     {
         if (_api == null || _busy) return;
         if (AhlBox.IsChecked == true && _ahl == null)
         {
-            try { _ahl = await Task.Run(() => AhlApi.RosterAsync()); _ahlError = null; }
-            catch (Exception ex) { _ahl = null; _ahlError = ex.Message; FetchStatus.Text = "Couldn't fetch the AHL roster: " + ex.Message; return; }
+            try
+            {
+                int ahlDone = 0;
+                var ahlProgress = new Progress<string>(t => FetchStatus.Text = $"Fetching AHL rosters… {++ahlDone}/32 ({t})");
+                var ahlSink = (IProgress<string>)ahlProgress;
+                _ahl = await Task.Run(() => AhlApi.AllRostersAsync(t => ahlSink.Report(t))); _ahlError = null;
+            }
+            catch (Exception ex) { _ahl = null; _ahlError = ex.Message; FetchStatus.Text = "Couldn't fetch the AHL rosters: " + ex.Message; return; }
         }
-        else if (AhlBox.IsChecked != true) { _ahl = null; _ahlError = null; }
+        else if (AhlBox.IsChecked != true) { _ahl = null; _ahlError = null; _ahlSkipped = new List<string>(); }
         await CompareAsync();
-        FetchStatus.Text = $"{_api.Count} players on NHL rosters" + (_ahl == null ? "" : $", {_ahl.Count} on Iowa Wild") + ". " + Counts() +
+        FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() +
             (_ahlError == null ? "" : $" AHL: {_ahlError}");
     }
 
@@ -226,8 +242,10 @@ public partial class RosterSyncView : UserControl
                 // were silently dropped (the fresh list had no match for them and nothing was written for them).
                 var fresh = RosterSync.Compare(db, api, sizes).Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
                 if (ahl != null)
-                    fresh.AddRange(RosterSync.CompareAhl(db, ahl, RosterSync.ResolveIowaTeamIndex(db), sizes)
-                        .Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))));
+                {
+                    var (freshAhl, _) = RosterSync.CompareAllAhl(db, ahl, sizes);
+                    fresh.AddRange(freshAhl.Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))));
+                }
                 return fresh.Count == 0 ? null : RosterSync.Apply(db, fresh) + $" ({DateTime.Now:yyyy-MM-dd})";
             }, "Roster sync");
             StatusChanged?.Invoke($"{picked.Count} roster change(s) written into the game. The Mods page can restore the original.");
@@ -244,7 +262,7 @@ public partial class RosterSyncView : UserControl
             _busy = false;
         }
         await CompareAsync();
-        FetchStatus.Text = $"{_api.Count} players on NHL rosters" + (_ahl == null ? "" : $", {_ahl.Count} on Iowa Wild") + ". After applying: " + Counts() +
+        FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. After applying: " + Counts() +
             (_ahlError == null ? "" : $" AHL: {_ahlError}");
     }
 

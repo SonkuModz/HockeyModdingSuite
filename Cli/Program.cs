@@ -2932,30 +2932,54 @@ public static class Program
         return 0;
     }
 
-    /// <summary>ahl-sync [--sizes] [--dry 1] [--all]: compares the game's rosters with Iowa Wild's current AHL roster (read only, unless --dry applies in memory). Iowa only, hard-coded in AhlApi.</summary>
+    /// <summary>
+    /// ahl-sync [--team CODE|NAME|ID] [--sizes] [--dry 1] [--all]: compares the game's rosters with the AHL's
+    /// current rosters — all 32 teams by default, one team with --team (e.g. --team IA, --team "Iowa Wild",
+    /// --team 389). Read only, unless --dry applies in memory. Teams with no matching team in the game are
+    /// skipped and listed, not failed.
+    /// </summary>
     private static int AhlSyncCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);
         var db = new Legacy(index).OpenDb(Roster.Database);
-        var api = AhlApi.RosterAsync().GetAwaiter().GetResult();
-        int ahlTeam = RosterSync.ResolveIowaTeamIndex(db);
-        var changes = RosterSync.CompareAhl(db, api, ahlTeam, opts.Has("sizes"));
-        Console.WriteLine($"{api.Count} players on Iowa Wild's AHL roster; {changes.Count} differences");
+        var all = AhlApi.AllRostersAsync().GetAwaiter().GetResult();
+        string teamArg = opts.Get("team");
+        var selected = teamArg == null ? all : all.Where(t => AhlTeamMatches(t.Team, teamArg)).ToList();
+        if (teamArg != null && selected.Count == 0)
+        {
+            Console.WriteLine($"No AHL team matches '{teamArg}'. Teams: " + string.Join(", ", all.Select(t => $"{t.Team.Code} ({t.Team.Name})")));
+            return 1;
+        }
+        int total = selected.Sum(t => t.Players.Count);
+        var (changes, skipped) = RosterSync.CompareAllAhl(db, selected, opts.Has("sizes"));
+        Console.WriteLine($"{total} players on {selected.Count} AHL team(s); {changes.Count} differences");
         foreach (var g in changes.GroupBy(c => c.Kind))
         {
             Console.WriteLine($"{g.Key}: {g.Count()}");
             foreach (var c in g.Take(opts.Has("all") ? 10000 : 12))
                 Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Name,-26} {c.Position,-2} {c.Description}{(c.NameOnly ? "  (name match only)" : "")}");
         }
+        if (skipped.Count > 0)
+            Console.WriteLine("Skipped (no matching team in the game): " + string.Join(", ", skipped));
         if (opts.Has("dry"))
         {
             // applies the ticked changes to the database in memory only, then compares again
             Console.WriteLine(RosterSync.Apply(db, changes.Where(c => c.Selected)));
-            var (ok, total) = db.CheckCrcs();
-            var again = RosterSync.CompareAhl(db, api, ahlTeam, opts.Has("sizes"));
-            Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
+            var (ok, totalCrcs) = db.CheckCrcs();
+            var (again, _) = RosterSync.CompareAllAhl(db, selected, opts.Has("sizes"));
+            Console.WriteLine($"in memory: CRCs {ok}/{totalCrcs}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
         }
         return 0;
+    }
+
+    /// <summary>Matches a --team argument against a feed team: feed id (389), feed code (IA), or name ("Iowa Wild", or a unique part of it, e.g. "Iowa").</summary>
+    private static bool AhlTeamMatches(AhlTeam team, string arg)
+    {
+        if (int.TryParse(arg, out int id)) return team.Id == id;
+        if (string.Equals(team.Code, arg, StringComparison.OrdinalIgnoreCase)) return true;
+        string want = RosterSync.Norm(arg);
+        string name = RosterSync.Norm(team.Name);
+        return name == want || name.Contains(want);
     }
 
     private static int Export(string game, Options opts)

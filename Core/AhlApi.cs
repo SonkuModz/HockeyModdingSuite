@@ -4,38 +4,77 @@ using System.Text.Json;
 
 namespace NHL27Kit.Core;
 
-/// <summary>A player on Iowa Wild's AHL roster, as the AHL's HockeyTech feed has him now.</summary>
+/// <summary>A player on an AHL roster, as the AHL's HockeyTech feed has him now.</summary>
 public sealed record AhlPlayer(int Id, string First, string Last, int Number, string Position, string Shoots,
                                int HeightIn, int WeightLb, DateTime? Born, string BirthPlace, string TeamName)
 {
     public string Name => $"{First} {Last}";
 }
 
+/// <summary>One AHL team, as the feed's teamsForSeason view lists it (id, feed team_code, name).</summary>
+public sealed record AhlTeam(int Id, string Code, string Name);
+
 /// <summary>
-/// Iowa Wild's roster from the AHL's public HockeyTech feed (the same feed theahl.com's roster page uses:
-/// lscluster.hockeytech.com/feed/index.php?feed=statviewfeed&amp;view=roster). No HTML scraping: the page is an
-/// Angular app and the roster comes back as JSONP. The key/client_code/site_id are public — they are in the site's
-/// own JavaScript (statview-1.4.1/js/client/ahl/base.r3.js) — not a secret.
-/// Each row gives name, AHL player_id, jersey number, position (LW/C/RW/D/G, or generic F for many forwards),
+/// The AHL's rosters from the AHL's public HockeyTech feed (the same feed theahl.com's roster pages use:
+/// lscluster.hockeytech.com/feed/index.php?feed=statviewfeed). No HTML scraping: the pages are an Angular app and
+/// the data comes back as JSONP. The key/client_code/site_id are public — they are in the site's own JavaScript
+/// (statview-1.4.1/js/client/ahl/base.r3.js) — not a secret.
+/// Each roster row gives name, AHL player_id, jersey number, position (LW/C/RW/D/G, or generic F for many forwards),
 /// shoots (goalies are "None"), height as "6-3", weight in pounds, birth date and birthplace.
 /// Position is display-only: the feed cannot say whether an "F" is a C, LW or RW, and RosterSync.Apply never
 /// writes position, so CompareAhl never compares it. Goalies' shoots "None" is kept as-is and never used.
 /// </summary>
 public static class AhlApi
 {
-    /// <summary>Iowa Wild, hard-coded for this prototype: the AHL team Nick follows. Expand via the teamsForSeason feed later.</summary>
+    /// <summary>Iowa Wild, kept as the single-team default (the AHL team Nick follows first): RosterAsync() with no arguments still fetches Iowa.</summary>
     public const int TeamId = 389;
     public const string TeamName = "Iowa Wild";
-    /// <summary>2026-27 Regular Season. This WILL go stale: next season the current season_id changes and this constant (and the UI text) must be updated, or resolved from the feed's bootstrap view.</summary>
+    /// <summary>2026-27 Regular Season. This WILL go stale: next season the current season_id changes and this constant must be updated, or resolved from the feed's bootstrap view.</summary>
     public const int SeasonId = 94;
     public const int LeagueId = 4;
 
     private const string Key = "ccb91f29d6744675";
     private const string ClientCode = "ahl";
     private const int SiteId = 3;
-    private const string Base = "https://lscluster.hockeytech.com/feed/index.php?feed=statviewfeed&view=roster";
+    private const string FeedBase = "https://lscluster.hockeytech.com/feed/index.php?feed=statviewfeed";
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    /// <summary>Every AHL team in the season, from the feed's teamsForSeason view (32 teams in 2026-27). The "All Teams" row (id -1) is skipped.</summary>
+    public static async Task<List<AhlTeam>> TeamsAsync(int seasonId = SeasonId, CancellationToken ct = default)
+    {
+        string url = $"{FeedBase}&view=teamsForSeason&season_id={seasonId}&key={Key}&client_code={ClientCode}&site_id={SiteId}&lang=en";
+        string json = await GetAsync(url, ct);
+        using var doc = JsonDocument.Parse(json);
+        var list = new List<AhlTeam>();
+        if (!doc.RootElement.TryGetProperty("teams", out var teams)) return list;
+        foreach (var t in teams.EnumerateArray())
+        {
+            if (!int.TryParse(Str(t, "id"), out int id) || id < 0) continue;
+            string name = Str(t, "name");
+            if (name.Length == 0) continue;
+            list.Add(new AhlTeam(id, Str(t, "team_code"), name));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Every AHL team's current roster, one team at a time (the feed turns away bursts with 429, so there is a
+    /// 250 ms pause between teams, like NhlApi.AllRostersAsync). Progress is reported per team (team name).
+    /// Roughly 32 teams x ~25 players, so about 800 players in 2026-27.
+    /// </summary>
+    public static async Task<List<(AhlTeam Team, List<AhlPlayer> Players)>> AllRostersAsync(Action<string> progress = null, CancellationToken ct = default)
+    {
+        var teams = await TeamsAsync(SeasonId, ct);
+        var all = new List<(AhlTeam, List<AhlPlayer>)>();
+        foreach (var t in teams)
+        {
+            all.Add((t, await RosterAsync(t.Id, SeasonId, t.Name, ct)));
+            progress?.Invoke(t.Name);
+            await Task.Delay(250, ct);
+        }
+        return all;
+    }
 
     /// <summary>Iowa Wild's current roster (25 players in 2026-27: 15 forwards, 8 defenders, 2 goalies).</summary>
     public static Task<List<AhlPlayer>> RosterAsync(int teamId = TeamId, int seasonId = SeasonId, CancellationToken ct = default) =>
@@ -44,7 +83,7 @@ public static class AhlApi
     /// <summary>One team's current roster from the feed. The team name is only used for display (the feed's teamName is not trusted for matching).</summary>
     public static async Task<List<AhlPlayer>> RosterAsync(int teamId, int seasonId, string teamName, CancellationToken ct = default)
     {
-        string url = $"{Base}&team_id={teamId}&season_id={seasonId}&league_id={LeagueId}&key={Key}&client_code={ClientCode}&site_id={SiteId}&lang=en";
+        string url = $"{FeedBase}&view=roster&team_id={teamId}&season_id={seasonId}&league_id={LeagueId}&key={Key}&client_code={ClientCode}&site_id={SiteId}&lang=en";
         string json = await GetAsync(url, ct);
         using var doc = JsonDocument.Parse(json);
         var list = new List<AhlPlayer>();
