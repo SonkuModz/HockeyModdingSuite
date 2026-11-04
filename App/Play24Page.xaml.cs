@@ -12,8 +12,8 @@ using NHL27Kit.Core;
 namespace NHL27Kit.App;
 
 /// <summary>
-/// Plays NHL 24 on NHL24 PC (a shadPS4 build for NHL 24): Play opens the package's launcher (launcher.exe, or
-/// tools\launcher.ps1 in older packages), which starts nhl24.exe. The emulator settings are its shadPS4 config,
+/// Plays NHL 24 on NHL24 PC (a shadPS4 build for NHL 24): Play starts nhl24.exe straight away, which runs game\eboot.bin
+/// or the eboot.bin in user\game_path.txt. The emulator settings are its shadPS4 config,
 /// user\config.json, edited here. The page also shows its play time, log and the game folder it runs.
 /// </summary>
 public partial class Play24Page : UserControl
@@ -23,7 +23,7 @@ public partial class Play24Page : UserControl
     private string _gameDir, _titleId = "CUSA37933", _install;
     private DateTime? _since;
 
-    /// <summary>The emulator's processes (the launcher starts nhl24_new.exe; older installs have nhl24.exe).</summary>
+    /// <summary>The emulator's processes: nhl24.exe in newer packages, nhl24_new.exe in older ones.</summary>
     private static readonly string[] GameProcesses = { "nhl24_new", "nhl24" };
 
     public event Action<string, string> StateChanged;
@@ -115,8 +115,7 @@ public partial class Play24Page : UserControl
         _install = FindInstall();
         InstallPath.Text = _install ?? "NHL24 PC not found";
         InstallInfo.Text = _install == null ? "Choose the NHL24 PC folder, the one with nhl24.exe."
-            : Launcher() != null ? "Play opens its launcher; press Play there to start the game with the settings below."
-            : "No launcher here: Play starts the emulator straight away.";
+            : $"Play starts {Path.GetFileName(Exe(_install))} with the settings below.";
         ShowPlaytime();
         LoadConfig();
         ShowRunsGame();
@@ -466,16 +465,18 @@ public partial class Play24Page : UserControl
         }
         try
         {
-            // the launcher reads the same config, so unsaved changes are saved first
+            // the emulator reads config.json at start, so unsaved changes are saved first
             if (_dirty && !SaveConfig()) return;
-            string launcher = Launcher(), exe = Exe(_install);
-            var start = launcher == null ? new ProcessStartInfo(exe)
-                : launcher.EndsWith(".ps1") ? new ProcessStartInfo("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{launcher}\"") { CreateNoWindow = true }
-                : new ProcessStartInfo(launcher);
-            start.WorkingDirectory = _install;
-            start.UseShellExecute = false;
-            Process.Start(start)?.Dispose();
-            StatusChanged?.Invoke(launcher != null ? "Opened the NHL24 PC launcher: press Play there to start the game" : $"Started {Path.GetFileName(exe)}");
+            // with no arguments it starts game\eboot.bin, or the eboot.bin user\game_path.txt names
+            if (LastStarted() == null && !File.Exists(Path.Combine(Nhl24Pc.GameLink(_install), "eboot.bin")))
+            {
+                PlayProblem.Text = "NHL24 PC has no game to start: see Game it runs.";
+                PlayProblem.Visibility = Visibility.Visible;
+                return;
+            }
+            string exe = Exe(_install);
+            Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = _install, UseShellExecute = false })?.Dispose();
+            StatusChanged?.Invoke($"Started {exe}");
             _tick.Start();
         }
         catch (Exception ex)
@@ -484,10 +485,6 @@ public partial class Play24Page : UserControl
             PlayProblem.Visibility = Visibility.Visible;
         }
     }
-
-    /// <summary>The package's launcher: tools\launcher.ps1 (what older packages' shortcut runs), else launcher.exe, or null.</summary>
-    private string Launcher() =>
-        new[] { Path.Combine(_install, "tools", "launcher.ps1"), Path.Combine(_install, "launcher.exe") }.FirstOrDefault(File.Exists);
 
     private static Process[] Running() => GameProcesses.SelectMany(Process.GetProcessesByName).ToArray();
 
