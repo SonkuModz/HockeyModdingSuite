@@ -9,7 +9,7 @@ namespace NHL27Kit.Core;
 /// compressed sizes (it fails when one doesn't fit). Nothing is written when another entry shares the stored bytes.
 /// With <c>grow</c> (each CAS file's planned length, shared with a <see cref="ChunkGrower"/> plan), a copy that doesn't
 /// fit is stored uncompressed at the end of its CAS file instead, and the bundle entry pointing at it is repointed (a
-/// signed TOC changes; NHL 24 texture headers whose mip offsets moved).
+/// signed TOC changes; NHL 24 texture headers whose mip offsets moved). On NHL 24 that is always allowed.
 /// Used for small header changes such as a mesh's bounding box; <see cref="PlanEbx"/> does the same for an EBX (a kit
 /// stamp's hotspot XML, rewritten at the same length).
 /// </summary>
@@ -18,8 +18,8 @@ public static class ResPatcher
     public static ChunkPlan Plan(AssetIndex index, string name, byte[] newRaw, LocationIndex locations, TocCache tocs, IDictionary<string, long> grow = null) =>
         Plan(index, index.GetRes(name) ?? throw new InvalidDataException($"No RES named {name}."), false, newRaw, locations, tocs, grow);
 
-    public static ChunkPlan PlanEbx(AssetIndex index, string name, byte[] newRaw, LocationIndex locations, TocCache tocs) =>
-        Plan(index, index.GetEbx(name) ?? throw new InvalidDataException($"No EBX named {name}."), true, newRaw, locations, tocs);
+    public static ChunkPlan PlanEbx(AssetIndex index, string name, byte[] newRaw, LocationIndex locations, TocCache tocs, IDictionary<string, long> grow = null) =>
+        Plan(index, index.GetEbx(name) ?? throw new InvalidDataException($"No EBX named {name}."), true, newRaw, locations, tocs, grow);
 
     private static ChunkPlan Plan(AssetIndex index, AssetEntry res, bool ebx, byte[] newRaw, LocationIndex locations, TocCache tocs, IDictionary<string, long> grow = null)
     {
@@ -28,6 +28,9 @@ public static class ResPatcher
         List<BundleRecord.Item> Items(BundleRecord r) => ebx ? r.Ebx : r.Res;
         int Entry(BundleRecord r, int at) => 1 + (ebx ? 0 : r.Ebx.Count) + at;
         var layout = index.Layout;
+        // NHL 24 compresses its EBX and RES, and its TOC signatures aren't checked: a copy that no longer compresses into
+        // its space always moves to the end of its CAS file
+        if (!layout.IsPs5) grow ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         string Rel(TocRef r) => Path.GetRelativePath(layout.GameDir, layout.CasPath(r.Catalog, r.Cas, r.Patch)).Replace('\\', '/');
         var plan = new ChunkPlan();
         var done = new HashSet<(string, long)>();

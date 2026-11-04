@@ -37,10 +37,21 @@ public static class DbEditor
         ChunkPlan plan;
         try
         {
+            if (legacy.Ps4)
+            {
+                // NHL 24: the data chunk is compressed, so it's rebuilt and added at the end of its CAS file
+                plan = new ChunkPlan();
+                var notes = new List<string>();
+                plan.Patches.AddRange(LegacyEditor.PlanPs4(index, legacy, f, db.Data, notes, log));
+                plan.Notes.AddRange(notes);
+            }
+            else
+            {
             var raw = legacy.ReadChunk(f.ChunkId);
             db.Data.CopyTo(raw, f.Offset);
             var tocs = new TocCache(index);
             plan = ChunkPatcher.Plan(index, f.ChunkId, raw, LocationIndex.Build(index, tocs), tocs, log);
+            }
         }
         catch
         {

@@ -29,8 +29,6 @@ public static class LegacyEditor
     public static ModEntry Save(AssetIndex index, ModStore store, string game, string collector, string name, byte[] data,
         string summary, Action<string> log = null)
     {
-        if (!index.Layout.IsPs5)
-            throw new NotSupportedException("Saving NHL 24's legacy files (its databases) isn't ready yet: its index entries and compressed data chunks differ from NHL 27's.");
         // the original layout, under any earlier save of this file
         var existing = store.Find(Kind, name);
         if (existing != null && store.State(existing, game) is ModState.Applied or ModState.Partial)
@@ -42,6 +40,8 @@ public static class LegacyEditor
         {
             var legacy = new Legacy(index, collector);
             var f = legacy.Find(name) ?? throw new FileNotFoundException($"No legacy file {name} in {collector}.");
+            if (legacy.Ps4) patches = PlanPs4(index, legacy, f, data, notes, log);
+            else {
             var idx = legacy.ReadChunk(legacy.IndexChunk);
             var (start, end) = Legacy.StoredRange(f.Offset, f.Size);
             if (I(idx, f.Entry + 8) != start || I(idx, f.Entry + 12) != end)
@@ -75,6 +75,7 @@ public static class LegacyEditor
                 patches.AddRange(indexPlan.Patches);
                 notes.AddRange(indexPlan.Notes.Where(n => n.StartsWith("left") || n.Contains("shared")));
             }
+            }
             if (patches.Count == 0) throw new InvalidDataException($"{name}: nothing could be written (see the notes).");
         }
         catch
@@ -89,6 +90,58 @@ public static class LegacyEditor
         var entry = store.Add(Kind, name, copy, summary, patches, notes);
         store.Apply(entry, game, log);
         return entry;
+    }
+
+    /// <summary>
+    /// NHL 24: its data chunks are Kraken-compressed and an index entry's stored range is compressed bytes, so the file
+    /// can't be written in place. The whole data chunk is rebuilt (the file where it was, or at the end of the chunk when
+    /// it grew), stored uncompressed in 256 KB blocks, and added at the end of its CAS file (<see cref="ChunkGrower"/>; the
+    /// game doesn't check NHL 24's TOC signatures). Every entry of that chunk gets its stored range in the new blocks, and
+    /// the index chunk is stored the same way. Restore cuts both back off.
+    /// </summary>
+    public static List<PatchData> PlanPs4(AssetIndex index, Legacy legacy, LegacyFile f, byte[] data, List<string> notes, Action<string> log)
+    {
+        var raw = legacy.ReadChunk(f.ChunkId);
+        int offset = f.Offset;
+        if (data.Length > f.Size)
+        {
+            // at the end of the chunk, 16-byte aligned
+            offset = (raw.Length + 15) & ~15;
+            var grown = new byte[offset + data.Length];
+            raw.CopyTo(grown, 0);
+            raw = grown;
+            notes.Add($"grew by {data.Length - f.Size:N0} bytes: moved to the end of its data chunk");
+        }
+        else if (data.Length < f.Size) Array.Clear(raw, offset + data.Length, f.Size - data.Length);
+        data.CopyTo(raw, offset);
+
+        var idx = legacy.ReadChunk(legacy.IndexChunk);
+        long L(int p) => BinaryPrimitives.ReadInt64LittleEndian(idx.AsSpan(p));
+        void W(int p, long v) => BinaryPrimitives.WriteInt64LittleEndian(idx.AsSpan(p), v);
+        // every entry in this data chunk: its range of the new stored blocks
+        int moved = 0;
+        foreach (var x in legacy.Files().Where(x => x.ChunkId == f.ChunkId).GroupBy(x => x.Entry).Select(g => g.First()))
+        {
+            bool self = x.Entry == f.Entry;
+            long o = self ? offset : L(x.Entry + 24), n = self ? data.Length : L(x.Entry + 32);
+            if (o < 0 || o + n > raw.Length) throw new InvalidDataException($"{x.Name}'s index entry points past its data chunk; not writing.");
+            var (start, end) = Legacy.StoredRange((int)o, (int)n);
+            W(x.Entry + 8, start);
+            W(x.Entry + 16, end);
+            W(x.Entry + 24, o);
+            W(x.Entry + 32, n);
+            moved++;
+        }
+        notes.Add($"data chunk stored uncompressed ({raw.Length:N0} bytes) at the end of its CAS file; {moved} index entr{(moved == 1 ? "y" : "ies")} updated");
+
+        var tocs = new TocCache(index);
+        var locations = LocationIndex.Build(index, tocs);
+        var ends = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var dataPlan = ChunkGrower.Plan(index, f.ChunkId, FrostbiteBlocks.Store(raw), locations, tocs, ends);
+        var indexPlan = ChunkGrower.Plan(index, legacy.IndexChunk, FrostbiteBlocks.Store(idx), locations, tocs, ends);
+        var patches = new List<PatchData>(dataPlan.Patches);
+        patches.AddRange(indexPlan.Patches);
+        return patches;
     }
 
     /// <summary>The smallest debug-only file of <paramref name="f"/>'s chunk that holds <paramref name="size"/> bytes and that no other file shares.</summary>

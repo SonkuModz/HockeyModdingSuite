@@ -13,7 +13,7 @@ namespace NHL27Kit.App;
 public sealed class ModService
 {
     private readonly SemaphoreSlim _gate = new(1);
-    private readonly TocCache _tocs;
+    private TocCache _tocs;
     private LocationIndex _locations;
 
     public ModService(AssetIndex index)
@@ -59,6 +59,24 @@ public sealed class ModService
         await _gate.WaitAsync();
         try { return await Task.Run(work); }
         finally { _gate.Release(); }
+    }
+
+    /// <summary>After a write that changed a TOC (data added at the end of a CAS file), the parsed TOCs are stale.</summary>
+    private void Forget(ModEntry e)
+    {
+        if (e.Patches.Any(p => p.File.EndsWith(".toc", StringComparison.OrdinalIgnoreCase)))
+        {
+            _tocs = new TocCache(Index);
+            _locations = null;
+        }
+    }
+
+    /// <summary>NHL 24's database, score clock and EBX saves add data at the end of CAS files, which changes TOCs.</summary>
+    private void ForgetPs4()
+    {
+        if (Index.Layout.IsPs5) return;
+        _tocs = new TocCache(Index);
+        _locations = null;
     }
 
     private LocationIndex Locations() => _locations ??= LocationIndex.Build(Index, _tocs);
@@ -130,7 +148,6 @@ public sealed class ModService
 
     public Task<SoundReplacementPlan> PlanSoundAsync(string name, SoundStream stream, string audioFile) => Run(() =>
     {
-        RefuseNhl24("sounds");
         var (pcm, ch, rate) = AudioLoader.Load(audioFile);
         return Replacements.PlanSound(Index, name, stream, pcm, ch, rate, Locations(), _tocs);
     });
@@ -152,14 +169,14 @@ public sealed class ModService
     {
         RefuseWrite();
         try { await Run(() => { Store.Apply(e, Game); return 0; }); }
-        finally { Changed?.Invoke(); }
+        finally { Forget(e); Changed?.Invoke(); }
     }
 
     public async Task RestoreAsync(ModEntry e)
     {
         RefuseWrite();
         try { await Run(() => { Store.Restore(e, Game); return 0; }); }
-        finally { Changed?.Invoke(); }
+        finally { Forget(e); Changed?.Invoke(); }
     }
 
     public const string EbxKind = "ebx";
@@ -171,7 +188,6 @@ public sealed class ModService
     public async Task<ModEntry> SaveEbxAsync(string name, byte[] data, string summary)
     {
         RefuseWrite();
-        RefuseNhl24("assets this way");
         try
         {
             return await Run(() =>
@@ -199,7 +215,7 @@ public sealed class ModService
                 return e;
             });
         }
-        finally { Changed?.Invoke(); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
     public const string MovieKind = "movie";
@@ -209,7 +225,6 @@ public sealed class ModService
     /// <summary>Plans a ready WebM (encoded to fit) over a movie, and keeps a copy of it as the mod's source.</summary>
     public Task<MoviePlan> PlanMovieAsync(Movie m, byte[] webm) => Run(() =>
     {
-        RefuseNhl24("videos");
         var plan = MovieReplacement.Plan(Index, m, webm, Locations(), _tocs);
         string sources = Path.Combine(Store.Dir, "sources");
         Directory.CreateDirectory(sources);
@@ -227,7 +242,7 @@ public sealed class ModService
         RefuseWrite();
         RefuseNhl24("score clocks");
         try { await Run(() => Scorebug.Save(Index, Store, Game, current, edits, sharpBadge: sharpBadge)); }
-        finally { Changed?.Invoke(); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
     /// <summary>A database as the game has it right now (never cached: edits made anywhere show up).</summary>
@@ -241,7 +256,7 @@ public sealed class ModService
     {
         RefuseWrite();
         try { return await Run(() => DbEditor.Save(Index, Store, Game, name, edit, source: source)); }
-        finally { Changed?.Invoke(); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
     /// <summary>Writes a pack of these mods (a database's current bytes are read from the game).</summary>

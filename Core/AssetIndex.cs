@@ -306,8 +306,32 @@ public sealed class AssetIndex
         return b;
     }
 
-    /// <summary>An asset's data, decompressed (stock location).</summary>
-    public byte[] Read(AssetEntry e) => FrostbiteBlocks.Decode(ReadStored(e.Ref));
+    /// <summary>An asset's data, decompressed, from where its TOC entry points now (<see cref="LiveRef"/>).</summary>
+    public byte[] Read(AssetEntry e) => FrostbiteBlocks.Decode(ReadStored(LiveRef(e)));
+
+    /// <summary>
+    /// The entry's location as its TOC has it now: a write that adds data at the end of a CAS file (NHL 24's textures and
+    /// databases, a grown texture) repoints the TOC entry's big-endian offset and size, which the index (built before)
+    /// doesn't know. The CAS file stays the same.
+    /// </summary>
+    public TocRef LiveRef(AssetEntry e)
+    {
+        var r = e.Ref;
+        if (e.Toc == null || r.OffsetPos <= 0 || r.SizePos <= 0) return r;
+        try
+        {
+            using var fs = new FileStream(e.Toc, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            Span<byte> b = stackalloc byte[4];
+            fs.Position = r.OffsetPos;
+            fs.ReadExactly(b);
+            uint offset = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(b);
+            fs.Position = r.SizePos;
+            fs.ReadExactly(b);
+            uint size = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(b);
+            return offset == r.Offset && size == r.Size ? r : r with { Offset = offset, Size = size };
+        }
+        catch (IOException) { return r; }
+    }
 }
 
 /// <summary>A bundle record (stored in a CAS file): the bundle's asset list with names, sizes, SHA1s, RES metadata and chunk ids.</summary>
