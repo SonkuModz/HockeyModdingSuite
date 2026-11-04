@@ -329,7 +329,18 @@ public partial class TexturePage : UserControl
         var notes = new List<string>();
         try
         {
-            var plan = await _mods.PlanTextureAsync(name, dlg.FileName, n => notes.Add(n));
+            TextureReplacementPlan plan;
+            try { plan = await _mods.PlanTextureAsync(name, dlg.FileName, n => notes.Add(n)); }
+            catch (InvalidDataException ex) when (_mods.Index.Layout.IsPs5 && ex.Message.Contains("also used by"))
+            {
+                if (!KitWriter.AskToTakeShared(Window.GetWindow(this), ex.Message))
+                {
+                    StatusChanged?.Invoke("Not replaced: other textures use the same stored image.");
+                    return;
+                }
+                notes.Clear();
+                plan = await _mods.PlanTextureAsync(name, dlg.FileName, n => notes.Add(n), takeShared: true);
+            }
             var h = plan.Header;
             notes.AddRange(plan.Chunk.Notes.Where(n => n.StartsWith("left") || n.Contains("shared")));
             _mods.Queue("texture", name, dlg.FileName, $"{h.Format.Name} {h.Width}×{h.Height}, {TextureBuilder.StoredMips(h)} stored mips", plan.Chunk.Patches, notes);

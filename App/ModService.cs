@@ -68,6 +68,8 @@ public sealed class ModService
         {
             _tocs = new TocCache(Index);
             _locations = null;
+            foreach (var toc in e.Patches.Select(p => p.File).Where(f => f.EndsWith(".toc", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase))
+                Index.Refresh(_tocs.Get(Path.Combine(Game, toc.Replace('/', Path.DirectorySeparatorChar))));
         }
     }
 
@@ -77,6 +79,7 @@ public sealed class ModService
         if (Index.Layout.IsPs5) return;
         _tocs = new TocCache(Index);
         _locations = null;
+        foreach (var toc in Index.Layout.AllTocPaths()) Index.Refresh(_tocs.Get(toc));
     }
 
     private LocationIndex Locations() => _locations ??= LocationIndex.Build(Index, _tocs);

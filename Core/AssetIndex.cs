@@ -14,8 +14,8 @@ public abstract class AssetEntry
     public string Name { get; init; }
     /// <summary>The bundle the entry was found in (the first one if it is in several).</summary>
     public int Bundle { get; init; }
-    /// <summary>Where the bundle's TOC says the data is (stock locations; see <see cref="AssetIndex"/>).</summary>
-    public TocRef Ref { get; init; }
+    /// <summary>Where the bundle's TOC says the data is (kept current by <see cref="AssetIndex.Refresh"/>).</summary>
+    public TocRef Ref { get; set; }
     public string Toc { get; init; }
     /// <summary>Absolute position of the asset's SHA1 in its bundle record (in the CAS file of the record).</summary>
     public long Sha1Pos { get; init; }
@@ -51,9 +51,8 @@ public sealed class ChunkEntry : AssetEntry
 
 /// <summary>
 /// Every asset of the game: EBX (with type and guid), RES and chunks, read from the superbundle TOCs and the bundle
-/// records they point at. Like FMT's index it describes the STOCK data: TOCs are read from the kit's stock copies
-/// when the game is modded (the caller passes them), so lookups stay valid after applies; what the game reads now is
-/// found through the live TOCs (see DirectWriter). Built once and cached to disk.
+/// records they point at, as the TOCs say when it's opened (cached to disk per TOC contents). A write that changes a
+/// TOC updates the locations through <see cref="Refresh"/>, so they stay what the game reads now.
 /// </summary>
 public sealed class AssetIndex
 {
@@ -78,6 +77,26 @@ public sealed class AssetIndex
     }
 
     private AssetIndex(GameLayout layout) => Layout = layout;
+
+    /// <summary>
+    /// After a TOC in the game changed (data added at the end of a CAS file, or a restore that put it back): every asset's
+    /// location as that TOC says now. A TOC's entries stay at the same positions in its file, so they are matched by those.
+    /// </summary>
+    public void Refresh(SuperBundleToc toc)
+    {
+        var now = new Dictionary<int, TocRef>();
+        foreach (var c in toc.Chunks) now[c.Ref.OffsetPos] = c.Ref;
+        foreach (var b in toc.Bundles)
+            foreach (var r in b.Entries) now[r.OffsetPos] = r;
+        void Update(AssetEntry e)
+        {
+            if (string.Equals(e.Toc, toc.Path, StringComparison.OrdinalIgnoreCase) && now.TryGetValue(e.Ref.OffsetPos, out var r)) e.Ref = r;
+        }
+        foreach (var e in Ebx.Values) Update(e);
+        foreach (var e in Res.Values) Update(e);
+        foreach (var e in Chunks.Values) Update(e);
+        foreach (var e in TableChunks.Values.SelectMany(l => l)) Update(e);
+    }
 
     public EbxEntry GetEbx(string name) => Ebx.GetValueOrDefault(name);
     public ResEntry GetRes(string name) => Res.GetValueOrDefault(name);

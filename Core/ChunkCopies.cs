@@ -81,7 +81,8 @@ public static class ChunkCopies
     /// bundle in another superbundle that carries the same chunk can be missing from <see cref="Find"/>. Copies already
     /// in <paramref name="known"/> are skipped; the ones found count as live (they are checked like any live copy).
     /// </summary>
-    public static List<ChunkCopy> FindAt(AssetIndex index, TocCache tocs, IReadOnlySet<long> places, IEnumerable<ChunkCopy> known)
+    /// <param name="only">Only copies of this chunk.</param>
+    public static List<ChunkCopy> FindAt(AssetIndex index, TocCache tocs, IReadOnlySet<long> places, IEnumerable<ChunkCopy> known, Guid? only = null)
     {
         var have = known.Where(c => c.InBundle).Select(c => (c.Toc, c.BundleName, LocationIndex.Key(c.Ref))).ToHashSet();
         var found = new List<ChunkCopy>();
@@ -98,6 +99,7 @@ public static class ChunkCopies
                     int at = i - 1 - rec.Ebx.Count - rec.Res.Count;
                     if (at < 0 || at >= rec.Chunks.Count) continue;
                     var item = rec.Chunks[at];
+                    if (only != null && item.Id != only) continue;
                     found.Add(new ChunkCopy("bundle", path, tb.Entries[i], int.MaxValue, tb.Name, item.Sha1Pos, item.Sha1, item.LogicalOffset, item.Size, true, r0));
                     have.Add((path, tb.Name, key));
                 }

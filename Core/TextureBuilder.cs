@@ -7,7 +7,6 @@ public static class TextureBuilder
     public static string Unsupported(TextureHeader h)
     {
         if (h.Ps4 && h.Layers > 1) return "NHL 24 texture arrays can't be replaced yet.";
-        if (h.Ps4 && h.FirstMip > 0) return "This NHL 24 texture streams its top mips separately; that can't be replaced yet.";
         if (h.Type != TextureType.TT_2d && h.Type != TextureType.TT_2dArray) return $"{h.Type} textures can't be replaced yet (only 2D textures and 2D arrays).";
         if (h.Type == TextureType.TT_2d && (h.Depth > 1 || h.SliceCount > 1)) return "This texture has several slices but isn't an array; it can't be replaced yet.";
         if (!h.Format.Known) return $"Pixel format {h.Format.Name} has no encoder.";

@@ -206,12 +206,15 @@ public sealed class ModStore
     private void Write(ModEntry e, string game, bool toNew, Action<string> log)
     {
         string verb = toNew ? "apply" : "restore";
+        if (toNew) MoveAppended(e, game, log);
         // check everything before writing anything
         for (int i = 0; i < e.Patches.Count; i++)
         {
             var p = e.Patches[i];
             string file = Path_(game, p);
             if (!File.Exists(file)) throw new FileNotFoundException($"Can't {verb} {e.Name}: {p.File} is not in the game folder.");
+            // added data needs no check to restore: nothing points at it afterwards, and TrimAdded cuts only what it recognises
+            if (p.Append && !toNew) continue;
             string h = Current(file, p) ?? throw new InvalidDataException($"Can't {verb} {e.Name}: {p.File} is shorter than the patch expects.");
             if (h != p.OldSha1 && h != p.NewSha1)
                 throw new InvalidDataException($"Can't {verb} {e.Name}: {p.File} at 0x{p.Offset:X} holds neither the original nor the replacement. The game files changed since this mod was made; nothing was written.");
@@ -243,6 +246,77 @@ public sealed class ModStore
             foreach (var f in e.Patches.Where(p => p.Append).Select(p => p.File).Distinct(StringComparer.OrdinalIgnoreCase))
                 written += TrimAdded(game, f, log);
         log?.Invoke($"{e.Name}: {written} range(s) written, {e.Patches.Count - written} already as wanted");
+    }
+
+    /// <summary>
+    /// A mod not in the game whose added data's place now holds something else (restoring it cut the file, then another
+    /// mod added data there): its data goes at the file's end instead, and the TOC offsets it writes follow. Nothing
+    /// changes unless every offset can follow.
+    /// </summary>
+    private void MoveAppended(ModEntry e, string game, Action<string> log)
+    {
+        var moves = new List<(int Index, byte[] Data, long At)>();
+        var offsets = new Dictionary<uint, uint>();
+        foreach (var group in e.Patches.Select((p, i) => (P: p, I: i)).Where(x => x.P.Append).GroupBy(x => x.P.File, StringComparer.OrdinalIgnoreCase))
+        {
+            string file = Path_(game, group.First().P);
+            if (!File.Exists(file)) continue;
+            long end = new FileInfo(file).Length;
+            var pending = group.Where(x => Current(file, x.P) != x.P.NewSha1).ToList();
+            if (pending.All(x => end <= x.P.Offset)) continue;
+            foreach (var (p, i) in pending)
+            {
+                var data = File.ReadAllBytes(New(e, i));
+                if (Hex(SHA1.HashData(data)) != p.NewSha1) throw new InvalidDataException($"The stored new bytes of {e.Name} (patch {i}) are damaged.");
+                long oldAt = (p.Offset + 15) & ~15L, newAt = (end + 15) & ~15L;
+                int pad = (int)(oldAt - p.Offset);
+                var moved = new byte[newAt - end + data.Length - pad];
+                data.AsSpan(pad).CopyTo(moved.AsSpan((int)(newAt - end)));
+                if (newAt + data.Length > uint.MaxValue) throw new InvalidDataException($"{p.File} would pass 4 GB, past what a TOC offset holds.");
+                if (offsets.ContainsKey((uint)oldAt)) throw new InvalidDataException($"Can't apply {e.Name}: two of its added ranges start at 0x{oldAt:X}, so they can't be moved.");
+                offsets[(uint)oldAt] = (uint)newAt;
+                moves.Add((i, moved, end));
+                end += moved.Length;
+            }
+        }
+        if (moves.Count == 0) return;
+
+        // the TOC offsets that point at the added data, all still as the game shipped them
+        var pointers = new List<(int Index, byte[] Data)>();
+        var followed = new HashSet<uint>();
+        for (int i = 0; i < e.Patches.Count; i++)
+        {
+            var p = e.Patches[i];
+            if (p.Append || p.Length != 4 || p.Note == null || !p.Note.EndsWith(" offset", StringComparison.Ordinal)) continue;
+            var cur = File.ReadAllBytes(New(e, i));
+            uint at = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(cur);
+            if (!offsets.TryGetValue(at, out uint to)) continue;
+            string file = Path_(game, p);
+            if (!File.Exists(file) || Current(file, p) != p.OldSha1)
+                throw new InvalidDataException($"Can't apply {e.Name}: {p.File} at 0x{p.Offset:X} isn't as the game shipped it, so this mod's added data can't be moved; nothing was written.");
+            var neu = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(neu, to);
+            pointers.Add((i, neu));
+            followed.Add(at);
+        }
+        if (followed.Count != offsets.Count)
+            throw new InvalidDataException($"Can't apply {e.Name}: its added data's place in the CAS file is taken, and this mod doesn't record every TOC offset that points at it. Restore the mods added after it first; nothing was written.");
+
+        foreach (var (i, data, at) in moves)
+        {
+            var p = e.Patches[i];
+            log?.Invoke($"{p.Note ?? "range"}: its place at 0x{p.Offset:X} in {p.File} is taken, moved to 0x{at:X}");
+            File.WriteAllBytes(New(e, i), data);
+            p.Offset = at;
+            p.Length = data.Length;
+            p.NewSha1 = Hex(SHA1.HashData(data));
+        }
+        foreach (var (i, data) in pointers)
+        {
+            File.WriteAllBytes(New(e, i), data);
+            e.Patches[i].NewSha1 = Hex(SHA1.HashData(data));
+        }
+        Save();
     }
 
     /// <summary>

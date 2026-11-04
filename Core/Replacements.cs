@@ -60,6 +60,15 @@ public static partial class Replacements
         if (n > 1) cuts.Add((int)header.MipSizes[0]);
         if (n > 2) cuts.Add((int)(header.MipSizes[0] + header.MipSizes[1]));
         cuts.Add(raw.Length);
+        // a streamed texture (first mip > 0): the chunk table holds the whole chunk, and its bundles only the end from the
+        // first mip they load: the same stored bytes, so that mip starts a block too
+        int tailAt = 0;
+        if (header.FirstMip > 0)
+        {
+            if (header.FirstMip >= n) throw new InvalidDataException($"The header's first mip is {header.FirstMip}, but it stores {n} mips.");
+            for (int k = 0; k < header.FirstMip; k++) tailAt += (int)header.MipSizes[k];
+            if (!cuts.Contains(tailAt)) { cuts.Add(tailAt); cuts.Sort(); }
+        }
         using var ms = new MemoryStream();
         var starts = new List<long>();
         for (int k = 0; k + 1 < cuts.Count; k++)
@@ -68,13 +77,14 @@ public static partial class Replacements
             ms.Write(FrostbiteBlocks.Store(raw[cuts[k]..cuts[k + 1]]));
         }
         byte[] stored = ms.ToArray();
+        (byte[] Stored, uint LogicalOffset)? tail = header.FirstMip > 0 ? (stored[(int)starts[cuts.IndexOf(tailAt)]..], (uint)tailAt) : null;
         var res = index.Read(index.GetRes(name));
         var newRes = (byte[])res.Clone();
         for (int k = 0; k < 2; k++)
             BitConverter.TryWriteBytes(newRes.AsSpan(k * 4, 4), (uint)(k + 1 < starts.Count ? starts[k + 1] : 0));
         // the chunk and any header copy that moves share the CAS files' planned ends
         var ends = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        var chunk = ChunkGrower.Plan(index, header.ChunkId, stored, locations, tocs, ends);
+        var chunk = ChunkGrower.Plan(index, header.ChunkId, stored, locations, tocs, ends, tail);
         if (!newRes.AsSpan().SequenceEqual(res))
         {
             var resPlan = ResPatcher.Plan(index, name, newRes, locations, tocs, grow: ends);

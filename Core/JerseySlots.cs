@@ -176,8 +176,11 @@ public static class JerseySlots
 
         // values every new slot takes from the team (its score clock colour and logo)
         int teamRow = before[0].Row;
-        int Team(string n) => (int)db.Get(t, teamRow, f[n]);
-        int clockColor = Team("scoreclockcolor"), clockLogo = Team("scoreclocklogo");
+        // NHL 24's table has no score clock fields
+        f.TryGetValue("scoreclockcolor", out var clockColorField);
+        f.TryGetValue("scoreclocklogo", out var clockLogoField);
+        int clockColor = clockColorField == null ? 0 : (int)db.Get(t, teamRow, clockColorField);
+        int clockLogo = clockLogoField == null ? 0 : (int)db.Get(t, teamRow, clockLogoField);
         int nextIndex = slots.Where(s => s.Row >= 0).Select(s => s.JerseyIndex).DefaultIfEmpty(-1).Max() + 1;
         nextIndex = Math.Max(nextIndex, before.Max(b => b.JerseyIndex) + 1);
         int maxIndex = (1 << f["jerseyindex"].Depth) - 1 + f["jerseyindex"].RangeLow;
@@ -202,8 +205,8 @@ public static class JerseySlots
                     db.Set(t, row, f["teamid"], teamId);
                     db.Set(t, row, f["jerseyindex"], nextIndex++);
                     db.Set(t, row, f["active"], 1);
-                    db.Set(t, row, f["scoreclockcolor"], clockColor);
-                    db.Set(t, row, f["scoreclocklogo"], clockLogo);
+                    if (clockColorField != null) db.Set(t, row, clockColorField, clockColor);
+                    if (clockLogoField != null) db.Set(t, row, clockLogoField, clockLogo);
                 }
                 db.Set(t, row, f["orderid"], i);
                 db.Set(t, row, f["teamartid"], s.ArtId);

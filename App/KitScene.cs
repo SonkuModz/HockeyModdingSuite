@@ -138,6 +138,11 @@ public static class KitScene
 /// <summary>Writes images over a kit's textures in the game (each its own mod entry, which Restore undoes).</summary>
 public static class KitWriter
 {
+    /// <summary>The game stores an image once for several textures: asks whether to change them all (Restore puts them all back).</summary>
+    public static bool AskToTakeShared(System.Windows.Window owner, string why) =>
+        System.Windows.MessageBox.Show(owner, why + "\n\nReplace it anyway? Every texture using this stored image changes too. Restore on the Mods page puts them all back.",
+            "This image is shared", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.Yes;
+
     /// <summary>
     /// Encodes one image for a kit texture and writes it into the game; returns what was done. A numbered branding
     /// texture's layer of the branding array (the copy the game draws) is written first.
@@ -157,7 +162,15 @@ public static class KitWriter
         {
             await mods.ResetAsync("texture", texture.Name);
             var notes = new List<string>();
-            var plan = await mods.PlanTextureAsync(texture.Name, file, n => notes.Add(n));
+            TextureReplacementPlan plan;
+            try { plan = await mods.PlanTextureAsync(texture.Name, file, n => notes.Add(n)); }
+            catch (System.IO.InvalidDataException ex) when (array == null && mods.Index.Layout.IsPs5 && ex.Message.Contains("also used by"))
+            {
+                if (!AskToTakeShared(System.Windows.Application.Current.MainWindow, ex.Message))
+                    return $"{label} not replaced: other textures use the same stored image.";
+                notes.Clear();
+                plan = await mods.PlanTextureAsync(texture.Name, file, n => notes.Add(n), takeShared: true);
+            }
             var h = plan.Header;
             notes.AddRange(plan.Chunk.Notes.Where(n => n.StartsWith("left") || n.Contains("shared")));
             var entry = mods.Queue("texture", texture.Name, file, $"{h.Format.Name} {h.Width}×{h.Height}, {TextureBuilder.StoredMips(h)} stored mips", plan.Chunk.Patches, notes);
