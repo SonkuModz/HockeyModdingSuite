@@ -85,7 +85,7 @@
         <DataTemplate x:Key="ToggleTemplate" DataType="{x:Type local:ToggleEdit}">
             <Border x:Name="Bd" Width="236" Margin="0,0,10,10" Padding="12,9" CornerRadius="9" Background="{StaticResource Surface2}"
                     BorderBrush="{StaticResource Line}" BorderThickness="1">
-                <CheckBox IsChecked="{Binding BoolValue}" Content="{Binding Label}" VerticalAlignment="Center" />
+                <CheckBox IsChecked="{Binding BoolValue}" Content="{Binding Label}" VerticalAlignment="Center" Foreground="{StaticResource Text}" />
             </Border>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsChanged}" Value="True">
