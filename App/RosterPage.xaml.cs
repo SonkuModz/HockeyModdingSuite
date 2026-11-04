@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -22,6 +23,10 @@ public partial class RosterPage : UserControl
     private List<LocRow> _strings = new();
     private RosterPlayer _current;
     private List<FieldEdit> _fields = new();
+    private PositionEdit _positionEdit;
+    private PickEdit _draftTeamPick;
+    private FieldEdit _draftTeamField, _draftRoundField, _draftPickField;
+    private List<ClauseEdit> _clauses = new();
     private LocRow _currentText;
     private string _currentTextOriginal;
     private T3Db _locDb;
@@ -194,9 +199,9 @@ public partial class RosterPage : UserControl
 
         var bio = db.Table(Roster.BioTable);
         var identity = new List<FieldEdit>();
-        void Add(List<FieldEdit> list, T3Table t, int row, string name, int offset = 0, bool rating = false)
+        void Add(List<FieldEdit> list, T3Table t, int row, string name, int offset = 0, bool rating = false, int scale = 1, int? minValue = null, int? maxValue = null)
         {
-            if (row >= 0 && Roster.Field(t, name) is { } f) list.Add(new FieldEdit(db, t, row, f, offset) { IsRating = rating });
+            if (row >= 0 && Roster.Field(t, name) is { } f) list.Add(new FieldEdit(db, t, row, f, offset, scale, minValue, maxValue) { IsRating = rating });
         }
         Add(identity, bio, p.BioRow, "firstname");
         Add(identity, bio, p.BioRow, "lastname");
@@ -235,8 +240,85 @@ public partial class RosterPage : UserControl
         XFactorTitle.Text = have == 0 ? "X-FACTORS  ·  NONE" : $"X-FACTORS  ·  {have}";
         foreach (var s in slots) _ = LoadXFactorIcon(s, version);
 
+        // Position: primary + secondary (+ the legacy position field, kept in sync by the PositionEdit)
+        var posFields = new List<FieldEdit>();
+        Add(posFields, bio, p.BioRow, "positionprimary", minValue: 0, maxValue: 5);
+        Add(posFields, bio, p.BioRow, "positionsecondary", minValue: -1, maxValue: 5);
+        Add(posFields, bio, p.BioRow, "position", minValue: 0, maxValue: 4);
+        _positionEdit = posFields.Count == 3 ? new PositionEdit(posFields[0], posFields[1], posFields[2]) : null;
+        PositionList.ItemsSource = _positionEdit == null ? null : new[] { _positionEdit };
+        PositionSection.Visibility = _positionEdit == null ? Visibility.Collapsed : Visibility.Visible;
+
+        // Draft: year (stored as year-1900), round, pick, and the team that drafted him
+        var draftFields = new List<FieldEdit>();
+        Add(draftFields, bio, p.BioRow, "draftyear", 1900);
+        Add(draftFields, bio, p.BioRow, "draftround", minValue: 0, maxValue: 7);
+        Add(draftFields, bio, p.BioRow, "draftposition", minValue: 0);
+        _draftRoundField = draftFields.FirstOrDefault(f => f.Field == "draftround");
+        _draftPickField = draftFields.FirstOrDefault(f => f.Field == "draftposition");
+        var draftTeamFields = new List<FieldEdit>();
+        Add(draftTeamFields, bio, p.BioRow, "draftteam", minValue: -1);
+        _draftTeamField = draftTeamFields.FirstOrDefault();
+        _draftTeamPick = null;
+        if (_draftTeamField != null)
+        {
+            var picks = new List<PickItem> { new("Undrafted", -1) };
+            picks.AddRange(_teams.Select(t => new PickItem($"{t.Name}  ({t.Abbr})", t.Index)));
+            int v = int.TryParse(_draftTeamField.Text, out int tv) ? tv : -1;
+            if (v != -1 && picks.All(x => x.Value != v)) picks.Insert(0, new PickItem($"#{v}", v));
+            _draftTeamPick = new PickEdit(_draftTeamField, picks);
+        }
+        DraftFields.ItemsSource = draftFields;
+        DraftTeamList.ItemsSource = _draftTeamPick == null ? null : new[] { _draftTeamPick };
+        DraftSection.Visibility = draftFields.Count == 0 && _draftTeamPick == null ? Visibility.Collapsed : Visibility.Visible;
+
+        // Contract: salary in dollars (stored in $5,000 units), years left, the type flags, and the extension
+        var contractFields = new List<FieldEdit>();
+        Add(contractFields, bio, p.BioRow, "contractdollars", scale: 5000, minValue: 0);
+        Add(contractFields, bio, p.BioRow, "contractlength", minValue: 0);
+        Add(contractFields, bio, p.BioRow, "extensionlength", minValue: 0);
+        Add(contractFields, bio, p.BioRow, "extensiondollars", scale: 5000, minValue: 0);
+        ContractFields.ItemsSource = contractFields;
+
+        var toggleFields = new List<FieldEdit>();
+        Add(toggleFields, bio, p.BioRow, "contractis2way", minValue: 0, maxValue: 1);
+        Add(toggleFields, bio, p.BioRow, "contractismultiyear", minValue: 0, maxValue: 1);
+        Add(toggleFields, bio, p.BioRow, "contractneedsentrylevel", minValue: 0, maxValue: 1);
+        Add(toggleFields, bio, p.BioRow, "extensionis2way", minValue: 0, maxValue: 1);
+        ContractToggles.ItemsSource = toggleFields.Select(f => new ToggleEdit(f)).ToList();
+
+        // Trade protection: one clause type + team list per season, from this season through the contract and extension
+        var clauseFields = new List<FieldEdit>();
+        for (int i = 0; i < 10; i++)
+        {
+            Add(clauseFields, bio, p.BioRow, $"contractclause{i}", minValue: 0, maxValue: 4);
+            Add(clauseFields, bio, p.BioRow, $"contractclausemntcnumteams{i}", minValue: 0, maxValue: 32);
+        }
+        _clauses = new List<ClauseEdit>();
+        for (int i = 0; i < 10; i++)
+        {
+            var c = clauseFields.FirstOrDefault(f => f.Field == $"contractclause{i}");
+            var m = clauseFields.FirstOrDefault(f => f.Field == $"contractclausemntcnumteams{i}");
+            if (c != null && m != null) _clauses.Add(new ClauseEdit(i + 1, c, m));
+        }
+        ClauseList.ItemsSource = _clauses;
+        ClauseSection.Visibility = _clauses.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        // contract status is shown, not edited: 0 = under contract, -1 = no NHL contract
+        var statusField = Roster.Field(bio, "contractstatus");
+        if (statusField == null) ContractStatusText.Visibility = Visibility.Collapsed;
+        else
+        {
+            ContractStatusText.Visibility = Visibility.Visible;
+            int status = (int)db.Get(bio, p.BioRow, statusField);
+            ContractStatusText.Text = status == 0 ? "Under contract" : status == -1 ? "No NHL contract" : $"Contract status {status}";
+        }
+        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0
+            ? Visibility.Collapsed : Visibility.Visible;
+
         foreach (var f in _fields) f.PropertyChanged -= OnFieldChanged;
-        _fields = identity.Concat(ratings).Concat(xfFields).ToList();
+        _fields = identity.Concat(ratings).Concat(xfFields).Concat(posFields).Concat(draftFields).Concat(draftTeamFields)
+            .Concat(contractFields).Concat(toggleFields).Concat(clauseFields).ToList();
         foreach (var f in _fields) f.PropertyChanged += OnFieldChanged;
         IdentityFields.ItemsSource = identity;
         RatingFields.ItemsSource = ratings;
@@ -250,7 +332,7 @@ public partial class RosterPage : UserControl
         FirstText.Text = p.FirstName;
         LastText.Text = p.LastName.ToUpperInvariant();
         OverallText.Text = p.Overall.ToString();
-        MetaText.Text = $"{p.PositionName}{(p.Jersey >= 0 ? "  ·  #" + p.Jersey : "")}  ·  game id {p.GameId}";
+        MetaText.Text = $"{p.PositionDisplay}{(p.Jersey >= 0 ? "  ·  #" + p.Jersey : "")}  ·  game id {p.GameId}";
         Editor.Visibility = Visibility.Visible;
         EditorEmpty.Visibility = Visibility.Collapsed;
         UpdateEditState($"Read from the game at {DateTime.Now:HH:mm:ss}.");
@@ -297,13 +379,35 @@ public partial class RosterPage : UserControl
     private void UpdateEditState(string idle)
     {
         var changed = _fields.Where(f => f.IsChanged).ToList();
-        bool errors = _fields.Any(f => f.HasError);
+        string cross = CrossFieldError();
+        bool errors = _fields.Any(f => f.HasError) || cross != null;
         SaveButton.IsEnabled = changed.Count > 0 && !errors && !_busy;
         DiscardButton.IsEnabled = changed.Count > 0 && !_busy;
         SaveLabel.Text = changed.Count > 0 ? $"Save {changed.Count} change{(changed.Count == 1 ? "" : "s")} to game" : "Save to game";
-        EditState.Text = errors ? "Fix the values marked in red." : changed.Count > 0
+        EditState.Text = cross ?? (errors ? "Fix the values marked in red." : changed.Count > 0
             ? string.Join(",  ", changed.Take(4).Select(f => $"{f.Label} {f.Original} → {f.Text}")) + (changed.Count > 4 ? $"  +{changed.Count - 4}" : "")
-            : idle ?? "No changes.";
+            : idle ?? "No changes.");
+    }
+
+    /// <summary>Checks that span more than one field: draft consistency, a team list with no clause, and the
+    /// skater/goalie guard. FieldEdit already covers the per-field ranges.</summary>
+    private string CrossFieldError()
+    {
+        if (_current == null) return null;
+        if (_draftTeamField != null && _draftRoundField != null && _draftPickField != null
+            && !_draftTeamField.HasError && !_draftRoundField.HasError && !_draftPickField.HasError)
+        {
+            int team = int.Parse(_draftTeamField.Text, CultureInfo.InvariantCulture);
+            int round = int.Parse(_draftRoundField.Text, CultureInfo.InvariantCulture);
+            int pick = int.Parse(_draftPickField.Text, CultureInfo.InvariantCulture);
+            if (team < 0 && (round != 0 || pick != 0)) return "Undrafted: set the draft round and pick to 0.";
+            if (team >= 0 && (round < 1 || pick < 1)) return "Drafted: the draft round and pick must be at least 1.";
+        }
+        foreach (var c in _clauses)
+            if (c.CrossError != null) return c.CrossError;
+        if (_positionEdit != null && _positionEdit.IsChanged && (_positionEdit.PrimaryValue == 5) != _current.IsGoalie)
+            return "A skater can't become a goalie (or the reverse) here: the ratings wouldn't match the position.";
+        return null;
     }
 
     private async void OnDiscard(object sender, RoutedEventArgs e)
@@ -321,6 +425,11 @@ public partial class RosterPage : UserControl
         }
         var changes = _fields.Where(f => f.IsChanged).ToList();
         if (changes.Count == 0 || changes.Any(f => f.HasError)) return;
+        if (CrossFieldError() is { } cross)
+        {
+            MessageBox.Show(Window.GetWindow(this), cross, "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         int id = _current.GameId;
         string who = _current.Name;
         _busy = true;
@@ -332,12 +441,21 @@ public partial class RosterPage : UserControl
             {
                 // the rows of a database read now; the player is found again by id
                 var p = new Roster(db).Find(id) ?? throw new InvalidOperationException($"{who} is no longer in the database.");
-                foreach (var c in changes)
+                // positions are written as a set — primary, secondary and the legacy position — so the three never disagree
+                var pos = changes.Where(c => c.Field is "positionprimary" or "positionsecondary" or "position").ToList();
+                foreach (var c in changes.Except(pos))
                 {
                     var t = db.Table(c.Table);
                     int row = c.Table == Roster.BioTable ? p.BioRow : c.Table == Roster.RosterTable ? p.RosterRow : p.RatingsRow;
                     db.Set(t, row, Roster.Field(t, c.Field), c.Value);
                     if (c.Field == "skill_overall" && Roster.Field(t, "c_overall") is { } co) db.Set(t, row, co, c.Value);
+                }
+                if (pos.Count > 0 && _positionEdit != null)
+                {
+                    var bio = db.Table(Roster.BioTable);
+                    db.Set(bio, p.BioRow, Roster.Field(bio, "positionprimary"), _positionEdit.PrimaryValue);
+                    db.Set(bio, p.BioRow, Roster.Field(bio, "positionsecondary"), _positionEdit.SecondaryValue);
+                    db.Set(bio, p.BioRow, Roster.Field(bio, "position"), Roster.CollapsedPosition(_positionEdit.PrimaryValue));
                 }
                 return $"{who}: " + string.Join(", ", changes.Select(c => $"{c.Label} {c.Original} → {c.Text}"));
             });
