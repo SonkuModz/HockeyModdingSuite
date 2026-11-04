@@ -1126,6 +1126,8 @@ public partial class MainWindow : Window
                 await Task.Delay(1500);
                 if (a.TryGetValue("tfosat", out var tfs) && double.TryParse(tfs, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double fsat))
                     fw.SetLook(fsat, 0.06);
+                if (a.TryGetValue("tfotint", out var tft) && double.TryParse(tft, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ftint))
+                    fw.TintSlider.Value = ftint;
                 if (a.TryGetValue("tfosearch", out var tfq)) fw.Search.Text = tfq;
                 if (tfo.StartsWith("http")) await fw.OpenRink(tfo); else await fw.PickRink(tfo);
                 await Task.Delay(1500);

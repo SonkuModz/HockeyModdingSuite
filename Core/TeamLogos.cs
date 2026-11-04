@@ -6,11 +6,34 @@ namespace NHL27Kit.Core;
 public sealed record TeamLogo(string Name, string Style, string Label, string Group, bool Main);
 
 /// <summary>
-/// A team's logos. The UI keeps one texture per team in each style folder, named t&lt;team index&gt;
-/// (ui/textures/common/teamlogos/xl/t27 is Toronto's menu logo); the rink's centre-ice logo is
-/// content/worlds/rink/textures/centerlogo/ice_centerlogo_&lt;index&gt;_color (exhibitionteams' arenaid equals the team index),
-/// and its red line …/centerline/ice_centerline_&lt;index&gt;_color (fewer teams have one).
+/// Logo textures by the numbers the game gives them. None of these is the team's index (which only matches for the older
+/// NHL teams), see <see cref="TeamSummary"/>:
+/// - ui/textures/common/teamlogos/&lt;style&gt;/t&lt;artid&gt;: the menu logos (xl/t32 is Vegas, team 30);
+/// - content/worlds/rink/textures/centerlogo/ice_centerlogo_&lt;artid&gt;_color: the centre logo, or the team's centericelogo
+///   when its centericelogotype is 0 or more (a few special teams; many have no centre logo of their own);
+/// - content/worlds/rink/textures/centerline/ice_centerline_&lt;centerline&gt;_color: the red line, often shared (181 teams use 76).
 /// </summary>
+public sealed class TeamLogoMap
+{
+    internal Dictionary<int, List<TeamLogo>> Menu { get; } = new();
+    internal Dictionary<int, TeamLogo> Ice { get; } = new();
+    internal Dictionary<int, TeamLogo> Lines { get; } = new();
+
+    /// <summary>The number of the team's centre logo.</summary>
+    public int CenterLogoNumber(TeamSummary team) => team.CenterLogoType >= 0 && Ice.ContainsKey(team.CenterLogo) ? team.CenterLogo : team.ArtId;
+
+    /// <summary>A team's logos, in display order.</summary>
+    public List<TeamLogo> For(TeamSummary team)
+    {
+        var list = Menu.TryGetValue(team.ArtId, out var menu) ? new List<TeamLogo>(menu) : new List<TeamLogo>();
+        if (Ice.TryGetValue(CenterLogoNumber(team), out var ice)) list.Add(ice);
+        if (Lines.TryGetValue(team.CenterLine, out var line)) list.Add(line);
+        TeamLogos.Sort(list);
+        return list;
+    }
+}
+
+/// <summary>Finds the logo textures of the game's index.</summary>
 public static class TeamLogos
 {
     private const string UiRoot = "ui/textures/common/teamlogos/";
@@ -48,45 +71,54 @@ public static class TeamLogos
 
     private static readonly string[] GroupOrder = { "Logo", "Rink", "On backgrounds", "Stylized", "Mono", "HUT cards", "Other" };
 
-    /// <summary>Every team's logos, by team index (one pass over the index's texture names).</summary>
-    public static Dictionary<int, List<TeamLogo>> All(AssetIndex index)
+    /// <summary>Every logo texture, by its number (one pass over the index's texture names).</summary>
+    public static TeamLogoMap All(AssetIndex index)
     {
-        var map = new Dictionary<int, List<TeamLogo>>();
+        var map = new TeamLogoMap();
         foreach (string name in index.Res.Keys)
         {
-            TeamLogo logo;
-            int team;
             if (name.StartsWith(UiRoot, StringComparison.OrdinalIgnoreCase) && UiName.Match(name) is { Success: true } m)
             {
-                team = int.Parse(m.Groups[2].Value);
+                int art = int.Parse(m.Groups[2].Value);
                 string style = m.Groups[1].Value.ToLowerInvariant();
                 var (label, group) = Known.TryGetValue(style, out var k) ? k : (style, "Other");
-                logo = new TeamLogo(name, style, label, group, Array.IndexOf(MainStyles, style) >= 0);
+                if (!map.Menu.TryGetValue(art, out var list)) map.Menu[art] = list = new List<TeamLogo>();
+                list.Add(new TeamLogo(name, style, label, group, Array.IndexOf(MainStyles, style) >= 0));
             }
             else if (name.StartsWith(CenterIce, StringComparison.OrdinalIgnoreCase) && IceName.Match(name) is { Success: true } c)
             {
-                team = int.Parse(c.Groups[1].Value);
-                logo = new TeamLogo(name, "centerice", "Centre ice", "Rink", false);
+                map.Ice[int.Parse(c.Groups[1].Value)] = new TeamLogo(name, "centerice", "Centre ice", "Rink", false);
             }
             else if (name.StartsWith(CenterLine, StringComparison.OrdinalIgnoreCase) && LineName.Match(name) is { Success: true } l)
             {
-                // the red line across centre ice (64×4096), numbered like the centre logos
-                team = int.Parse(l.Groups[1].Value);
-                logo = new TeamLogo(name, "centerline", "Centre line", "Rink", false);
+                // the red line across centre ice (64×4096)
+                map.Lines[int.Parse(l.Groups[1].Value)] = new TeamLogo(name, "centerline", "Centre line", "Rink", false);
             }
-            else continue;
-            if (!map.TryGetValue(team, out var list)) map[team] = list = new List<TeamLogo>();
-            list.Add(logo);
         }
-        foreach (var list in map.Values)
-            list.Sort((a, b) =>
-            {
-                int g = Array.IndexOf(GroupOrder, a.Group).CompareTo(Array.IndexOf(GroupOrder, b.Group));
-                if (g != 0) return g;
-                int ka = Order(a.Style), kb = Order(b.Style);
-                return ka != kb ? ka.CompareTo(kb) : string.Compare(a.Style, b.Style, StringComparison.Ordinal);
-            });
         return map;
+    }
+
+    internal static void Sort(List<TeamLogo> list) => list.Sort((a, b) =>
+    {
+        int g = Array.IndexOf(GroupOrder, a.Group).CompareTo(Array.IndexOf(GroupOrder, b.Group));
+        if (g != 0) return g;
+        int ka = Order(a.Style), kb = Order(b.Style);
+        return ka != kb ? ka.CompareTo(kb) : string.Compare(a.Style, b.Style, StringComparison.Ordinal);
+    });
+
+    /// <summary>The other teams that draw the same logo art (often a team's alumni).</summary>
+    public static List<TeamSummary> ArtSharers(IEnumerable<TeamSummary> teams, TeamSummary team) =>
+        teams.Where(t => t.Row != team.Row && t.ArtId == team.ArtId).ToList();
+
+    /// <summary>The other teams that draw the same centre line.</summary>
+    public static List<TeamSummary> LineSharers(IEnumerable<TeamSummary> teams, TeamSummary team) =>
+        teams.Where(t => t.Row != team.Row && t.CenterLine == team.CenterLine).ToList();
+
+    /// <summary>"A, B, C and 4 more".</summary>
+    public static string Names(IReadOnlyCollection<TeamSummary> teams, int show = 3)
+    {
+        var names = teams.Select(t => string.IsNullOrWhiteSpace(t.Name) ? $"team {t.Index}" : t.Name).Distinct().ToList();
+        return names.Count <= show ? string.Join(", ", names) : $"{string.Join(", ", names.Take(show))} and {names.Count - show} more";
     }
 
     private static int Order(string style)

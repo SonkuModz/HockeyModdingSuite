@@ -436,6 +436,12 @@ entry (source "Teams page"; Mods page restores). Core: `Core/TeamEditor.cs` (fie
   field's fixed byte width; colours are #RRGGBB.
 - Scripted: `--page teams --tteam TOR --tset "feprimarycolor=#FF0000;arena.arenaname=X" --tsave --tscroll N`.
 - TODO: verify a real save + restore once the kit/game are closed; see which colour sets show where in game.
+- **Numbering (fixed 2026-11-04):** logo textures aren't numbered by team index; 504 of 537 teams differ. Menu logos
+  and centre logos use `artid`, centre lines use the `centerline` field, and `centericelogo` replaces the art number when
+  `centericelogotype` is 0 or more (29 special teams). Art is shared (59 art ids, often alumni), lines too (46 of 93 lines
+  have one team; 76 has 181). The notes below that say "team index" or "arenaid == index" are the earlier wrong reading:
+  arenaid does equal the index, but it doesn't number these textures. Line numbering comes from the field's values (all 93
+  exist as textures, against 158 of 330 art ids) and isn't yet seen on the ice.
 - Logos (added same day): `Core/TeamLogos.cs` scans the index once for `ui/textures/common/teamlogos/<style>/t<team index>`
   (~34 styles: xl/large/medium/small/extrasmall, light / team-colour backgrounds, stylized, glossy, mono, hype stage, HUT
   cards) and `content/worlds/rink/textures/centerlogo/ice_centerlogo_<index>_color` (centre ice; arenaid == team index for
@@ -687,17 +693,24 @@ Teams → Logos card → **Centre ice from TheFaceoff.net…** opens a converter
   84.3 ft wide), with the template (blue lines at 1882/3118 of 5000) as fallback.
   - `ice_centerlogo_N_color` 1024² BC7: 40.3 ft square around centre (the game's logos put the 15 ft circle at a
     380.8 px radius). White ice is turned transparent with colour-to-alpha, `CutOut` (default 0.06) drops ice scratches,
-    and paint is opaque from 0.30 darker. The game's logos keep paint under the red line, so no gap is cut.
+    and paint is opaque from 0.20 darker (0.30 with the tint left on). The game's logos keep paint under the red line, so no gap is cut.
   - `ice_centerline_N_color` 64×4096: the 85 ft line along the strip, its 1 ft across x 4..59, opaque (as the game's).
     It keeps team patterns (Toronto's maple leaves).
-  - Saturation scales colour around luma (default 115%: the site's ice texture washes colours slightly).
+  - **Ice tint** (`IceTint`, default 100%): the site draws paint under a frosted-ice veil. Ice is about 252 but black
+    paint is about 91-95, and known team colours fit gain 0.59, offset 83. Scratches on solid paint do not follow an ice
+    template (correlation -0.108), so it is undone with levels, not template removal: 85..238 stretched to full range,
+    which also clips pale ice scratches to white. A 7×7 edge-keeping blur takes off grain, and paint is opaque from 0.20
+    darker. Output goes in 19..228, the range of the game's own logos. Boston's black 95 → 34 and gold (255,185,77) →
+    (228,157,30); the game's are (35,31,32) and (224,147,0). Black grain stays higher than the game's (std 10-14 against
+    3). 0% gives the old conversion. The line gets the same colours, without the blur.
+  - Saturation scales colour around luma (default 100%; it was 115% to make up for the tint).
 - **Window**: league picker, filter, Load older (5 pages), paste a rink link (any league or year), a live 768 px
   preview (the logo on ice with the line over it, or on dark to check transparency), the whole rink with the cut square
-  marked, Saturation and Ice cut-out sliders, the line strip, Save PNGs…, and Write into TEAM. Write goes through
+  marked, Saturation, Ice cut-out and Remove tint sliders, the line strip, Save PNGs…, and Write into TEAM. Write goes through
   `TeamsPage.WriteCenterIceAsync`: each texture is its own mod entry. `TeamLogos` now lists `ice_centerline_N`
   ("Centre line", Rink group) too.
 - CLI: `faceoff [NAME] [--league ahl] [--pages N]` lists rinks and downloads a layout (no JPEG decoder in the CLI).
-- Script args: `--page teams --tteam TOR --tfaceoff "Toronto Maple Leafs 2027"|URL [--tfosat 1.4] [--tfodark] [--tfowrite]`.
+- Script args: `--page teams --tteam TOR --tfaceoff "Toronto Maple Leafs 2027"|URL [--tfosat 1.4] [--tfotint 0.5] [--tfodark] [--tfowrite]`.
   A screenshot run renders an open dialog instead of the main window.
 - **Not yet done**: writing into the game and checking it in game (scale and line width are matched to the
   game's own Toronto textures, not seen on the ice).

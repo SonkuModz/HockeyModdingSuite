@@ -22,7 +22,7 @@ public partial class TeamsPage : UserControl
     private readonly Dictionary<(string Table, int Row, string Field), (object Value, string Label, string Team, bool Color)> _edits = new();
     private bool _busy, _loaded, _suppress;
     private TextureService _textures;
-    private Dictionary<int, List<TeamLogo>> _logos;
+    private TeamLogoMap _logos;
     private List<TeamLogoRow> _logoRows = new();
     private int _logoLoad;
     private readonly DispatcherTimer _searchTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
@@ -55,10 +55,17 @@ public partial class TeamsPage : UserControl
         if (search != null) { Search.Text = search; ApplyFilter(); }
         if (team != null)
         {
-            var rows = TeamList.Items.OfType<TeamListRow>().ToList();
-            TeamList.SelectedItem = rows.FirstOrDefault(r => r.Team.Abbr.Equals(team, StringComparison.OrdinalIgnoreCase))
-                ?? rows.FirstOrDefault(r => r.Team.Index.ToString() == team)
-                ?? rows.FirstOrDefault(r => r.Team.Name.Contains(team, StringComparison.OrdinalIgnoreCase));
+            TeamListRow Pick()
+            {
+                var rows = TeamList.Items.OfType<TeamListRow>().ToList();
+                return rows.FirstOrDefault(r => r.Team.Abbr.Equals(team, StringComparison.OrdinalIgnoreCase))
+                    ?? rows.FirstOrDefault(r => r.Team.Index.ToString() == team)
+                    ?? rows.FirstOrDefault(r => r.Team.Name.Contains(team, StringComparison.OrdinalIgnoreCase));
+            }
+            // the shown league first (TOR is the Leafs, not a Circuit team); then the team may be in another league
+            var pick = Pick();
+            if (pick == null) { LeagueFilter.SelectedItem = "All leagues"; ApplyFilter(); pick = Pick(); }
+            TeamList.SelectedItem = pick;
             if (TeamList.SelectedItem != null) TeamList.ScrollIntoView(TeamList.SelectedItem);
         }
     }
@@ -207,11 +214,15 @@ public partial class TeamsPage : UserControl
     /// <summary>The team's logo tiles; thumbnails are read from the game in the background (the newest team wins).</summary>
     private void ShowLogos(TeamSummary team)
     {
-        var logos = _logos?.GetValueOrDefault(team.Index) ?? new List<TeamLogo>();
+        var logos = _logos?.For(team) ?? new List<TeamLogo>();
         _logoRows = logos.Select(l => new TeamLogoRow { Logo = l }).ToList();
         LogoGroups.ItemsSource = _logoRows.GroupBy(r => r.Logo.Group).Select(g => new TeamLogoGroup { Title = g.Key, Logos = g.ToList() }).ToList();
         LogosCard.Visibility = _logoRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        LogosCaption.Text = $"{_logoRows.Count} logo textures for team #{team.Index}, read from the game. Replace writes a texture into the game (the Mods page restores it).";
+        var artSharers = TeamLogos.ArtSharers(_teams, team);
+        var lineSharers = TeamLogos.LineSharers(_teams, team);
+        LogosCaption.Text = $"{_logoRows.Count} logo textures, art #{team.ArtId}, read from the game. Replace writes a texture into the game (the Mods page restores it)." +
+                            (artSharers.Count > 0 ? $"\nThese logos also show for {TeamLogos.Names(artSharers)}." : "") +
+                            (lineSharers.Count > 0 && _logoRows.Any(r => r.Logo.Style == "centerline") ? $"\nThe centre line (#{team.CenterLine}) also shows for {TeamLogos.Names(lineSharers)}." : "");
         ReplaceMainButton.IsEnabled = _logoRows.Any(r => r.Logo.Main);
         HeaderLogo.Source = null;
         _ = LoadThumbsAsync(++_logoLoad);
@@ -297,6 +308,8 @@ public partial class TeamsPage : UserControl
     private void OnReplaceLogo(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not TeamLogoRow row) return;
+        if (row.Logo.Style == "centerline" && TeamLogos.LineSharers(_teams, _team).Where(t => t.ArtId != _team.ArtId).ToList() is { Count: > 0 } others &&
+            !Confirm($"This centre line is also used by {others.Count} other team(s): {TeamLogos.Names(others)}. Replacing it changes theirs too. Continue?")) return;
         if (PickImage($"Replace {row.Label}") is { } file) _ = ReplaceLogosAsync(new[] { row }, file);
     }
 
@@ -390,7 +403,8 @@ public partial class TeamsPage : UserControl
     public FaceoffWindow OpenFaceoff()
     {
         if (_team == null) return null;
-        var w = new FaceoffWindow(_team, _logoRows.Any(r => r.Logo.Style == "centerline"), WriteCenterIceAsync) { Owner = Window.GetWindow(this) };
+        bool hasLine = _logoRows.Any(r => r.Logo.Style == "centerline");
+        var w = new FaceoffWindow(_team, hasLine, _logos.CenterLogoNumber(_team), TeamLogos.ArtSharers(_teams, _team), TeamLogos.LineSharers(_teams, _team), WriteCenterIceAsync) { Owner = Window.GetWindow(this) };
         w.Show();
         return w;
     }

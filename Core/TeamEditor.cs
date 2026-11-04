@@ -7,7 +7,13 @@ public enum TeamFieldKind { Text, Color, Number, Toggle, Team, Arena }
 public sealed record TeamField(string Section, string Table, string Field, string Label, TeamFieldKind Kind, string Hint = null);
 
 /// <summary>A team row of exhibitionteams, for the team list.</summary>
-public sealed record TeamSummary(int Row, int Index, string Name, string Abbr, string City, int LeagueId, string League, bool Active, int ArenaId);
+/// <remarks>
+/// The art numbers are not the team's index: <see cref="ArtId"/> numbers its logo textures and kit folders, and
+/// <see cref="CenterLine"/> its centre-line texture. Several teams can share either. <see cref="CenterLogo"/> replaces the
+/// art number for the centre-ice logo when <see cref="CenterLogoType"/> is 0 or more.
+/// </remarks>
+public sealed record TeamSummary(int Row, int Index, string Name, string Abbr, string City, int LeagueId, string League, bool Active, int ArenaId,
+    int ArtId, int CenterLine, int CenterLogo, int CenterLogoType);
 
 /// <summary>An arena row of exhibitionarena, for the arena picker.</summary>
 public sealed record ArenaSummary(int Row, int Index, string Name, string City);
@@ -69,9 +75,13 @@ public static class TeamEditor
         {
             if (db.IsInvalid(t, r)) continue;
             int league = (int)db.Get(t, r, f["league"]);
+            int index = (int)db.Get(t, r, f["index"]);
+            // older games may not have these fields: their textures are taken to be numbered by team
+            int Number(string field, int otherwise) => f.TryGetValue(field, out var x) ? (int)db.Get(t, r, x) : otherwise;
             list.Add(new TeamSummary(r, (int)db.Get(t, r, f["index"]), (string)db.Get(t, r, f["teamname"]), (string)db.Get(t, r, f["abbrname"]),
                 (string)db.Get(t, r, f["cityname"]), league, leagues.GetValueOrDefault(league, $"League {league}"),
-                (int)db.Get(t, r, f["active"]) == 1, (int)db.Get(t, r, f["arenaid"])));
+                (int)db.Get(t, r, f["active"]) == 1, (int)db.Get(t, r, f["arenaid"]),
+                Number("artid", index), Number("centerline", index), Number("centericelogo", 0), Number("centericelogotype", -1)));
         }
         return list;
     }

@@ -49,7 +49,7 @@ public partial class FaceoffWindow : Window
 
     public static readonly string Folder = Path.Combine(KitPaths.Export, "faceoff");
 
-    public FaceoffWindow(TeamSummary team, bool hasLine, Func<string, string, Task<string>> write)
+    public FaceoffWindow(TeamSummary team, bool hasLine, int logoNumber, List<TeamSummary> artSharers, List<TeamSummary> lineSharers, Func<string, string, Task<string>> write)
     {
         InitializeComponent();
         _team = team;
@@ -57,9 +57,15 @@ public partial class FaceoffWindow : Window
         _write = write;
         Heading.Text = $"Centre ice for {team.Name}, from TheFaceoff.net";
         WriteText.Text = $"Write into {team.Abbr}";
-        TargetInfo.Text = $"Writes {team.Abbr}'s centre logo (ice_centerlogo_{team.Index}, 1024²)" +
-                          (hasLine ? $" and centre line (ice_centerline_{team.Index}, 64×4096)" : "; this team has no centre line texture of its own, so only the logo") +
-                          ". Each is its own mod entry; the Mods page restores them.";
+        // a line is often shared across teams, so one that other clubs use is only written when asked for
+        var otherClubs = lineSharers.Where(t => t.ArtId != team.ArtId).ToList();
+        LineCheck.Visibility = hasLine ? Visibility.Visible : Visibility.Collapsed;
+        LineCheck.IsChecked = otherClubs.Count == 0;
+        TargetInfo.Text = $"Writes {team.Abbr}'s centre logo (ice_centerlogo_{logoNumber}, 1024²)" +
+                          (hasLine ? $" and, when ticked, its centre line (ice_centerline_{team.CenterLine}, 64×4096)" : "; this team has no centre line texture, so only the logo") +
+                          ". Each is its own mod entry; the Mods page restores them." +
+                          (artSharers.Count > 0 ? $" The logo also shows for {TeamLogos.Names(artSharers)}." : "") +
+                          (hasLine && otherClubs.Count > 0 ? $" The line also changes {TeamLogos.Names(otherClubs)}, so it's off unless you tick it." : "");
         _lookTimer.Tick += async (_, _) => { _lookTimer.Stop(); await Convert(); };
         RinkList.ItemsSource = _rows;
         UpdateLookText();
@@ -267,12 +273,14 @@ public partial class FaceoffWindow : Window
         var d = new CenterIceLook();
         SatSlider.Value = d.Saturation;
         CutSlider.Value = d.CutOut;
+        TintSlider.Value = d.IceTint;
     }
 
     private void UpdateLookText()
     {
         SatText.Text = $"{SatSlider.Value * 100:0}%";
         CutText.Text = $"{CutSlider.Value:0.00}";
+        TintText.Text = $"{TintSlider.Value * 100:0}%";
     }
 
     public void SetLook(double saturation, double cut)
@@ -281,7 +289,7 @@ public partial class FaceoffWindow : Window
         CutSlider.Value = cut;
     }
 
-    private CenterIceLook Look() => new(SatSlider.Value, CutSlider.Value);
+    private CenterIceLook Look() => new(SatSlider.Value, CutSlider.Value, TintSlider.Value);
 
     /// <summary>Converts the layout with the sliders' look and shows it (the centre as the game puts it together, and the line).</summary>
     private async Task Convert()
@@ -341,7 +349,7 @@ public partial class FaceoffWindow : Window
         var (logo, line) = SavePngs(Folder);
         WriteButton.IsEnabled = false;
         WriteStatus.Text = $"Writing into {_team.Abbr}'s centre ice…";
-        try { WriteStatus.Text = await _write(logo, _hasLine ? line : null); }
+        try { WriteStatus.Text = await _write(logo, _hasLine && LineCheck.IsChecked == true ? line : null); }
         catch (Exception ex) { WriteStatus.Text = "Can't write: " + ex.Message; }
         finally { WriteButton.IsEnabled = true; }
     }

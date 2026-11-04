@@ -109,13 +109,19 @@
                                 <DockPanel>
                                     <TextBlock x:Name="SatText" DockPanel.Dock="Right" Style="{StaticResource Caption}" Width="40" TextAlignment="Right" VerticalAlignment="Center" />
                                     <TextBlock Text="Saturation" Width="78" Style="{StaticResource Caption}" VerticalAlignment="Center" />
-                                    <Slider x:Name="SatSlider" Minimum="0" Maximum="2.5" Value="1.15" SmallChange="0.05" LargeChange="0.25" ValueChanged="OnLook" />
+                                    <Slider x:Name="SatSlider" Minimum="0" Maximum="2.5" Value="1" SmallChange="0.05" LargeChange="0.25" ValueChanged="OnLook" />
                                 </DockPanel>
                                 <DockPanel Margin="0,6,0,0">
                                     <TextBlock x:Name="CutText" DockPanel.Dock="Right" Style="{StaticResource Caption}" Width="40" TextAlignment="Right" VerticalAlignment="Center" />
                                     <TextBlock Text="Ice cut-out" Width="78" Style="{StaticResource Caption}" VerticalAlignment="Center" />
                                     <Slider x:Name="CutSlider" Minimum="0" Maximum="0.25" Value="0.06" SmallChange="0.01" LargeChange="0.03" ValueChanged="OnLook"
                                             ToolTip="How much of the ice's pale scratches is cut away around the paint. Higher cleans the ice more; too high eats pale paint." />
+                                </DockPanel>
+                                <DockPanel Margin="0,6,0,0">
+                                    <TextBlock x:Name="TintText" DockPanel.Dock="Right" Style="{StaticResource Caption}" Width="40" TextAlignment="Right" VerticalAlignment="Center" />
+                                    <TextBlock Text="Remove tint" Width="78" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                    <Slider x:Name="TintSlider" Minimum="0" Maximum="1" Value="1" SmallChange="0.05" LargeChange="0.25" ValueChanged="OnLook"
+                                            ToolTip="TheFaceoff.net draws its logos under frosted ice, which washes them out. This takes that tint off and matches the game's own logos. 0% keeps the picture's colours." />
                                 </DockPanel>
                                 <WrapPanel Margin="0,8,0,0">
                                     <Button Style="{StaticResource Ghost}" Content="Defaults" Padding="8,3" Click="OnDefaults" />
@@ -127,7 +133,8 @@
                                 <Border CornerRadius="8" Background="{StaticResource Checker}" ClipToBounds="True" Height="64">
                                     <Image x:Name="LineImage" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" />
                                 </Border>
-                                <TextBlock x:Name="TargetInfo" Style="{StaticResource Caption}" FontSize="11.5" TextWrapping="Wrap" Margin="0,12,0,0" />
+                                <CheckBox x:Name="LineCheck" Style="{StaticResource Switch}" Content="Write the centre line too" Margin="0,12,0,0" HorizontalAlignment="Left" />
+                                <TextBlock x:Name="TargetInfo" Style="{StaticResource Caption}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0" />
                             </StackPanel>
                         </Grid>
                     </DockPanel>
