@@ -58,6 +58,7 @@ public static class Program
                 "ebx-probe" => EbxProbeCmd(game, opts),
                 "roster-sync" => RosterSyncCmd(game, opts),
                 "ahl-sync" => AhlSyncCmd(game, opts),
+                "picks-sync" => PicksSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -2932,6 +2933,49 @@ public static class Program
             var (ok, total) = db.CheckCrcs();
             var again = RosterSync.Compare(db, api, opts.Has("sizes"));
             Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
+        }
+        return 0;
+    }
+
+    private static int PicksSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var fetch = PuckPediaPicks.AllPicksAsync().GetAwaiter().GetResult();
+        var result = PickSync.Compare(db, fetch.Picks);
+        var changes = result.Changes;
+        string team = opts.Get("team");
+        if (team != null)
+        {
+            string t = team.ToUpperInvariant();
+            changes = changes.Where(c => c.OriginalAbbr == t || c.ToAbbr == t).ToList();
+        }
+        Console.WriteLine($"{result.Compared} draft picks compared (2027-2031); {changes.Count} owner differences");
+        foreach (var c in changes.Take(opts.Has("all") ? 10000 : 12))
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Year + 1900} {PickSync.Ordinal(c.Round)} round ({c.OriginalAbbr}) {c.FromAbbr} → {c.ToAbbr}");
+        var notes = new List<string>();
+        if (result.SkippedConditional > 0) notes.Add($"{result.SkippedConditional} conditional skipped");
+        if (result.NoGameRow > 0) notes.Add($"{result.NoGameRow} PuckPedia picks with no game row");
+        if (result.NoPuckPediaPick > 0) notes.Add($"{result.NoPuckPediaPick} game picks with no PuckPedia match");
+        if (result.SkippedUnmapped > 0) notes.Add($"{result.SkippedUnmapped} unmapped");
+        if (notes.Count > 0) Console.WriteLine("skipped: " + string.Join(", ", notes));
+        if (fetch.FailedTeams.Count > 0)
+        {
+            var groups = fetch.FailedTeams.GroupBy(f => f.Reason).ToList();
+            if (groups.Count == 1) Console.WriteLine($"PuckPedia fetch failed for {fetch.FailedTeams.Count} teams ({groups[0].Key})");
+            else foreach (var f in fetch.FailedTeams) Console.WriteLine($"  PuckPedia fetch failed: {f.Slug} ({f.Reason})");
+            if (fetch.FailedTeams.Any(f => f.Reason == "HTTP 403"))
+                Console.WriteLine("The team pages load in a browser, so the site is refusing the app's request (likely its bot protection), not a network problem.");
+            if (fetch.FailedTeams.Count >= PuckPediaPicks.Teams.Length)
+                Console.WriteLine("No PuckPedia data was fetched, so pick ownership could not be compared at all.");
+        }
+        if (opts.Has("dry"))
+        {
+            // applies the ticked changes to the database in memory only, then compares again
+            Console.WriteLine(PickSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, total) = db.CheckCrcs();
+            var again = PickSync.Compare(db, fetch.Picks);
+            Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: {again.Changes.Count}");
         }
         return 0;
     }

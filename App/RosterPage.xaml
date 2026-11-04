@@ -136,7 +136,6 @@
                         <RadioButton x:Name="ModePlayers" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Players" IsChecked="True" Checked="OnModeChanged" />
                         <RadioButton x:Name="ModeText" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Text" Checked="OnModeChanged" />
                         <RadioButton x:Name="ModeLines" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Lines" Checked="OnModeChanged" />
-                        <RadioButton x:Name="ModeSync" Style="{StaticResource Segment}" GroupName="RosterMode" Content="NHL sync" Checked="OnModeChanged" />
                         <RadioButton x:Name="ModePicks" Style="{StaticResource Segment}" GroupName="RosterMode" Content="Draft Picks" Checked="OnModeChanged" />
                     </StackPanel>
                 </Border>
@@ -144,6 +143,12 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="13" />
                         <TextBlock Text="Reload" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="SyncButton" Style="{StaticResource Primary}" Margin="10,0,0,0" Click="OnSyncClick" ToolTip="Bring the game's rosters up to date with the NHL">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE895;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="NHL Sync" Margin="8,0,0,0" />
                     </StackPanel>
                 </Button>
             </StackPanel>

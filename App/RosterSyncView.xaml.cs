@@ -18,24 +18,38 @@ public sealed class SyncRow : Observable
         _changed = changed;
     }
 
+    /// <summary>A draft pick owner change from PuckPedia: same row, ticked and applied like a player move.</summary>
+    public SyncRow(PickSyncChange p, Action changed)
+    {
+        Pick = p;
+        _selected = p.Selected && p.CanApply;
+        _changed = changed;
+    }
+
     public SyncChange Change { get; }
-    public string Name => Change.Name;
-    public string Meta => $"{Change.Position}" + (Change.Ahl is { } h ? $"  ·  AHL id {h.Id}" + (h.Born is { } b ? $"  ·  born {b:yyyy-MM-dd}" : "") : Change.Api is { } a ? $"  ·  NHL id {a.Id}" + (a.Born is { } b2 ? $"  ·  born {b2:yyyy-MM-dd}" : "") : $"  ·  game id {Change.GameId}");
-    public string Description => Change.Description;
-    public bool CanApply => Change.CanApply;
-    public string Note => Change.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." :
+    public PickSyncChange Pick { get; }
+    public bool IsPick => Pick != null;
+
+    public string Name => IsPick ? $"{Pick.Year + 1900} {PickSync.Ordinal(Pick.Round)} round pick ({Pick.OriginalAbbr})" : Change.Name;
+    public string Meta => IsPick ? "Draft pick  ·  PuckPedia" :
+        $"{Change.Position}" + (Change.Ahl is { } h ? $"  ·  AHL id {h.Id}" + (h.Born is { } b ? $"  ·  born {b:yyyy-MM-dd}" : "") : Change.Api is { } a ? $"  ·  NHL id {a.Id}" + (a.Born is { } b2 ? $"  ·  born {b2:yyyy-MM-dd}" : "") : $"  ·  game id {Change.GameId}");
+    public string Description => IsPick ? Pick.Description : Change.Description;
+    public bool CanApply => IsPick ? Pick.CanApply : Change.CanApply;
+    public string Note => IsPick ? "" : Change.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." :
         Change.Kind == SyncKind.Join && Change.NeedsNewRow ? "In the game as a free agent with no roster row — Sync will create one." :
         Change.Kind == SyncKind.Left ? "Unticked: he may be injured, sent down or gone. Tick it to send him to the AHL affiliate." :
         Change.Kind == SyncKind.Missing ? "Not in the game's database, so it can't be applied yet." : "";
-    public string KindText => Change.Kind switch
+    public string KindText => IsPick ? "PICK" : Change.Kind switch
     {
         SyncKind.Move => "TRADE", SyncKind.Join => "CALL-UP", SyncKind.Update => "NUMBER", SyncKind.Left => "LEFT NHL", _ => "NOT IN GAME",
     };
-    public Brush KindBrush => new SolidColorBrush(Change.Kind switch
+    public Brush KindBrush => new SolidColorBrush(IsPick ? Color.FromRgb(0xB7, 0x8C, 0xFF) : Change.Kind switch
     {
         SyncKind.Move => Color.FromRgb(0xF2, 0xA6, 0x3B), SyncKind.Join => Color.FromRgb(0x5B, 0xC2, 0x8C), SyncKind.Update => Color.FromRgb(0x7C, 0xA7, 0xF5),
         SyncKind.Left => Color.FromRgb(0xB8, 0xBE, 0xC9), _ => Color.FromRgb(0xE0, 0x6C, 0x6C),
     });
+    /// <summary>Everything the search box matches on for a pick row.</summary>
+    public string SearchText => $"{Name} {Description}";
 
     public bool Selected
     {
@@ -46,9 +60,10 @@ public sealed class SyncRow : Observable
 
 /// <summary>
 /// The Roster page's NHL sync: fetches every team's current roster from the NHL API (and, when ticked, every AHL
-/// team's roster from the AHL feed), compares them with the game's (RosterSync), lists the differences to tick, and
-/// writes the ticked ones into nhl_game.db through the database's mod entry. Applying reads the database from the
-/// game again and matches the players afresh, so nothing stale is written.
+/// team's roster from the AHL feed) and the draft picks from PuckPedia, compares them with the game's
+/// (RosterSync, PickSync), lists the differences to tick, and writes the ticked ones into nhl_game.db through the
+/// database's mod entry. Applying reads the database from the game again and matches the players and picks afresh,
+/// so nothing stale is written.
 /// </summary>
 public partial class RosterSyncView : UserControl
 {
@@ -61,6 +76,10 @@ public partial class RosterSyncView : UserControl
     /// <summary>The last AHL error (fetch or compare), shown in the status line; null when the AHL part is fine.</summary>
     private string _ahlError;
     private List<SyncRow> _rows = new();
+    private List<PuckPediaPick> _picks;
+    private PickCompareResult _pickResult;
+    private List<SyncRow> _pickRows = new();
+    private List<PuckPediaFailure> _pickFailed = new();
     private bool _busy;
 
     public event Action<string> StatusChanged;
@@ -104,7 +123,26 @@ public partial class RosterSyncView : UserControl
             }
             FetchStatus.Text = "Comparing with the game…";
             await CompareAsync();
-            FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.");
+            try
+            {
+                FetchStatus.Text = "Fetching draft picks from PuckPedia…";
+                int pdone = 0;
+                var fetch = await PuckPediaPicks.AllPicksAsync(slug => FetchStatus.Text = $"Fetching draft picks from PuckPedia… {++pdone}/{PuckPediaPicks.Teams.Length} ({slug})");
+                _picks = fetch.Picks.ToList();
+                _pickFailed = fetch.FailedTeams.ToList();
+                await ComparePicksAsync();
+            }
+            catch (Exception ex)
+            {
+                // a picks failure never wipes the player results: the pick rows just clear
+                _picks = null;
+                _pickResult = null;
+                _pickRows = new List<SyncRow>();
+                _pickFailed = new List<PuckPediaFailure> { new("all teams", PuckPediaPicks.FailureReason(ex)) };
+                ApplyFilter();
+            }
+            FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.")
+                + PickFailureText();
             FilterBar.IsEnabled = true;
         }
         catch (Exception ex)
@@ -115,7 +153,7 @@ public partial class RosterSyncView : UserControl
         {
             _busy = false;
             FetchButton.IsEnabled = true;
-            FetchLabel.Text = _api == null ? "Fetch NHL rosters" : "Fetch again";
+            FetchLabel.Text = _api == null ? "Fetch NHL rosters & picks" : "Fetch again";
             SetButtons();
         }
     }
@@ -147,6 +185,17 @@ public partial class RosterSyncView : UserControl
         ApplyFilter();
     }
 
+    /// <summary>Compares the fetched PuckPedia picks with the game's draft picks as they are now.</summary>
+    private async Task ComparePicksAsync()
+    {
+        if (_picks == null) return;
+        var db = await _mods.OpenDbAsync(Roster.Database);
+        var picks = _picks;
+        _pickResult = await Task.Run(() => PickSync.Compare(db, picks));
+        _pickRows = _pickResult.Changes.Select(c => new SyncRow(c, SetButtons)).ToList();
+        ApplyFilter();
+    }
+
     private string Counts()
     {
         int N(SyncKind k) => _rows.Count(r => !r.Change.IsAhl && r.Change.Kind == k);
@@ -155,6 +204,42 @@ public partial class RosterSyncView : UserControl
                $"{N(SyncKind.Left)} no longer on an NHL roster, {N(SyncKind.Missing)} not in the game.";
         if (_rows.Any(r => r.Change.IsAhl))
             s += $" AHL: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} number changes, {A(SyncKind.Missing)} not in the game.";
+        if (_pickResult == null) return s;
+        if (_pickFailed.Count >= PuckPediaPicks.Teams.Length)
+        {
+            // Total failure: no PuckPedia data arrived at all, so "0 differences" would be a lie — the
+            // picks simply were not compared. The reasons are in the status line (PickFailureText).
+            s += " Draft picks were not compared: the PuckPedia fetch failed for every team.";
+            return s;
+        }
+        s += $" {_pickRows.Count} draft pick owner{(_pickRows.Count == 1 ? "" : "s")} differ from PuckPedia.";
+        var notes = new List<string>();
+        if (_pickResult.SkippedConditional > 0) notes.Add($"{_pickResult.SkippedConditional} conditional skipped");
+        if (_pickResult.NoGameRow > 0) notes.Add($"{_pickResult.NoGameRow} PuckPedia picks with no game row");
+        if (_pickResult.NoPuckPediaPick > 0) notes.Add($"{_pickResult.NoPuckPediaPick} game picks with no PuckPedia match");
+        if (_pickResult.SkippedUnmapped > 0) notes.Add($"{_pickResult.SkippedUnmapped} unmapped");
+        if (notes.Count > 0) s += " (" + string.Join(", ", notes) + ")";
+        return s;
+    }
+
+    /// <summary>The PuckPedia failure suffix for the status line: "PuckPedia fetch failed for 32 teams (HTTP 403)." when every failure shares one reason, the individual "slug (reason)" list otherwise. A 403 gets a plain hint — the pages load in a browser, so the site is refusing the app's request, not a network problem.</summary>
+    private string PickFailureText()
+    {
+        if (_pickFailed.Count == 0) return "";
+        if (_pickFailed.Count == 1 && _pickFailed[0].Slug == "all teams")
+            return $" PuckPedia fetch failed: {_pickFailed[0].Reason}.";
+        var groups = _pickFailed.GroupBy(f => f.Reason).ToList();
+        string s;
+        if (groups.Count == 1)
+            s = $" PuckPedia fetch failed for {_pickFailed.Count} team{(_pickFailed.Count == 1 ? "" : "s")} ({groups[0].Key}).";
+        else
+        {
+            var shown = _pickFailed.Take(8).Select(f => $"{f.Slug} ({f.Reason})");
+            string tail = _pickFailed.Count > 8 ? $", and {_pickFailed.Count - 8} more" : "";
+            s = " PuckPedia fetch failed for: " + string.Join(", ", shown) + tail + ".";
+        }
+        if (_pickFailed.Any(f => f.Reason == "HTTP 403"))
+            s += " The team pages load in a browser, so the site is refusing the app's request (likely its bot protection), not a network problem.";
         return s;
     }
 
@@ -171,12 +256,15 @@ public partial class RosterSyncView : UserControl
     {
         if (ChangeList == null) return;
         var kind = Kind;
+        bool picksOnly = KindPicks.IsChecked == true;
         string q = SyncSearch.Text.Trim();
-        var rows = _rows.Where(r => (kind == null || r.Change.Kind == kind) &&
-            (q.Length == 0 || r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Description.Contains(q, StringComparison.OrdinalIgnoreCase)
-             || (r.Change.Api?.Team ?? r.Change.Ahl?.TeamName ?? "").Equals(q, StringComparison.OrdinalIgnoreCase))).ToList();
+        var rows = _rows.Concat(_pickRows).Where(r =>
+            (picksOnly ? r.IsPick : kind == null || !r.IsPick && r.Change.Kind == kind) &&
+            (q.Length == 0 || (r.IsPick ? r.SearchText.Contains(q, StringComparison.OrdinalIgnoreCase)
+                : r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Description.Contains(q, StringComparison.OrdinalIgnoreCase)
+                  || (r.Change.Api?.Team ?? r.Change.Ahl?.TeamName ?? "").Equals(q, StringComparison.OrdinalIgnoreCase)))).ToList();
         ChangeList.ItemsSource = rows;
-        EmptyText.Text = _api == null ? "Press Fetch NHL rosters to compare the game with today's NHL." : "Nothing here: the game already matches.";
+        EmptyText.Text = _api == null ? "Press Fetch NHL rosters & picks to compare the game with today's NHL." : "Nothing here: the game already matches.";
         EmptyText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         SetButtons();
     }
@@ -215,11 +303,13 @@ public partial class RosterSyncView : UserControl
 
     private void SetButtons()
     {
-        int n = _rows.Count(r => r.Selected);
+        int n = _rows.Count(r => r.Selected) + _pickRows.Count(r => r.Selected);
+        int total = _rows.Count + _pickRows.Count;
         ApplyButton.IsEnabled = !_busy && n > 0;
         TickAll.IsEnabled = TickNone.IsEnabled = !_busy && Shown.Any();
         ApplyLabel.Text = n > 0 ? $"Apply {n} to game" : "Apply to game";
-        ApplyStatus.Text = _api == null ? "" : $"{n} of {_rows.Count} ticked. Players who change team get their line spots cleared; the game puts them in its own lines.";
+        ApplyStatus.Text = _api == null ? "" : $"{n} of {total} ticked. Players who change team get their line spots cleared; the game puts them in its own lines."
+            + (_pickRows.Count > 0 ? " Pick rows only change the pick's owner." : "");
     }
 
     private async void OnApply(object sender, RoutedEventArgs e) => await ApplyAsync();
@@ -229,7 +319,8 @@ public partial class RosterSyncView : UserControl
     {
         // IsAhl is part of the key: an NHL change and an AHL change for the same player/kind/team must not be confused.
         var picked = _rows.Where(r => r.Selected).Select(r => (r.Change.GameId, r.Change.Kind, r.Change.ToTeam, r.Change.IsAhl)).ToHashSet();
-        if (picked.Count == 0 || _busy) return;
+        var pickedPicks = _pickRows.Where(r => r.Selected).Select(r => (r.Pick.Year, r.Pick.Round, r.Pick.OriginalTeam)).ToHashSet();
+        if (picked.Count == 0 && pickedPicks.Count == 0 || _busy) return;
         if (ModService.GameRunning)
         {
             MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -239,9 +330,11 @@ public partial class RosterSyncView : UserControl
         SetButtons();
         var api = _api;
         var ahl = _ahl;
+        var picks = _picks;
         bool sizes = SizesBox.IsChecked == true;
-        StatusChanged?.Invoke($"Writing {picked.Count} roster change(s) into the game…");
-        string summary = null;
+        int totalPicked = picked.Count + pickedPicks.Count;
+        StatusChanged?.Invoke($"Writing {totalPicked} roster change(s) into the game…");
+        bool wrote = false;
         try
         {
             await _mods.SaveDbAsync(Roster.Database, db =>
@@ -263,13 +356,20 @@ public partial class RosterSyncView : UserControl
                     else if (c.IsAhl && !deduped[at].IsAhl) deduped[at] = c;
                 }
                 fresh = deduped;
-                if (fresh.Count == 0) return null;
-                summary = RosterSync.Apply(db, fresh);
-                return summary + $" ({DateTime.Now:yyyy-MM-dd})";
+                var summaries = new List<string>();
+                if (fresh.Count > 0) summaries.Add(RosterSync.Apply(db, fresh));
+                if (picks != null)
+                {
+                    var freshPicks = PickSync.Compare(db, picks).Changes.Where(c => pickedPicks.Contains((c.Year, c.Round, c.OriginalTeam))).ToList();
+                    if (freshPicks.Count > 0) summaries.Add(PickSync.Apply(db, freshPicks));
+                }
+                if (summaries.Count == 0) return null;
+                wrote = true;
+                return string.Join("; ", summaries) + $" ({DateTime.Now:yyyy-MM-dd})";
             }, "Roster sync");
-            if (summary != null)
+            if (wrote)
             {
-                StatusChanged?.Invoke($"{summary}. The Mods page can restore the original.");
+                StatusChanged?.Invoke($"{totalPicked} roster change(s) written into the game. The Mods page can restore the original.");
                 Applied?.Invoke();
             }
             else
@@ -290,13 +390,14 @@ public partial class RosterSyncView : UserControl
             _busy = false;
         }
         await CompareAsync();
+        await ComparePicksAsync();
         FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. After applying: " + Counts() +
             (_ahlError == null ? "" : $" AHL: {_ahlError}");
     }
 
-    /// <summary>Shows one kind of change (scripted runs): move, join, update, left, missing.</summary>
+    /// <summary>Shows one kind of change (scripted runs): move, join, update, left, missing, picks.</summary>
     public void ShowKind(string kind)
     {
-        (kind switch { "move" => KindMove, "join" => KindJoin, "update" => KindUpdate, "left" => KindLeft, "missing" => KindMissing, _ => KindAll }).IsChecked = true;
+        (kind switch { "move" => KindMove, "join" => KindJoin, "update" => KindUpdate, "left" => KindLeft, "missing" => KindMissing, "picks" => KindPicks, _ => KindAll }).IsChecked = true;
     }
 }

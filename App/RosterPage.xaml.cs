@@ -46,7 +46,8 @@ public partial class RosterPage : UserControl
     }
 
     private bool TextMode => ModeText.IsChecked == true;
-    private bool SyncMode => ModeSync.IsChecked == true;
+    private bool _syncMode;
+    private bool SyncMode => _syncMode;
     private bool LinesMode => ModeLines.IsChecked == true;
     private bool PicksMode => ModePicks.IsChecked == true;
 
@@ -74,7 +75,12 @@ public partial class RosterPage : UserControl
     /// <summary>Opens the NHL sync and fetches (scripted runs), then shows one kind of change.</summary>
     public async Task SyncAsync(string kind)
     {
-        ModeSync.IsChecked = true;
+        _syncMode = true;
+        ModePlayers.IsChecked = false;
+        ModeText.IsChecked = false;
+        ModeLines.IsChecked = false;
+        ModePicks.IsChecked = false;
+        await ApplyModeAsync();
         await SyncView.FetchAsync();
         SyncView.ShowKind(kind);
     }
@@ -484,6 +490,25 @@ public partial class RosterPage : UserControl
 
     private async void OnModeChanged(object sender, RoutedEventArgs e)
     {
+        // a tab in the bar was picked: that leaves sync mode
+        _syncMode = false;
+        await ApplyModeAsync();
+    }
+
+    /// <summary>Opens the NHL sync from the gold header button.</summary>
+    private async void OnSyncClick(object sender, RoutedEventArgs e)
+    {
+        _syncMode = true;
+        // no tab is active while the sync is open; picking a tab leaves it
+        ModePlayers.IsChecked = false;
+        ModeText.IsChecked = false;
+        ModeLines.IsChecked = false;
+        ModePicks.IsChecked = false;
+        await ApplyModeAsync();
+    }
+
+    private async Task ApplyModeAsync()
+    {
         if (PlayersView == null) return;
         PlayersView.Visibility = TextMode || SyncMode || LinesMode || PicksMode ? Visibility.Collapsed : Visibility.Visible;
         LinesView.Visibility = LinesMode ? Visibility.Visible : Visibility.Collapsed;
@@ -492,6 +517,7 @@ public partial class RosterPage : UserControl
         PicksView.Visibility = PicksMode ? Visibility.Visible : Visibility.Collapsed;
         SearchRow.Visibility = SyncMode || LinesMode || PicksMode ? Visibility.Collapsed : Visibility.Visible;
         ReloadButton.Visibility = SyncMode ? Visibility.Collapsed : Visibility.Visible;
+        SyncButton.Visibility = SyncMode ? Visibility.Collapsed : Visibility.Visible;
         if (LinesMode)
         {
             PageTitle.Text = "Lines";
