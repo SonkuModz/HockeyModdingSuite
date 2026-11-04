@@ -90,6 +90,7 @@ public static class Program
                 "sound" => SoundCmd(game, opts),
                 "movies" => MoviesCmd(game, opts),
                 "nhl24pc" => Nhl24PcCmd(opts),
+                "ps4-sigtest" => Ps4SigTestCmd(game, opts),
                 "movie-replace" => MovieReplaceCmd(game, opts),
                 _ => Unknown(args[0]),
             };
@@ -1173,6 +1174,78 @@ public static class Program
             Console.WriteLine($"  [{i}] {line}");
             shown++;
         }
+        return 0;
+    }
+
+    /// <summary>
+    /// ps4-sigtest NAME [--write]: NHL 24's TOC signature test (PLAN §28 step 3). The BC3 texture's colours are inverted
+    /// (each colour block's two endpoints flipped), stored uncompressed so it no longer fits, and added at the end of its
+    /// CAS file; its TOC entries are repointed and the signature is left as it was. With --write it goes into the game
+    /// as a mod entry in mods-nhl24 (its old bytes kept).
+    /// </summary>
+    private static int Ps4SigTestCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        if (index.Layout.IsPs5) throw new ArgumentException("ps4-sigtest is for NHL 24 (PS4)");
+        string name = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("ps4-sigtest needs a texture name");
+        var res = index.GetRes(name) ?? throw new ArgumentException($"no texture {name}");
+        var h = TextureHeader.Parse(index.Read(res), ps4: true);
+        var tocs = new TocCache(index);
+        var loc = LocationIndex.Build(index, tocs);
+        var copies = ChunkCopies.Find(index, h.ChunkId, tocs);
+        foreach (var c in copies)
+            Console.WriteLine($"  {(c.Live ? "live" : "old "),-4} {c.Kind,-6} {Path.GetFileName(c.Toc),-24} {(c.InBundle ? c.BundleName : "chunk table"),-50} cas {c.Ref.Catalog}/{c.Ref.Cas} at 0x{c.Ref.Offset:X} size {c.Ref.Size:N0}");
+        byte[] stored = index.ReadStored(copies.First(c => c.Live).Ref);
+        ChunkPlan plan;
+        Texture preview;
+        if (h.Format.Name == "BC3" && h.MipCount == 1 && h.FirstMip == 0)
+        {
+            byte[] raw = FrostbiteBlocks.Decode(stored);
+            // BC3: 8 bytes alpha, then the colour block's two RGB565 endpoints; flipping them inverts the colours
+            for (int i = 0; i + 16 <= raw.Length; i += 16)
+                for (int e = 8; e < 12; e += 2)
+                    System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(i + e),
+                        (ushort)~System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(i + e)));
+            byte[] newStored = FrostbiteBlocks.Store(raw);
+            plan = ChunkGrower.Plan(index, h.ChunkId, newStored, loc, tocs);
+            Console.WriteLine($"{name}: {stored.Length:N0} stored bytes -> {newStored.Length:N0} (uncompressed, colours inverted)");
+            preview = new Texture { Name = name, Header = h, Data = raw };
+            preview.DecodeMip(0);
+        }
+        else
+        {
+            // any other texture: the picture's colours inverted and the whole chain encoded again (NHL 24's replace path)
+            var t = Texture.Load(index, name);
+            var rgba = (byte[])t.Rgba.Clone();
+            for (int i = 0; i < rgba.Length; i += 4)
+                for (int k = 0; k < 3; k++) rgba[i + k] = (byte)(255 - rgba[i + k]);
+            var tp = Replacements.PlanTexture(index, name, rgba, loc, tocs, Console.WriteLine);
+            plan = tp.Chunk;
+            preview = tp.Result;
+            Console.WriteLine($"{name}: {h.Format.Name} {h.Width}x{h.Height}, {TextureBuilder.StoredMips(h)} mips encoded again; mip offsets {h.MipOffsets[0]},{h.MipOffsets[1]} -> {tp.Header.MipOffsets[0]},{tp.Header.MipOffsets[1]}");
+        }
+        foreach (var p in plan.Patches)
+            Console.WriteLine($"    {p.Note,-22} {p.New.Length,10:N0} bytes at 0x{p.Offset:X} in {p.File}{(p.Append ? " (appended)" : "")}");
+        foreach (var n in plan.Notes) Console.WriteLine($"    note: {n}");
+        var tocFiles = plan.Patches.Where(p => p.File.EndsWith(".toc")).Select(p => p.File).Distinct().ToList();
+        Console.WriteLine($"  signed TOCs changed, signature left as it is: {string.Join(", ", tocFiles)}");
+        string outDir = opts.Get("out") ?? Path.Combine(KitPaths.Export, "ps4-sigtest");
+        Directory.CreateDirectory(outDir);
+        File.WriteAllBytes(Path.Combine(outDir, Path.GetFileName(name) + "_inverted.png"), preview.ToPng());
+        Console.WriteLine($"  preview: {outDir}");
+        if (!opts.Has("write")) return 0;
+
+        if (Emulators.Running() is { } emu) throw new InvalidOperationException($"{emu} is running. Close the game before changing its files.");
+        if (new[] { "HMS", "NHL27Kit" }.SelectMany(System.Diagnostics.Process.GetProcessesByName).Any(p => p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero))
+            throw new InvalidOperationException("The kit is open. Close it before changing the game's files.");
+        if (Directory.Exists(game.TrimEnd('\\', '/') + "-mods")) throw new InvalidOperationException("A -mods overlay folder is next to the game; the emulator would load it over the game.");
+        var store = Mods();
+        if (store.Find("texture", name) is { } had && store.State(had, game) != ModState.NotApplied)
+            throw new InvalidOperationException($"{name} already has a mod entry in the game ({had.Summary}).");
+        var entry = store.Add("texture", name, "ps4-sigtest", "Signature test: colours inverted, stored uncompressed and added at the end of its CAS file; TOC signature left as it was",
+            plan.Patches, plan.Notes);
+        store.Apply(entry, game, Console.WriteLine);
+        Console.WriteLine($"state: {store.State(entry, game)}");
         return 0;
     }
 

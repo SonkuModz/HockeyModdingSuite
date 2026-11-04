@@ -6,7 +6,8 @@ public static class TextureBuilder
     /// <summary>Why a texture can't be replaced (null if it can): arrays, cubes and volumes are not handled, nor unknown formats.</summary>
     public static string Unsupported(TextureHeader h)
     {
-        if (h.Ps4) return "Replacing NHL 24 textures isn't ready yet: for now they can be viewed and exported.";
+        if (h.Ps4 && h.Layers > 1) return "NHL 24 texture arrays can't be replaced yet.";
+        if (h.Ps4 && h.FirstMip > 0) return "This NHL 24 texture streams its top mips separately; that can't be replaced yet.";
         if (h.Type != TextureType.TT_2d && h.Type != TextureType.TT_2dArray) return $"{h.Type} textures can't be replaced yet (only 2D textures and 2D arrays).";
         if (h.Type == TextureType.TT_2d && (h.Depth > 1 || h.SliceCount > 1)) return "This texture has several slices but isn't an array; it can't be replaced yet.";
         if (!h.Format.Known) return $"Pixel format {h.Format.Name} has no encoder.";
@@ -26,7 +27,8 @@ public static class TextureBuilder
 
     /// <summary>
     /// The new chunk (raw, before framing). <paramref name="rgba"/> is the image at the texture's full size
-    /// (<see cref="TextureHeader.Width"/> x <see cref="TextureHeader.Height"/>). Mips are stored smallest first.
+    /// (<see cref="TextureHeader.Width"/> x <see cref="TextureHeader.Height"/>). Mips are stored smallest first
+    /// (NHL 24: largest first, <see cref="BuildPs4"/>).
     /// </summary>
     public static byte[] BuildChunk(TextureHeader h, byte[] rgba, Action<string> log = null)
     {
@@ -35,6 +37,7 @@ public static class TextureBuilder
         var f = h.Format;
         if (rgba.Length != h.Width * h.Height * 4)
             throw new ArgumentException($"The image must be {h.Width} x {h.Height}.");
+        if (h.Ps4) return BuildPs4(h, rgba, log);
         int n = StoredMips(h);
         bool srgb = IsSrgb(h);
         var (lw, lh) = h.MipSize(n - 1);
@@ -71,6 +74,34 @@ public static class TextureBuilder
         }
         using var ms = new MemoryStream((int)h.ChunkSize);
         for (int i = n - 1; i >= 0; i--) ms.Write(stored[i]);
+        return ms.ToArray();
+    }
+
+    /// <summary>
+    /// NHL 24's chunk: every stored mip largest first, each one PS4-tiled on its own and padded to whole 8x8-block tiles
+    /// (<see cref="Ps4Tiling"/>), or in rows when the header has no Swizzle flag.
+    /// </summary>
+    private static byte[] BuildPs4(TextureHeader h, byte[] rgba, Action<string> log)
+    {
+        var f = h.Format;
+        bool srgb = IsSrgb(h), tiled = h.Flags.HasFlag(TextureFlags.Swizzle);
+        int n = StoredMips(h);
+        using var ms = new MemoryStream((int)h.ChunkSize);
+        byte[] cur = rgba;
+        int w = h.Width, ht = h.Height;
+        for (int i = 0; i < n; i++)
+        {
+            var (mw, mh) = h.MipSize(i);
+            if (i > 0) (cur, w, ht) = MipChain.Halve(cur, w, ht, srgb);
+            if (w != mw || ht != mh) throw new InvalidDataException($"Mip {i} should be {mw} x {mh}, not {w} x {ht}.");
+            int bw = (mw + 3) / 4, bh = (mh + 3) / 4;
+            log?.Invoke($"encoding mip {i} ({mw} x {mh})");
+            var blocks = BcEncoder.Encode(cur, mw, mh, f);
+            var mip = tiled ? Ps4Tiling.Tile(blocks, bw, bh, f.BlockBytes) : blocks;
+            if (mip.Length != h.MipSizes[i])
+                throw new InvalidDataException($"Mip {i} should take {h.MipSizes[i]} bytes but a {(tiled ? "tiled " : "")}{mw} x {mh} {f.Name} mip takes {mip.Length}: this layout isn't understood.");
+            ms.Write(mip);
+        }
         return ms.ToArray();
     }
 }

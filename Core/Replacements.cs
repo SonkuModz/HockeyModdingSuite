@@ -24,6 +24,7 @@ public static partial class Replacements
         var header = TextureHeader.Parse(index.Read(res), ps4: !index.Layout.IsPs5);
         string why = TextureBuilder.Unsupported(header);
         if (why != null) throw new NotSupportedException(why);
+        if (header.Ps4) return PlanTexturePs4(index, name, header, rgba, locations, tocs, log);
         byte[] raw = TextureBuilder.BuildChunk(header, rgba, log);
         if (header.Layers > 1)
         {
@@ -41,6 +42,49 @@ public static partial class Replacements
         var result = new Texture { Name = name, Header = header, Chunk = null, Data = raw, Layer = layer };
         result.DecodeMip(0);
         return new TextureReplacementPlan { Name = name, Header = header, Chunk = chunk, Result = result };
+    }
+
+    /// <summary>
+    /// NHL 24: the new chunk is stored uncompressed (mip 0, mip 1 and the rest each starting a block, as the game's own
+    /// chunks do), added at the end of its CAS file (<see cref="ChunkGrower"/>), and the header's two mip offsets (where
+    /// mip 1 and mip 2 start in the stored chunk) are rewritten in every RES copy. The TOC entries change, so the TOC's
+    /// signature no longer matches. The header patches follow the chunk's in <see cref="TextureReplacementPlan.Chunk"/>,
+    /// so callers apply one list.
+    /// </summary>
+    private static TextureReplacementPlan PlanTexturePs4(AssetIndex index, string name, TextureHeader header, byte[] rgba, LocationIndex locations, TocCache tocs, Action<string> log)
+    {
+        byte[] raw = TextureBuilder.BuildChunk(header, rgba, log);
+        int n = TextureBuilder.StoredMips(header);
+        // the parts that start a block: mip 0, mip 1, then the rest together
+        var cuts = new List<int> { 0 };
+        if (n > 1) cuts.Add((int)header.MipSizes[0]);
+        if (n > 2) cuts.Add((int)(header.MipSizes[0] + header.MipSizes[1]));
+        cuts.Add(raw.Length);
+        using var ms = new MemoryStream();
+        var starts = new List<long>();
+        for (int k = 0; k + 1 < cuts.Count; k++)
+        {
+            starts.Add(ms.Length);
+            ms.Write(FrostbiteBlocks.Store(raw[cuts[k]..cuts[k + 1]]));
+        }
+        byte[] stored = ms.ToArray();
+        var res = index.Read(index.GetRes(name));
+        var newRes = (byte[])res.Clone();
+        for (int k = 0; k < 2; k++)
+            BitConverter.TryWriteBytes(newRes.AsSpan(k * 4, 4), (uint)(k + 1 < starts.Count ? starts[k + 1] : 0));
+        // the chunk and any header copy that moves share the CAS files' planned ends
+        var ends = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var chunk = ChunkGrower.Plan(index, header.ChunkId, stored, locations, tocs, ends);
+        if (!newRes.AsSpan().SequenceEqual(res))
+        {
+            var resPlan = ResPatcher.Plan(index, name, newRes, locations, tocs, grow: ends);
+            chunk.Patches.AddRange(resPlan.Patches);
+            chunk.Notes.AddRange(resPlan.Notes);
+        }
+        var nh = TextureHeader.Parse(newRes, ps4: true);
+        var result = new Texture { Name = name, Header = nh, Chunk = null, Data = raw };
+        result.DecodeMip(0);
+        return new TextureReplacementPlan { Name = name, Header = nh, Chunk = chunk, Result = result };
     }
 
     /// <summary>
