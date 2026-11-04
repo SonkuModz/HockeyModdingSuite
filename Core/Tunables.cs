@@ -64,9 +64,10 @@ public static class Tunables
             return o < 0 ? null : BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan((int)o, 4));
         }
 
-        // every "\0gName\0" string in read-only data
+        // every "\0gName\0" string in read-only data (on PS4 that is part of the code segment)
         var names = new Dictionary<long, string>();
-        foreach (var s in segs.Where(s => s.Va != 0))
+        bool ps4 = BinaryPrimitives.ReadUInt32LittleEndian(b) == 0x1D3D154F;
+        foreach (var s in segs.Where(s => s.Va != 0 || ps4))
         {
             int end = (int)(s.Offset + s.Size);
             for (int i = (int)s.Offset + 1; i < end - 2; i++)
@@ -114,9 +115,9 @@ public static class Tunables
             return k;
         }
 
-        var rows = new List<Tunable>();
+        var rows = ps4 ? ReadPs4(b, c0, code.Size, sites, CStr, F32) : new List<Tunable>();
         var seen = new HashSet<(string, long)>();
-        foreach (var (site, name) in sites)
+        foreach (var (site, name) in ps4 ? Enumerable.Empty<(long, string)>() : sites)
         {
             if (!seen.Add((name, site))) continue;
             var list = Window(b, c0, code.Size, site);
@@ -199,6 +200,136 @@ public static class Tunables
         return rows;
     }
 
+    /// <summary>
+    /// NHL 24 (PS4) builds each value inline: the object is static data at a fixed address A, filled in place and linked
+    /// into the list: [A+8] group, [A+0x10] name (the lea rcx this starts from), [A+0x18] label, [A+0x20] type code.
+    /// After the link come the values: a float's default and minimum as the low 8 bytes of an xmm loaded from read-only
+    /// data (vmovlps [A+0x38]) and its maximum as an immediate at [A+0x40]; an int's default and minimum as a qword
+    /// immediate at [A+0x38] and its maximum at [A+0x40]; a bool's default as a byte at [A+0x38].
+    /// </summary>
+    private static List<Tunable> ReadPs4(byte[] b, int c0, long codeSize, List<(long Site, string Name)> sites, Func<long, string> cstr, Func<long, float?> f32)
+    {
+        var rows = new List<Tunable>();
+        foreach (var (site, name) in sites.OrderBy(x => x.Site))
+        {
+            // registers holding a string pointer before the site (the group and label are often loaded earlier)
+            var ptr = new Dictionary<Register, long>();
+            var before = Window(b, c0, codeSize, site);
+            if (before != null)
+                foreach (var x in before.TakeWhile(x => (long)x.IP < site))
+                {
+                    if (x.Mnemonic == Mnemonic.Lea && x.Op1Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand) ptr[x.Op0Register.GetFullRegister()] = (long)x.IPRelativeMemoryAddress;
+                    else if (x.Op0Kind == OpKind.Register) ptr.Remove(x.Op0Register.GetFullRegister());
+                }
+            int len = (int)Math.Min(0x300, codeSize - site);
+            var d = Decoder.Create(64, new ByteArrayCodeReader(b, c0 + (int)site, len), (ulong)site);
+            // the object: where the name (rcx) is stored, minus 0x10
+            ulong a = 0;
+            {
+                var pre = Decoder.Create(64, new ByteArrayCodeReader(b, c0 + (int)site, Math.Min(0x60, len)), (ulong)site);
+                while (pre.IP < (ulong)site + 0x60 && a == 0)
+                {
+                    var x = pre.Decode();
+                    if (x.IsInvalid) break;
+                    if (x.Mnemonic == Mnemonic.Mov && x.Op0Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand && x.Op1Kind == OpKind.Register && x.Op1Register == Register.RCX)
+                        a = x.IPRelativeMemoryAddress - 0x10;
+                }
+            }
+            if (a == 0) continue;
+            int heads = 0;
+            TunableType? kind = null;
+            long? group = null, label = null;
+            bool sameLabel = false;
+            var xmm = new Dictionary<Register, (long Addr, int Size)>();
+            var imm = new Dictionary<Register, long>();
+            double? value = null, min = null, max = null;
+            while (d.IP < (ulong)(site + len))
+            {
+                var x = d.Decode();
+                if (x.IsInvalid) break;
+                bool rip = x.Op0Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand;
+                ulong m = rip ? x.IPRelativeMemoryAddress : 0;
+                Register r1 = x.OpCount > 1 && x.Op1Kind == OpKind.Register ? x.Op1Register : Register.None;
+                if (x.Mnemonic == Mnemonic.Lea && x.Op1Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand)
+                {
+                    ptr[x.Op0Register.GetFullRegister()] = (long)x.IPRelativeMemoryAddress;
+                    continue;
+                }
+                if (x.Mnemonic == Mnemonic.Mov && x.Op0Kind == OpKind.Register && x.Op1Kind is OpKind.Immediate64 or OpKind.Immediate32 or OpKind.Immediate32to64)
+                {
+                    imm[x.Op0Register.GetFullRegister()] = (long)x.GetImmediate(1);
+                    continue;
+                }
+                // an xmm loaded from read-only data, or zeroed
+                if (x.Mnemonic is Mnemonic.Vmovss or Mnemonic.Vmovsd or Mnemonic.Vmovq && x.Op0Kind == OpKind.Register && x.OpCount == 2 && x.Op1Kind == OpKind.Memory && x.IsIPRelativeMemoryOperand)
+                {
+                    xmm[x.Op0Register] = ((long)x.IPRelativeMemoryAddress, x.Mnemonic == Mnemonic.Vmovss ? 4 : 8);
+                    continue;
+                }
+                if (x.Mnemonic is Mnemonic.Vxorps or Mnemonic.Vxorpd && x.OpCount == 3 && x.Op1Kind == OpKind.Register && x.Op2Kind == OpKind.Register && x.Op1Register == x.Op2Register)
+                {
+                    xmm[x.Op0Register] = (0, 16);
+                    continue;
+                }
+                // the head of the list (a store of rax outside the object): the first links this object, the second is the next one's
+                if (rip && x.Mnemonic == Mnemonic.Mov && r1 == Register.RAX && (m < a || m >= a + 0x48) && heads++ == 1) break;
+                if (!rip || m < a || m >= a + 0x48) continue;
+                long off = (long)(m - a);
+                if (x.Mnemonic == Mnemonic.Mov && r1 != Register.None)
+                {
+                    var full = r1.GetFullRegister();
+                    if (off == 8) group = ptr.TryGetValue(full, out var g) ? g : null;
+                    else if (off == 0x18) { sameLabel = full == Register.RCX; label = ptr.TryGetValue(full, out var l) ? l : null; }
+                    else if (off == 0x38 && imm.TryGetValue(full, out var q)) { value = (int)q; min = (int)(q >> 32); }
+                    continue;
+                }
+                if (x.Mnemonic == Mnemonic.Mov && x.Op1Kind is OpKind.Immediate8 or OpKind.Immediate32 or OpKind.Immediate32to64)
+                {
+                    long v = x.Op1Kind == OpKind.Immediate8 ? x.Immediate8 : (int)x.Immediate32;
+                    bool qword = x.MemorySize == MemorySize.UInt64 || x.MemorySize == MemorySize.Int64;
+                    if (off == 0x20)
+                    {
+                        kind = v switch { 1 => TunableType.Bool, 2 => TunableType.Int, 4 => TunableType.Float, _ => null };
+                        if (kind == null) break;
+                    }
+                    else if (kind == TunableType.Bool && off == 0x38) value = v != 0 ? 1 : 0;
+                    else if (kind == TunableType.Int && off == 0x38) { value = v; if (qword) min = v < 0 ? -1 : 0; }
+                    else if (kind == TunableType.Int && off == 0x3C) min = v;
+                    else if (kind == TunableType.Int && off == 0x40) max = v;
+                    else if (kind == TunableType.Float && off is 0x38 or 0x3C or 0x40)
+                    {
+                        double f = Round(BitConverter.Int32BitsToSingle((int)v));
+                        if (off == 0x38) { value = f; if (qword) min = 0; }
+                        else if (off == 0x3C) min = f;
+                        else max = f;
+                    }
+                    continue;
+                }
+                // float values stored from an xmm register
+                if (x.Mnemonic is Mnemonic.Vmovlps or Mnemonic.Vmovss or Mnemonic.Vmovq or Mnemonic.Vmovsd && x.OpCount == 2 && r1 != Register.None)
+                {
+                    bool known = xmm.TryGetValue(r1, out var src);
+                    float? F(int at) => !known ? null : src.Addr == 0 || at >= src.Size ? 0f : f32(src.Addr + at);
+                    if (off == 0x38)
+                    {
+                        value = F(0) is float v0 ? Round(v0) : null;
+                        if (x.MemorySize != MemorySize.Float32) min = F(4) is float v1 ? Round(v1) : null;
+                    }
+                    else if (off == 0x3C) min = F(0) is float v1 ? Round(v1) : null;
+                    else if (off == 0x40) max = F(0) is float v2 ? Round(v2) : null;
+                }
+            }
+            if (kind == null) continue;
+            string groupText = group is long gp ? cstr(gp) : null;
+            string labelText = sameLabel || label == null ? null : cstr(label.Value);
+            if (labelText == name) labelText = null;
+            rows.Add(new Tunable(name, kind.Value, value, kind == TunableType.Bool ? null : min, kind == TunableType.Bool ? null : max, groupText, labelText, site));
+        }
+        return rows;
+
+        static double Round(float f) => double.Parse(f.ToString("G6", System.Globalization.CultureInfo.InvariantCulture), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     /// <summary>Writes the list as CSV (the same columns as docs/eboot/tunables.csv).</summary>
     public static void WriteCsv(IEnumerable<Tunable> rows, string file)
     {
@@ -240,7 +371,9 @@ public static class Tunables
     /// <summary>The loaded segments: the SELF's segment table gives each program header's place in the file.</summary>
     private static List<Segment> Segments(byte[] b)
     {
-        if (BinaryPrimitives.ReadUInt32LittleEndian(b) != 0xEEF51454) throw new InvalidDataException("eboot.bin isn't a decrypted PS5 SELF");
+        // PS5 and PS4 (NHL 24) SELFs share the layout: a 0x20 header, 0x20-byte segment entries, then the ELF
+        uint magic = BinaryPrimitives.ReadUInt32LittleEndian(b);
+        if (magic != 0xEEF51454 && magic != 0x1D3D154F) throw new InvalidDataException("eboot.bin isn't a decrypted PS5 or PS4 SELF");
         int count = BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(0x18));
         int elf = 0x20 + count * 0x20;
         if (BinaryPrimitives.ReadUInt32LittleEndian(b.AsSpan(elf)) != 0x464C457F) throw new InvalidDataException("No ELF header after the SELF segment table");
