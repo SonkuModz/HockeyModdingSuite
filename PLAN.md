@@ -1189,3 +1189,19 @@ Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide w
 - **Step 4 (writing), started**: the general NHL 24 refusals are gone; textures replace from the Textures page.
   Still refused for NHL 24 until each is tried in game: sounds, videos, EBX saves, score clock
   (`ModService.RefuseNhl24`) and databases (`LegacyEditor`).
+- **Step 4 (writing), since**: every write works on NHL 24.
+  - PS4 legacy files (databases): the whole data chunk is rewritten uncompressed (0x40000-byte blocks, 8-byte
+    headers), a grown file goes to the end of the chunk, every index entry's stored range is recomputed, and both
+    chunks are appended (`LegacyEditor.PlanPs4`). EBX copies that don't fit move to the end of their CAS.
+  - ModStore: append ranges are left alone on restore; `TrimAdded` cuts a file's added tail once nothing applied
+    uses it (`leftovers.json` keeps removed entries' ranges). `modstore-selftest` passes.
+  - Reads after a write go through the live TOC entry (`AssetIndex.LiveRef`).
+  - Scorebug: NHL 24's ESPN+ clock (scoreclock.gfx / score_clock.gfx, CFX) reads its settings from a 4096-character
+    `#NHL24KIT_CFG#` constant; the Scorebug page edits it with a preview (`Scorebug24`). Awaiting an in-game check,
+    with a test DB edit (exhibition team 2 "HMS Test Bruins").
+  - Tuning: tunables are read from the PS4 eboot (inline static objects, `Tunables.ReadPs4`): 20,745 values.
+  - Uniforms: kits draw on NHL 24 (MeshSet's PS4 layout; jerseys named per LOD, `..._large_lod0_mesh`). Helmet,
+    gloves and the idle pose aren't done for NHL 24 (different meshes); the user said that's enough.
+  - Unused jerseys: works as on NHL 27.
+  - Skipped for NHL 24 (user's call, 2026-11-03): Arenas, Be A Pro (no career saves in NHL24 PC's
+    user\home\1000\savedata\CUSA37933 anyway), Jersey Studio. Their nav buttons stay hidden on NHL 24.
