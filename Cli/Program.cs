@@ -2905,7 +2905,11 @@ public static class Program
         return 0;
     }
 
-    /// <summary>roster-sync [--team TOR] [--all]: compares the game's rosters with the NHL API's current ones (read only).</summary>
+    /// <summary>roster-sync [--team TOR] [--all]: compares the game's rosters with the NHL API's current ones (read only).
+    /// Note: a player who is also on an AHL roster appears here too, showing the NHL side only — the NHL API lists
+    /// players assigned to the AHL (e.g. Ben Jones on CGY while he plays for the Wranglers), so this command alone
+    /// cannot tell which side is right. The UI's combined compare (RosterSync.CompareCombined, AHL wins ties) is
+    /// the deduped view; use that to apply changes for such players.</summary>
     private static int RosterSyncCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);
@@ -2937,6 +2941,10 @@ public static class Program
     /// current rosters — all 32 teams by default, one team with --team (e.g. --team IA, --team "Iowa Wild",
     /// --team 389). Read only, unless --dry applies in memory. Teams with no matching team in the game are
     /// skipped and listed, not failed.
+    /// Note: a player who is also on an NHL roster appears here too, showing the AHL side only — the NHL API lists
+    /// players assigned to the AHL (e.g. Ben Jones on CGY while he plays for the Wranglers), so this command alone
+    /// cannot tell which side is right. The UI's combined compare (RosterSync.CompareCombined, AHL wins ties) is
+    /// the deduped view; use that to apply changes for such players.
     /// </summary>
     private static int AhlSyncCmd(string game, Options opts)
     {

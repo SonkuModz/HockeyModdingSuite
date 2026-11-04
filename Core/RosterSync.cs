@@ -144,7 +144,13 @@ public static class RosterSync
     }
 
     /// <param name="sizes">Also list players whose only difference is height or weight.</param>
-    public static List<SyncChange> Compare(T3Db db, IReadOnlyList<NhlPlayer> api, bool sizes = false)
+    /// <param name="alreadyMatched">
+    /// Game ids already matched by another compare (CompareCombined's shared set, filled by the AHL compare
+    /// first). A player in this set is skipped outright — no change, no Missing, and no Left — so a player on
+    /// both an NHL roster and an AHL roster gets exactly one change, the AHL one (see CompareCombined).
+    /// Null for a stand-alone NHL compare (the CLI's roster-sync), which keeps the old behaviour.
+    /// </param>
+    public static List<SyncChange> Compare(T3Db db, IReadOnlyList<NhlPlayer> api, bool sizes = false, HashSet<int> alreadyMatched = null)
     {
         var teams = TeamIndex(db);
         var nhlTeams = teams.Values.ToHashSet();
@@ -199,6 +205,9 @@ public static class RosterSync
             if (p == null && a.Born != null)
                 p = byLast.GetValueOrDefault(Norm(a.Last))?.FirstOrDefault(c => Born(c) == a.Born);
             if (p == null && cands.Count == 1) { p = cands[0]; nameOnly = true; }
+            // Already matched by the AHL compare (CompareCombined runs it first): skip outright, don't
+            // call him Missing and don't build an NHL change for him — his AHL change already covers him.
+            if (p != null && alreadyMatched != null && alreadyMatched.Contains(p.GameId)) continue;
             if (p == null || matched.Contains(p.GameId))
             {
                 changes.Add(new SyncChange { Kind = SyncKind.Missing, Api = a, Name = a.Name, Position = a.Position, ToTeam = to, ToTeamName = TeamName(to) });
@@ -227,8 +236,11 @@ public static class RosterSync
             c.Selected = true;
             changes.Add(c);
         }
-        // NHL players in the game who aren't on any NHL roster now: offered a move to the club's AHL affiliate, unticked
-        foreach (var p in roster.Players.Where(p => p.RosterRow >= 0 && !matched.Contains(p.GameId)))
+        // NHL players in the game who aren't on any NHL roster now: offered a move to the club's AHL affiliate, unticked.
+        // Players already matched by the AHL compare are excluded too: a player on an AHL roster who is not on any
+        // NHL roster must not also appear here as Left, or the two changes would fight over him.
+        foreach (var p in roster.Players.Where(p => p.RosterRow >= 0 && !matched.Contains(p.GameId) &&
+            (alreadyMatched == null || !alreadyMatched.Contains(p.GameId))))
         {
             int team = TeamOf(p.RosterRow);
             if (!nhlTeams.Contains(team)) continue;
@@ -390,7 +402,8 @@ public static class RosterSync
     /// CompareAhl so a player listed for two teams is reported once, for his first-listed team, and never as
     /// Missing for the second. Returns the changes (ordered by kind, then team, then name) and the skipped teams.
     /// </summary>
-    public static (List<SyncChange> Changes, List<string> SkippedTeams) CompareAllAhl(T3Db db, IReadOnlyList<(AhlTeam Team, List<AhlPlayer> Players)> allRosters, bool sizes = false)
+    /// <param name="matchedOut">Optional set the game ids matched by this call are added to (CompareCombined's shared set).</param>
+    public static (List<SyncChange> Changes, List<string> SkippedTeams) CompareAllAhl(T3Db db, IReadOnlyList<(AhlTeam Team, List<AhlPlayer> Players)> allRosters, bool sizes = false, HashSet<int> matchedOut = null)
     {
         var changes = new List<SyncChange>();
         var skipped = new List<string>();
@@ -401,7 +414,37 @@ public static class RosterSync
             if (idx < 0) { skipped.Add(team.Name); continue; }
             changes.AddRange(CompareAhl(db, players, idx, sizes, matched));
         }
+        if (matchedOut != null) matchedOut.UnionWith(matched);
         return (changes.OrderBy(c => c.Kind).ThenBy(c => c.ToTeamName ?? "").ThenBy(c => c.Name).ToList(), skipped);
+    }
+
+    /// <summary>
+    /// The combined NHL + AHL compare used by the UI (RosterSyncView): AHL first, NHL second, sharing one
+    /// matched set, so a player on both an NHL roster and an AHL roster gets exactly one change — the AHL one.
+    /// Why AHL wins: the NHL API's roster is not a playing roster. It lists 27 Calgary players (17F/7D/3G),
+    /// including men assigned to the AHL, so it cannot override the AHL feed for where a player actually plays.
+    /// Ben Jones, 2026-11-04: on the Flames in the NHL API and on the Wranglers in the AHL feed at the same
+    /// time. Before this, the UI showed both — NHL CALL-UP Wranglers → Flames 195→187 lb and AHL TRADE
+    /// Flames → Wranglers 187→195 lb — and applying one created the other, forever (same for Toninato,
+    /// Burns, Groulx, McWard, Noesen and Korpisalo, all NHL-contract players assigned to the AHL). Now the
+    /// NHL compare skips him entirely and only the AHL TRADE is listed; applying it leaves no row for him.
+    /// Known tradeoff: if the AHL feed is stale for a day after a genuine call-up, the AHL change wins for
+    /// that day (he is sent down), and the NHL compare calls him up again once the feed drops him. That is
+    /// a one-day lag, not a permanent ping-pong, and the user can untick the row in the meantime.
+    /// The returned list keeps the old display order (NHL changes first, then AHL changes), each part in
+    /// its own compare's order. A player on an NHL roster who is not in the game at all is still reported
+    /// Missing by the NHL compare (the skip only applies to players who were actually matched), and likewise
+    /// for the AHL side — Missing rows can't be applied, so they can't ping-pong.
+    /// </summary>
+    public static (List<SyncChange> Changes, List<string> SkippedAhlTeams) CompareCombined(T3Db db, IReadOnlyList<NhlPlayer> api, IReadOnlyList<(AhlTeam Team, List<AhlPlayer> Players)> allAhl, bool sizes = false)
+    {
+        var matched = new HashSet<int>();
+        var (ahlChanges, skipped) = CompareAllAhl(db, allAhl, sizes, matched);
+        var nhlChanges = Compare(db, api, sizes, matched);
+        var changes = new List<SyncChange>(nhlChanges.Count + ahlChanges.Count);
+        changes.AddRange(nhlChanges);
+        changes.AddRange(ahlChanges);
+        return (changes, skipped);
     }
 
     /// <summary>
@@ -484,11 +527,16 @@ public static class RosterSync
                 SetIn(bio, c.BioRow, bf["jersey"], c.NewNumber);
                 if (numberChanged) numbers++;
             }
-            if (c.WithSizes && c.NewHeight > 0 && c.NewWeight > 0 && (c.NewHeight != c.OldHeight || c.NewWeight != c.OldWeight))
+            // Height and weight are written independently: Compare lists a size-only Update when EITHER
+            // differs, so requiring both here would leave a player with only one dimension in the feed
+            // listed forever with nothing ever written for him. `sizes` is counted once per player, not
+            // once per dimension, so the summary format is unchanged.
+            if (c.WithSizes)
             {
-                SetIn(bio, c.BioRow, bf["height"], c.NewHeight - HeightOffset);
-                SetIn(bio, c.BioRow, bf["weight"], c.NewWeight - WeightOffset);
-                sizes++;
+                bool wroteSize = false;
+                if (c.NewHeight > 0 && c.NewHeight != c.OldHeight) { SetIn(bio, c.BioRow, bf["height"], c.NewHeight - HeightOffset); wroteSize = true; }
+                if (c.NewWeight > 0 && c.NewWeight != c.OldWeight) { SetIn(bio, c.BioRow, bf["weight"], c.NewWeight - WeightOffset); wroteSize = true; }
+                if (wroteSize) sizes++;
             }
         }
         // every team that gained or lost a player gets its lines built again from its players

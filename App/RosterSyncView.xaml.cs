@@ -126,15 +126,22 @@ public partial class RosterSyncView : UserControl
         var db = await _mods.OpenDbAsync(Roster.Database);
         bool sizes = SizesBox.IsChecked == true;
         var api = _api;
-        var changes = await Task.Run(() => RosterSync.Compare(db, api, sizes));
-        if (_ahl != null)
+        var ahl = _ahl;
+        // One combined compare (AHL first, NHL second, one shared matched set — see CompareCombined):
+        // a player on both an NHL roster and an AHL roster gets exactly one change, the AHL one, so the
+        // list can no longer show the NHL and AHL changes for the same player as inverses of each other.
+        // An AHL compare failure must not wipe the NHL rows: fall back to the NHL compare alone, remember
+        // the error for the status line, and try again on the next fetch. Teams with no game match are
+        // skipped by CompareAllAhl (their names come back in _ahlSkipped) and do not fail the compare.
+        List<SyncChange> changes;
+        if (ahl != null)
         {
-            // An AHL compare failure must not wipe the NHL rows: keep them, remember the error for the status
-            // line, and try again on the next fetch. Teams with no game match are skipped by CompareAllAhl
-            // (their names come back in _ahlSkipped) and do not fail the compare.
-            var ahl = _ahl;
-            try { var (ahlChanges, skipped) = await Task.Run(() => RosterSync.CompareAllAhl(db, ahl, sizes)); changes.AddRange(ahlChanges); _ahlSkipped = skipped; _ahlError = null; }
-            catch (Exception ex) { _ahlError = ex.Message; }
+            try { var (combined, skipped) = await Task.Run(() => RosterSync.CompareCombined(db, api, ahl, sizes)); changes = combined; _ahlSkipped = skipped; _ahlError = null; }
+            catch (Exception ex) { _ahlError = ex.Message; changes = await Task.Run(() => RosterSync.Compare(db, api, sizes)); }
+        }
+        else
+        {
+            changes = await Task.Run(() => RosterSync.Compare(db, api, sizes));
         }
         _rows = changes.Select(c => new SyncRow(c, SetButtons)).ToList();
         ApplyFilter();
@@ -234,22 +241,43 @@ public partial class RosterSyncView : UserControl
         var ahl = _ahl;
         bool sizes = SizesBox.IsChecked == true;
         StatusChanged?.Invoke($"Writing {picked.Count} roster change(s) into the game…");
+        bool wrote = false;
         try
         {
             await _mods.SaveDbAsync(Roster.Database, db =>
             {
-                // Re-compare BOTH lists fresh: ApplyAsync used to re-run only the NHL compare, so ticked AHL rows
-                // were silently dropped (the fresh list had no match for them and nothing was written for them).
-                var fresh = RosterSync.Compare(db, api, sizes).Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
-                if (ahl != null)
+                // Re-compare fresh with the same combined compare the list uses (AHL first, NHL second,
+                // one shared matched set — see CompareCombined): the fresh list can no longer contain two
+                // changes for the same player that would overwrite each other in Apply. Safety net: if a
+                // duplicate somehow remains, keep one change per player, preferring the AHL one.
+                List<SyncChange> fresh = ahl != null
+                    ? RosterSync.CompareCombined(db, api, ahl, sizes).Changes
+                    : RosterSync.Compare(db, api, sizes);
+                fresh = fresh.Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
+                var deduped = new List<SyncChange>(fresh.Count);
+                var byGame = new Dictionary<int, int>(); // GameId -> index in deduped (GameId -1 rows are never deduped)
+                foreach (var c in fresh)
                 {
-                    var (freshAhl, _) = RosterSync.CompareAllAhl(db, ahl, sizes);
-                    fresh.AddRange(freshAhl.Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))));
+                    if (c.GameId < 0) { deduped.Add(c); continue; }
+                    if (!byGame.TryGetValue(c.GameId, out int at)) { byGame[c.GameId] = deduped.Count; deduped.Add(c); }
+                    else if (c.IsAhl && !deduped[at].IsAhl) deduped[at] = c;
                 }
-                return fresh.Count == 0 ? null : RosterSync.Apply(db, fresh) + $" ({DateTime.Now:yyyy-MM-dd})";
+                fresh = deduped;
+                if (fresh.Count == 0) return null;
+                wrote = true;
+                return RosterSync.Apply(db, fresh) + $" ({DateTime.Now:yyyy-MM-dd})";
             }, "Roster sync");
-            StatusChanged?.Invoke($"{picked.Count} roster change(s) written into the game. The Mods page can restore the original.");
-            Applied?.Invoke();
+            if (wrote)
+            {
+                StatusChanged?.Invoke($"{picked.Count} roster change(s) written into the game. The Mods page can restore the original.");
+                Applied?.Invoke();
+            }
+            else
+            {
+                // SaveDbAsync wrote nothing (the fresh re-compare matched none of the ticked rows): say
+                // so, instead of claiming the changes were written when they were not.
+                StatusChanged?.Invoke("Nothing was written: the ticked rows no longer matched on a fresh compare. Fetch again and check the list.");
+            }
         }
         catch (Exception ex)
         {
