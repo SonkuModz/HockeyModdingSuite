@@ -22,39 +22,36 @@ public sealed class PickSyncChange
     public string Description => $"{FromAbbr} → {ToAbbr}";
 }
 
-/// <summary>The outcome of comparing the game's picks with PuckPedia's.</summary>
+/// <summary>The outcome of comparing the game's picks with the snapshot file's.</summary>
 public sealed class PickCompareResult
 {
     public List<PickSyncChange> Changes { get; init; }
-    /// <summary>Game picks in the synced years that had a PuckPedia match to compare against.</summary>
+    /// <summary>Game picks in the synced years that had a file match to compare against.</summary>
     public int Compared { get; init; }
-    /// <summary>Picks with a live condition on PuckPedia: excluded from sync changes entirely, never auto-proposed.</summary>
-    public int SkippedConditional { get; init; }
-    /// <summary>PuckPedia picks in the synced years with no matching (year, round, original team) game row: never auto-applied.</summary>
+    /// <summary>File picks in the synced years with no matching (year, round, original team) game row: never auto-applied.</summary>
     public int NoGameRow { get; init; }
-    /// <summary>Game picks in the synced years with no PuckPedia match (2031 is not listed yet, for example).</summary>
+    /// <summary>Game picks in the synced years with no file match (the file covers fewer years than the game stores, for example).</summary>
     public int NoPuckPediaPick { get; init; }
-    /// <summary>PuckPedia picks whose original or owner slug isn't in the known team map: skipped, never auto-applied.</summary>
+    /// <summary>File picks whose original or owner abbreviation isn't in the known team map: skipped, never auto-applied.</summary>
     public int SkippedUnmapped { get; init; }
 }
 
 /// <summary>
-/// Draft pick ownership sync against PuckPedia.
+/// Draft pick ownership sync against the bundled draft-picks.json snapshot file.
 ///
 /// The game stores picks in exhibitiondraftpick: one row per (year, round, origteamid), 1344 rows = 32 teams x 7 rounds
 /// x 6 years. The year is the calendar draft year - 1900 (126 = 2026 draft, already completed, never synced;
-/// 127 = 2027 through 131 = 2031). There is no condition field — the game cannot represent conditional picks — so
-/// any pick PuckPedia flags with a live active_draft_pick_condition is excluded from sync changes entirely, per the
-/// user's rule. Applying writes only the new owner into exhibitiondraftpick; there is no online/custom copy of the
-/// picks table, so nothing is mirrored, and player rows are never touched.
+/// 127 = 2027 through 131 = 2031 in NHL 27). The file lists picks by real calendar year, mapped onto the game's
+/// years through the offset (game first draft year − snapshot year), so the same file works for NHL 24. The
+/// synced years are the ones the file covers — its earliest and latest mapped year — never hard-coded. There
+/// is no condition field — the game cannot represent conditional picks — and conditions are treated as
+/// non-existent: a conditional pick is listed with its owner and round exactly as the file shows them, and
+/// the sync uses those as-is. Applying writes only the new owner into exhibitiondraftpick; there is no
+/// online/custom copy of the picks table, so nothing is mirrored, and player rows are never touched.
 /// </summary>
 public static class PickSync
 {
     public const string Table = "exhibitiondraftpick";
-    /// <summary>First draft year the sync touches (stored year 127 = 2027 draft). 126 is the completed 2026 draft.</summary>
-    public const int FirstSyncYear = 127;
-    /// <summary>Last draft year the game stores (stored year 131 = 2031 draft). PuckPedia lists none of these yet.</summary>
-    public const int LastSyncYear = 131;
 
     public static string Ordinal(int round) => round switch { 1 => "1st", 2 => "2nd", 3 => "3rd", _ => $"{round}th" };
 
@@ -62,9 +59,14 @@ public static class PickSync
     {
         var index = RosterSync.TeamIndex(db); // NHL abbreviation -> game team index
         var slugToIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (slug, abbr) in PuckPediaPicks.Teams)
+        foreach (var (slug, abbr) in PickSnapshot.Teams)
             if (index.TryGetValue(abbr, out int i)) slugToIndex[slug] = i;
         var teams = TeamNames(db);
+
+        // The synced years are the ones the snapshot file covers — its earliest and latest mapped year —
+        // never hard-coded: the file's real years map through the offset for the game in hand.
+        int firstSync = picks.Count == 0 ? 0 : picks.Min(p => p.StoredYear);
+        int lastSync = picks.Count == 0 ? -1 : picks.Max(p => p.StoredYear);
 
         var t = db.Table(Table);
         var f = t.Fields.ToDictionary(x => x.Name);
@@ -73,13 +75,13 @@ public static class PickSync
         {
             if (db.IsInvalid(t, r)) continue;
             int year = (int)db.Get(t, r, f["year"]);
-            if (year < FirstSyncYear || year > LastSyncYear) continue;
+            if (year < firstSync || year > lastSync) continue;
             game[(year, (int)db.Get(t, r, f["round"]), (int)db.Get(t, r, f["origteamid"]))] = (r, (int)db.Get(t, r, f["owner"]));
         }
 
         var changes = new List<PickSyncChange>();
         var seen = new HashSet<(int, int, int)>();
-        int conditional = 0, noGameRow = 0, unmapped = 0, compared = 0;
+        int noGameRow = 0, unmapped = 0, compared = 0;
         foreach (var p in picks)
         {
             if (!slugToIndex.TryGetValue(p.OriginalSlug, out int orig) || !slugToIndex.TryGetValue(p.OwnerSlug, out int owner))
@@ -87,7 +89,6 @@ public static class PickSync
                 unmapped++;
                 continue;
             }
-            if (p.StoredYear < FirstSyncYear || p.StoredYear > LastSyncYear) continue;
             var key = (p.StoredYear, p.Round, orig);
             if (!game.TryGetValue(key, out var g))
             {
@@ -95,11 +96,6 @@ public static class PickSync
                 continue;
             }
             seen.Add(key);
-            if (p.HasActiveCondition)
-            {
-                conditional++;
-                continue;
-            }
             compared++;
             if (g.Owner == owner) continue;
             teams.TryGetValue(orig, out var ot);
@@ -116,7 +112,7 @@ public static class PickSync
         changes.Sort((a, b) => a.Year != b.Year ? a.Year.CompareTo(b.Year) : a.Round != b.Round ? a.Round.CompareTo(b.Round) : a.OriginalTeam.CompareTo(b.OriginalTeam));
         return new PickCompareResult
         {
-            Changes = changes, Compared = compared, SkippedConditional = conditional,
+            Changes = changes, Compared = compared,
             NoGameRow = noGameRow, NoPuckPediaPick = game.Keys.Count(k => !seen.Contains(k)), SkippedUnmapped = unmapped,
         };
     }

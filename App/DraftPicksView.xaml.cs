@@ -43,16 +43,17 @@ public sealed class DraftPickCell
 /// <summary>One row of the picks grid: a draft year and its seven rounds.</summary>
 public sealed class DraftPickYear
 {
-    public DraftPickYear(int year, List<DraftPickCell> cells)
+    public DraftPickYear(int year, List<DraftPickCell> cells, bool isPast)
     {
         Year = year;
         Cells = cells;
+        IsPast = isPast;
     }
 
     public int Year { get; }
     public int DisplayYear => Year + 1900;
     public List<DraftPickCell> Cells { get; }
-    public bool IsPast => Year == DraftPicks.CompletedYear;
+    public bool IsPast { get; }
     public string Title => IsPast ? $"{DisplayYear}  ·  completed draft" : DisplayYear.ToString();
     public double RowOpacity => IsPast ? 0.55 : 1;
 }
@@ -134,7 +135,7 @@ public partial class DraftPicksView : UserControl
                         $"Acquired — originally {Abbr(a.OriginalTeam)}'s pick."));
                 return new DraftPickCell(round, chips);
             }).ToList();
-            return new DraftPickYear(y, cells);
+            return new DraftPickYear(y, cells, y == picks.FirstYear);
         }).ToList();
         Years.ItemsSource = rows;
 

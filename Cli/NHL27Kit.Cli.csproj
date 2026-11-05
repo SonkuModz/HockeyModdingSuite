@@ -20,10 +20,9 @@
     <None Include="..\ThirdParty\opus.dll" Condition="Exists('..\ThirdParty\opus.dll')" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
-    <!-- PuckPedia team pages saved as HTML (see PuckPedia\README.md): the live fetch is tried first and
-         these are only a fallback for machines where the site refuses the app's requests (HTTP 403). The
-         folder is NOT in the repo by default — the maintainer drops the 32 pages in before a release — so
-         the build never breaks without it, and the pages land in PuckPedia\ next to nhl27kit.exe. -->
-    <Content Include="..\PuckPedia\*.html" Link="PuckPedia\%(Filename)%(Extension)" Condition="Exists('..\PuckPedia')" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Draft pick ownership (see PuckPedia\README.md): a static snapshot in draft-picks.json, copied
+         next to nhl27kit.exe — the CLI reads it from there, no network. The file is in the repo, so the
+         build fails without it; refresh it by replacing the repo copy (or the copy next to the exe). -->
+    <Content Include="..\PuckPedia\draft-picks.json" Link="draft-picks.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
