@@ -18,6 +18,13 @@
                             <TextBlock x:Name="FetchLabel" Text="Fetch NHL rosters" Margin="8,0,0,0" />
                         </StackPanel>
                     </Button>
+                    <Button x:Name="LoadPagesButton" DockPanel.Dock="Right" Padding="14,7" Margin="0,0,8,0" Click="OnLoadSavedPages"
+                            ToolTip="Read the draft picks from PuckPedia team pages you saved as HTML files (the site refuses the app's live requests).">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8B7;" Style="{StaticResource Icon}" FontSize="13" />
+                            <TextBlock Text="Load saved pages…" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </Button>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="Sync with the NHL" Foreground="{StaticResource Text}" FontSize="15" FontWeight="SemiBold" />
                         <TextBlock x:Name="FetchStatus" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"

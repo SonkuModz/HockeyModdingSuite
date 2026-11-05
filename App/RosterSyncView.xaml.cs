@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Microsoft.Win32;
 using NHL27Kit.Core;
 
 namespace NHL27Kit.App;
@@ -80,6 +81,10 @@ public partial class RosterSyncView : UserControl
     private PickCompareResult _pickResult;
     private List<SyncRow> _pickRows = new();
     private List<PuckPediaFailure> _pickFailed = new();
+    /// <summary>True when the pick rows came from saved HTML pages rather than the live PuckPedia fetch; the status line says so instead of calling it a fetch failure.</summary>
+    private bool _picksFromFiles;
+    /// <summary>"PuckPedia: 1 team live, 31 teams from bundled pages." — "" when the last pick fetch was live-only or files-only; appended to the Fetch status line so the user can tell what actually happened.</summary>
+    private string _pickSource = "";
     private bool _busy;
 
     public event Action<string> StatusChanged;
@@ -99,6 +104,7 @@ public partial class RosterSyncView : UserControl
         _busy = true;
         SetButtons();
         FetchButton.IsEnabled = false;
+        LoadPagesButton.IsEnabled = false;
         try
         {
             int done = 0;
@@ -126,10 +132,13 @@ public partial class RosterSyncView : UserControl
             try
             {
                 FetchStatus.Text = "Fetching draft picks from PuckPedia…";
+                _picksFromFiles = false;
+                _pickSource = "";
                 int pdone = 0;
-                var fetch = await PuckPediaPicks.AllPicksAsync(slug => FetchStatus.Text = $"Fetching draft picks from PuckPedia… {++pdone}/{PuckPediaPicks.Teams.Length} ({slug})");
+                var fetch = await PuckPediaPicks.AllPicksWithBundledFallbackAsync(slug => FetchStatus.Text = $"Fetching draft picks from PuckPedia… {++pdone}/{PuckPediaPicks.Teams.Length} ({slug})");
                 _picks = fetch.Picks.ToList();
                 _pickFailed = fetch.FailedTeams.ToList();
+                _pickSource = PuckPediaPicks.SourceSummary(fetch);
                 await ComparePicksAsync();
             }
             catch (Exception ex)
@@ -142,7 +151,7 @@ public partial class RosterSyncView : UserControl
                 ApplyFilter();
             }
             FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.")
-                + PickFailureText();
+                + PickFailureText() + _pickSource;
             FilterBar.IsEnabled = true;
         }
         catch (Exception ex)
@@ -153,7 +162,57 @@ public partial class RosterSyncView : UserControl
         {
             _busy = false;
             FetchButton.IsEnabled = true;
+            LoadPagesButton.IsEnabled = true;
             FetchLabel.Text = _api == null ? "Fetch NHL rosters & picks" : "Fetch again";
+            SetButtons();
+        }
+    }
+
+    private async void OnLoadSavedPages(object sender, RoutedEventArgs e) => await LoadSavedPagesAsync();
+
+    /// <summary>Reads the draft picks from PuckPedia team pages saved as HTML files in a folder the user picks — the live fetch is refused by the site's bot protection (HTTP 403) while the same pages load in a browser, so he saves them himself (browser Save As) — compares them with the game and shows the pick rows. The player fetch is not re-run: only the picks part runs, and any old pick rows are replaced.</summary>
+    private async Task LoadSavedPagesAsync()
+    {
+        if (_mods == null || _busy) return;
+        var dlg = new OpenFolderDialog { Title = "Choose the folder with the saved PuckPedia team pages (<slug>.html)" };
+        if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+        string folder = dlg.FolderName;
+        _busy = true;
+        SetButtons();
+        FetchButton.IsEnabled = false;
+        LoadPagesButton.IsEnabled = false;
+        try
+        {
+            int done = 0;
+            var fetch = await PuckPediaPicks.AllPicksFromFilesAsync(folder, slug => FetchStatus.Text = $"Reading saved PuckPedia pages… {++done}/{PuckPediaPicks.Teams.Length} ({slug})");
+            _picks = fetch.Picks.ToList();
+            _pickFailed = fetch.FailedTeams.ToList();
+            _picksFromFiles = true;
+            _pickSource = "";
+            await ComparePicksAsync();
+            FetchStatus.Text = _api == null
+                ? $"Draft picks read from saved pages in {folder}. " + PickCounts().TrimStart() + PickFailureText()
+                : $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + PickFailureText()
+                  + $" Draft picks read from saved pages in {folder}.";
+            FilterBar.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            // a files-load failure never wipes the player results: the pick rows just clear
+            _picks = null;
+            _pickResult = null;
+            _pickRows = new List<SyncRow>();
+            _pickFailed = new List<PuckPediaFailure> { new("all teams", PuckPediaPicks.FailureReason(ex)) };
+            _picksFromFiles = true;
+            _pickSource = "";
+            ApplyFilter();
+            FetchStatus.Text = "Couldn't read the saved PuckPedia pages: " + ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            FetchButton.IsEnabled = true;
+            LoadPagesButton.IsEnabled = true;
             SetButtons();
         }
     }
@@ -205,14 +264,22 @@ public partial class RosterSyncView : UserControl
         if (_rows.Any(r => r.Change.IsAhl))
             s += $" AHL: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} number changes, {A(SyncKind.Missing)} not in the game.";
         if (_pickResult == null) return s;
+        return s + PickCounts();
+    }
+
+    /// <summary>The picks part of the status line: "3 draft pick owners differ from PuckPedia. (…)", or the total-failure line when no team's picks arrived; "" when no pick compare has run. The total-failure wording says whether the live fetch failed or no saved pages were found, so a files load never reads as a fetch failure.</summary>
+    private string PickCounts()
+    {
+        if (_pickResult == null) return "";
         if (_pickFailed.Count >= PuckPediaPicks.Teams.Length)
         {
             // Total failure: no PuckPedia data arrived at all, so "0 differences" would be a lie — the
             // picks simply were not compared. The reasons are in the status line (PickFailureText).
-            s += " Draft picks were not compared: the PuckPedia fetch failed for every team.";
-            return s;
+            return _picksFromFiles
+                ? " Draft picks were not compared: no saved PuckPedia pages were found."
+                : " Draft picks were not compared: the PuckPedia fetch failed for every team.";
         }
-        s += $" {_pickRows.Count} draft pick owner{(_pickRows.Count == 1 ? "" : "s")} differ from PuckPedia.";
+        string s = $" {_pickRows.Count} draft pick owner{(_pickRows.Count == 1 ? "" : "s")} differ from PuckPedia.";
         var notes = new List<string>();
         if (_pickResult.SkippedConditional > 0) notes.Add($"{_pickResult.SkippedConditional} conditional skipped");
         if (_pickResult.NoGameRow > 0) notes.Add($"{_pickResult.NoGameRow} PuckPedia picks with no game row");
@@ -222,23 +289,24 @@ public partial class RosterSyncView : UserControl
         return s;
     }
 
-    /// <summary>The PuckPedia failure suffix for the status line: "PuckPedia fetch failed for 32 teams (HTTP 403)." when every failure shares one reason, the individual "slug (reason)" list otherwise. A 403 gets a plain hint — the pages load in a browser, so the site is refusing the app's request, not a network problem.</summary>
+    /// <summary>The PuckPedia failure suffix for the status line: "PuckPedia fetch failed for 32 teams (HTTP 403)." when every failure shares one reason, the individual "slug (reason)" list otherwise. A 403 gets a plain hint — the pages load in a browser, so the site is refusing the app's request, not a network problem. When the picks came from saved files the wording says "pages missing" instead of "fetch failed".</summary>
     private string PickFailureText()
     {
         if (_pickFailed.Count == 0) return "";
         if (_pickFailed.Count == 1 && _pickFailed[0].Slug == "all teams")
-            return $" PuckPedia fetch failed: {_pickFailed[0].Reason}.";
+            return _picksFromFiles ? $" Could not read the saved pages: {_pickFailed[0].Reason}." : $" PuckPedia fetch failed: {_pickFailed[0].Reason}.";
         var groups = _pickFailed.GroupBy(f => f.Reason).ToList();
+        string what = _picksFromFiles ? "PuckPedia pages missing" : "PuckPedia fetch failed";
         string s;
         if (groups.Count == 1)
-            s = $" PuckPedia fetch failed for {_pickFailed.Count} team{(_pickFailed.Count == 1 ? "" : "s")} ({groups[0].Key}).";
+            s = $" {what} for {_pickFailed.Count} team{(_pickFailed.Count == 1 ? "" : "s")} ({groups[0].Key}).";
         else
         {
             var shown = _pickFailed.Take(8).Select(f => $"{f.Slug} ({f.Reason})");
             string tail = _pickFailed.Count > 8 ? $", and {_pickFailed.Count - 8} more" : "";
-            s = " PuckPedia fetch failed for: " + string.Join(", ", shown) + tail + ".";
+            s = $" {what} for: " + string.Join(", ", shown) + tail + ".";
         }
-        if (_pickFailed.Any(f => f.Reason == "HTTP 403"))
+        if (!_picksFromFiles && _pickFailed.Any(f => f.Reason == "HTTP 403"))
             s += " The team pages load in a browser, so the site is refusing the app's request (likely its bot protection), not a network problem.";
         return s;
     }
@@ -264,7 +332,8 @@ public partial class RosterSyncView : UserControl
                 : r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Description.Contains(q, StringComparison.OrdinalIgnoreCase)
                   || (r.Change.Api?.Team ?? r.Change.Ahl?.TeamName ?? "").Equals(q, StringComparison.OrdinalIgnoreCase)))).ToList();
         ChangeList.ItemsSource = rows;
-        EmptyText.Text = _api == null ? "Press Fetch NHL rosters & picks to compare the game with today's NHL." : "Nothing here: the game already matches.";
+        EmptyText.Text = _api == null && _pickResult == null ? "Press Fetch NHL rosters & picks to compare the game with today's NHL." :
+            _api == null ? "No draft pick differences in the saved pages." : "Nothing here: the game already matches.";
         EmptyText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         SetButtons();
     }
@@ -343,7 +412,10 @@ public partial class RosterSyncView : UserControl
                 // one shared matched set — see CompareCombined): the fresh list can no longer contain two
                 // changes for the same player that would overwrite each other in Apply. Safety net: if a
                 // duplicate somehow remains, keep one change per player, preferring the AHL one.
-                List<SyncChange> fresh = ahl != null
+                // No player fetch has run (the picks were loaded from saved files, not fetched): there is
+                // nothing to re-compare for players, so the fresh player list is empty — the pick rows are
+                // re-compared below from _picks, which is what Apply needs here.
+                List<SyncChange> fresh = api == null ? new List<SyncChange>() : ahl != null
                     ? RosterSync.CompareCombined(db, api, ahl, sizes).Changes
                     : RosterSync.Compare(db, api, sizes);
                 fresh = fresh.Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
@@ -389,10 +461,12 @@ public partial class RosterSyncView : UserControl
         {
             _busy = false;
         }
-        await CompareAsync();
+        if (api != null) await CompareAsync();
         await ComparePicksAsync();
-        FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. After applying: " + Counts() +
-            (_ahlError == null ? "" : $" AHL: {_ahlError}");
+        FetchStatus.Text = _api == null
+            ? "After applying: " + PickCounts().TrimStart() + PickFailureText()
+            : $"{_api.Count} players on NHL rosters{AhlSummary()}. After applying: " + Counts() +
+              (_ahlError == null ? "" : $" AHL: {_ahlError}");
     }
 
     /// <summary>Shows one kind of change (scripted runs): move, join, update, left, missing, picks.</summary>

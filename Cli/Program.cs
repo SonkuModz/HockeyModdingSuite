@@ -2937,11 +2937,26 @@ public static class Program
         return 0;
     }
 
+    /// <summary>
+    /// picks-sync [--team CODE] [--all] [--dry 1] [--files FOLDER]: compares the game's draft picks
+    /// (2027-2031) with PuckPedia's current owners. Live by default — each failed team is retried (3
+    /// attempts, 1 s then 2 s backoff) with a 1 s pause between teams, and teams the live fetch still
+    /// refuses fall back to their saved page in the PuckPedia/ folder next to nhl27kit.exe (see
+    /// PuckPedia/README.md); the status line says how many teams came from each source. --files FOLDER
+    /// reads the team pages from &lt;slug&gt;.html files in FOLDER instead, with no live fetch at all — the
+    /// site refuses the app's live requests on the user's PC (HTTP 403 on 31 of 32 teams) while the same
+    /// pages load in his browser, so he saves them himself (browser Save As) and the app parses the
+    /// files. --dry applies the ticked changes in memory only, then compares again.
+    /// </summary>
     private static int PicksSyncCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);
         var db = new Legacy(index).OpenDb(Roster.Database);
-        var fetch = PuckPediaPicks.AllPicksAsync().GetAwaiter().GetResult();
+        string files = opts.Get("files");
+        if (opts.Has("files") && files == null) throw new ArgumentException("picks-sync --files needs a folder");
+        var fetch = files != null
+            ? PuckPediaPicks.AllPicksFromFilesAsync(files).GetAwaiter().GetResult()
+            : PuckPediaPicks.AllPicksWithBundledFallbackAsync().GetAwaiter().GetResult();
         var result = PickSync.Compare(db, fetch.Picks);
         var changes = result.Changes;
         string team = opts.Get("team");
@@ -2950,6 +2965,8 @@ public static class Program
             string t = team.ToUpperInvariant();
             changes = changes.Where(c => c.OriginalAbbr == t || c.ToAbbr == t).ToList();
         }
+        string mix = PuckPediaPicks.SourceSummary(fetch);
+        Console.WriteLine(files != null ? $"PuckPedia pages loaded from {files}" : (mix != "" ? mix : "PuckPedia pages fetched live"));
         Console.WriteLine($"{result.Compared} draft picks compared (2027-2031); {changes.Count} owner differences");
         foreach (var c in changes.Take(opts.Has("all") ? 10000 : 12))
             Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Year + 1900} {PickSync.Ordinal(c.Round)} round ({c.OriginalAbbr}) {c.FromAbbr} → {c.ToAbbr}");
@@ -2962,12 +2979,15 @@ public static class Program
         if (fetch.FailedTeams.Count > 0)
         {
             var groups = fetch.FailedTeams.GroupBy(f => f.Reason).ToList();
-            if (groups.Count == 1) Console.WriteLine($"PuckPedia fetch failed for {fetch.FailedTeams.Count} teams ({groups[0].Key})");
-            else foreach (var f in fetch.FailedTeams) Console.WriteLine($"  PuckPedia fetch failed: {f.Slug} ({f.Reason})");
-            if (fetch.FailedTeams.Any(f => f.Reason == "HTTP 403"))
+            string what = files != null ? "PuckPedia pages missing" : "PuckPedia fetch failed";
+            if (groups.Count == 1) Console.WriteLine($"{what} for {fetch.FailedTeams.Count} teams ({groups[0].Key})");
+            else foreach (var f in fetch.FailedTeams) Console.WriteLine($"  {what}: {f.Slug} ({f.Reason})");
+            if (files == null && fetch.FailedTeams.Any(f => f.Reason == "HTTP 403"))
                 Console.WriteLine("The team pages load in a browser, so the site is refusing the app's request (likely its bot protection), not a network problem.");
             if (fetch.FailedTeams.Count >= PuckPediaPicks.Teams.Length)
-                Console.WriteLine("No PuckPedia data was fetched, so pick ownership could not be compared at all.");
+                Console.WriteLine(files != null
+                    ? "No PuckPedia pages were found, so pick ownership could not be compared at all."
+                    : "No PuckPedia data was fetched, so pick ownership could not be compared at all.");
         }
         if (opts.Has("dry"))
         {

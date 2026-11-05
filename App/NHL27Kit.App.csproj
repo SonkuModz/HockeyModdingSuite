@@ -23,6 +23,13 @@
     <None Include="..\ThirdParty\opus.dll" Condition="Exists('..\ThirdParty\opus.dll') And '$(NoThirdParty)' != 'true'" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
+    <!-- PuckPedia team pages saved as HTML (see PuckPedia\README.md): the live fetch is tried first and
+         these are only a fallback for machines where the site refuses the app's requests (HTTP 403). The
+         folder is NOT in the repo by default — the maintainer drops the 32 pages in before a release — so
+         the build never breaks without it, and the pages land in PuckPedia\ next to HMS.exe. -->
+    <Content Include="..\PuckPedia\*.html" Link="PuckPedia\%(Filename)%(Extension)" Condition="Exists('..\PuckPedia')" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <Resource Include="Assets\hms-icon.png" />
     <Resource Include="Assets\hms-badge.png" />
     <Resource Include="Assets\hms.ico" />
