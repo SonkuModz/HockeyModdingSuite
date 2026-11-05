@@ -152,6 +152,25 @@ public sealed class FieldEdit : Observable
     public Brush BarBrush => RosterVisuals.RatingBrush(int.TryParse(_text, out int v) ? v : 0);
 }
 
+/// <summary>
+/// A value shown on the profile but never edited: no database field behind it, so it never counts as a change
+/// and never gets written. Shown in a faded (disabled) box, like a disabled control elsewhere in the app.
+/// </summary>
+public sealed class ReadOnlyField
+{
+    public ReadOnlyField(string label, string text)
+    {
+        Label = label;
+        Text = text;
+    }
+
+    public string Label { get; }
+    public string Text { get; }
+    /// <summary>Wide enough for the longest team name ("Columbus Blue Jackets") and a "26.32% — $1.84M" share.</summary>
+    public double CardWidth => 360;
+    public double BoxWidth => 200;
+}
+
 /// <summary>A position on the primary/secondary scale: 0=C, 1=LW, 2=RW, 3=LD, 4=RD, 5=G; -1 is "None" (secondary only).</summary>
 public sealed record PositionChoice(int Value, string Name)
 {
