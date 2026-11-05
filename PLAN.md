@@ -681,6 +681,16 @@ Now its own page (**Studio** in the sidebar, `App/JerseyStudioPage.*`, 2026-10-3
 
 Teams → Logos card → **Centre ice from TheFaceoff.net…** opens a converter window for the shown team.
 
+**Centre ice tab** (2026-11-04): the team editor has Team and Centre ice tabs. The tab takes a rink picture the user
+downloaded (Choose picture… or drop it on the card) and shows the same conversion, because the site answers the kit 403
+at times while a browser still gets through. Nothing in the tab contacts the site; Open TheFaceoff.net only opens the
+league in the user's browser. On a rink's page the whole-rink picture links to a Google Drive file ("2027 Rink.jpg")
+with a Download button, which gives the full picture; right-clicking the picture on the site saves a resized AVIF
+(about 1035 wide). `App/CenterIcePanel` holds the preview, sliders, Save PNGs and Write, shared with the window. It
+turns away a picture under 1000 wide or not the 5000×2236 shape, and warns when the copy is under 4000 wide. Changing
+team clears the picture, since a picture is one team's rink. The window now writes only into the team it was opened for.
+Script: `--page teams --tteam WPG --ticepicture FILE` (`-` for the empty tab).
+
 - **Site** (`Core/FaceoffNet.cs`): a Wix site rendered on the server, so plain HTTP works. A league list
   (`/ice-nhl`, `/ice-ahl`…) has 8 rinks a page, newest first, paged with `?<pager>_page=N` (the pager id is read from
   page 1; NHL `comp-mb1jb5iy`). Each entry gives the title, a `center-ice/<guid>` link and the centre-ice close-up id.

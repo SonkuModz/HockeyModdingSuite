@@ -35,7 +35,8 @@ pulls current rosters from the NHL (trades, signings, call-ups), and **Lines** s
 
 ### Teams
 Team names, abbreviations, colours and home arenas, plus every logo the team has (crest, ice, boards). Replace a logo
-with your own picture, or build a centre-ice logo from any rink on TheFaceoff.net.
+with your own picture, or build a centre-ice logo and line from any rink on TheFaceoff.net: the team's Centre ice tab takes
+the rink picture you download yourself, so it works even when the site refuses the kit.
 
 ![Teams](docs/images/teams.png)
 

@@ -41,6 +41,18 @@ public static class FaceoffNet
         ("phf", "PHF"), ("cehl", "CeHL"), ("ihl", "IHL"), ("wha", "WHA"), ("plus", "Faceoff Plus"),
     };
 
+    /// <summary>The site's league for the game's league name (the NHL when nothing fits).</summary>
+    public static string LeagueKey(string league)
+    {
+        string l = (league ?? "").ToLowerInvariant();
+        return Leagues.FirstOrDefault(x => l.Contains(x.Key)).Key ?? "nhl";
+    }
+
+    /// <summary>A failed request in plain words: a refusal says what to do instead.</summary>
+    public static string Explain(Exception ex) => ex is HttpRequestException { StatusCode: HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests }
+        ? "TheFaceoff.net is refusing the kit's requests right now. Try again later, or download the rink's picture yourself and use the team's Centre ice tab."
+        : "Can't read TheFaceoff.net: " + ex.Message;
+
     private static readonly HttpClient Http = MakeClient();
 
     private static HttpClient MakeClient()

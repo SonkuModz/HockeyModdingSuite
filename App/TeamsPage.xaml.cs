@@ -167,9 +167,12 @@ public partial class TeamsPage : UserControl
     {
         _team = team;
         Empty.Visibility = team == null ? Visibility.Visible : Visibility.Collapsed;
-        Editor.Visibility = team == null ? Visibility.Collapsed : Visibility.Visible;
+        EditorRoot.Visibility = team == null ? Visibility.Collapsed : Visibility.Visible;
         if (team == null) { Sections.ItemsSource = null; PaletteStrip.ItemsSource = null; LogoGroups.ItemsSource = null; HeaderLogo.Source = null; return; }
         ShowLogos(team);
+        // a picture is one team's rink, so it doesn't stay for the next team
+        IceEditor.SetTarget(team, HasIceLogo, HasIceLine, _logos.CenterLogoNumber(team), TeamLogos.ArtSharers(_teams, team), TeamLogos.LineSharers(_teams, team),
+            WriteCenterIceAsync, $"Choose the rink picture you downloaded for {team.Abbr}, or drop it here");
 
         var teamPicks = new[] { new PickItem("None", -1) }
             .Concat(_teams.OrderBy(t => t.Name).Select(t => new PickItem($"{t.Name} ({t.Abbr})", t.Index))).ToList();
@@ -397,14 +400,66 @@ public partial class TeamsPage : UserControl
         return msg;
     }
 
+    private bool HasIceLogo => _logoRows.Any(r => r.Logo.Style == "centerice");
+    private bool HasIceLine => _logoRows.Any(r => r.Logo.Style == "centerline");
+
+    private void OnTab(object sender, RoutedEventArgs e)
+    {
+        if (Editor == null || CenterIceTab == null) return;
+        bool ice = TabCenterIce.IsChecked == true;
+        Editor.Visibility = ice ? Visibility.Collapsed : Visibility.Visible;
+        CenterIceTab.Visibility = ice ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Shows the Centre ice tab and, when given, converts a picture (scripted runs).</summary>
+    public async Task ShowCenterIce(string file)
+    {
+        TabCenterIce.IsChecked = true;
+        if (file != null) await OpenIcePicture(file);
+    }
+
+    private void OnOpenFaceoffSite(object sender, RoutedEventArgs e)
+    {
+        string url = $"{FaceoffNet.Site}/ice-{FaceoffNet.LeagueKey(_team?.League)}";
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception ex) { StatusChanged?.Invoke($"Can't open {url}: {ex.Message}"); }
+    }
+
+    private async void OnChoosePicture(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title = $"The rink picture for {_team?.Name}",
+            Filter = "Rink pictures|*.jpg;*.jpeg;*.png;*.webp;*.avif;*.bmp;*.tif;*.tiff|All files|*.*",
+        };
+        if (dlg.ShowDialog(Window.GetWindow(this)) == true) await OpenIcePicture(dlg.FileName);
+    }
+
+    private void OnPictureDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void OnPictureDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } files) await OpenIcePicture(files[0]);
+    }
+
+    private Task OpenIcePicture(string file) => IceEditor.OpenPicture(IceEditor.Begin("Reading the picture…"), file, Path.GetFileNameWithoutExtension(file), Path.GetFileName(file));
+
     private void OnFaceoff(object sender, RoutedEventArgs e) => OpenFaceoff();
 
     /// <summary>Opens the TheFaceoff.net centre-ice converter for the shown team.</summary>
     public FaceoffWindow OpenFaceoff()
     {
         if (_team == null) return null;
-        bool hasLine = _logoRows.Any(r => r.Logo.Style == "centerline");
-        var w = new FaceoffWindow(_team, hasLine, _logos.CenterLogoNumber(_team), TeamLogos.ArtSharers(_teams, _team), TeamLogos.LineSharers(_teams, _team), WriteCenterIceAsync) { Owner = Window.GetWindow(this) };
+        var team = _team;
+        // the window stays open while the list moves on: it only writes into the team it was opened for
+        Task<string> Write(string logo, string line) => _team?.Row == team.Row
+            ? WriteCenterIceAsync(logo, line)
+            : Task.FromResult($"{team.Abbr} is no longer the shown team: pick it in the list to write.");
+        var w = new FaceoffWindow(team, HasIceLogo, HasIceLine, _logos.CenterLogoNumber(team), TeamLogos.ArtSharers(_teams, team), TeamLogos.LineSharers(_teams, team), Write) { Owner = Window.GetWindow(this) };
         w.Show();
         return w;
     }

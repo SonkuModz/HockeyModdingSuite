@@ -127,34 +127,45 @@
                                HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="320" Margin="0,4,0,0" />
                 </StackPanel>
 
-                <ScrollViewer x:Name="Editor" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                    <StackPanel>
-                        <!-- header: the team as it is now, with its palette -->
-                        <Border Style="{StaticResource Card}" Padding="20,16" Margin="0,0,0,12">
-                            <DockPanel>
-                                <ItemsControl x:Name="PaletteStrip" DockPanel.Dock="Right" VerticalAlignment="Center">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Orientation="Horizontal" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type local:TeamValueRow}">
-                                            <Border Width="34" Height="34" CornerRadius="8" Margin="6,0,0,0" Background="{Binding Swatch}" BorderBrush="#40FFFFFF" BorderThickness="1"
-                                                    ToolTip="{Binding Text}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <Border DockPanel.Dock="Left" Width="64" Height="64" Margin="0,0,16,0" VerticalAlignment="Center">
-                                    <Image x:Name="HeaderLogo" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
-                                </Border>
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock x:Name="TeamTitle" FontFamily="{StaticResource DisplayFont}" FontSize="24" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock x:Name="TeamMeta" Style="{StaticResource Caption}" Margin="0,3,0,0" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </DockPanel>
+                <Grid x:Name="EditorRoot" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <!-- header: the team as it is now, with its palette -->
+                <Border Style="{StaticResource Card}" Padding="20,16" Margin="0,0,12,12">
+                    <DockPanel>
+                        <ItemsControl x:Name="PaletteStrip" DockPanel.Dock="Right" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:TeamValueRow}">
+                                    <Border Width="34" Height="34" CornerRadius="8" Margin="6,0,0,0" Background="{Binding Swatch}" BorderBrush="#40FFFFFF" BorderThickness="1"
+                                            ToolTip="{Binding Text}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border DockPanel.Dock="Left" Width="64" Height="64" Margin="0,0,16,0" VerticalAlignment="Center">
+                            <Image x:Name="HeaderLogo" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
                         </Border>
-
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="TeamTitle" FontFamily="{StaticResource DisplayFont}" FontSize="24" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="TeamMeta" Style="{StaticResource Caption}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                    <Border Grid.Row="1" CornerRadius="9" Padding="3" Margin="0,0,0,12" HorizontalAlignment="Left" Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="TabTeam" Style="{StaticResource Segment}" GroupName="TeamTab" Content="Team" IsChecked="True" Checked="OnTab" />
+                            <RadioButton x:Name="TabCenterIce" Style="{StaticResource Segment}" GroupName="TeamTab" Content="Centre ice" Checked="OnTab" />
+                        </StackPanel>
+                    </Border>
+                    <ScrollViewer x:Name="Editor" Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
                         <!-- logos: every style the game keeps for this team, with Export and Replace -->
                         <Border x:Name="LogosCard" Style="{StaticResource Card}" Padding="18,14,14,8" Margin="0,0,12,12">
                             <StackPanel>
@@ -251,8 +262,40 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <!-- centre ice from a rink picture the user downloaded -->
+                    <ScrollViewer x:Name="CenterIceTab" Grid.Row="2" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <Border Style="{StaticResource Card}" Padding="18,14" Margin="0,0,12,12" AllowDrop="True" DragOver="OnPictureDragOver" Drop="OnPictureDrop">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,14">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Button Style="{StaticResource Ghost}" Padding="10,5" Click="OnOpenFaceoffSite" ToolTip="Opens the team's league on TheFaceoff.net in your web browser">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="12" />
+                                                <TextBlock Text="Open TheFaceoff.net" Margin="6,0,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource Primary}" Padding="12,5" Margin="8,0,0,0" Click="OnChoosePicture">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE8E5;" Style="{StaticResource Icon}" FontSize="12" />
+                                                <TextBlock Text="Choose picture…" Margin="6,0,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,14,0">
+                                        <TextBlock Text="Centre ice from a rink picture" FontSize="14.5" FontWeight="SemiBold" />
+                                        <TextBlock Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                                   Text="1. Open TheFaceoff.net and go to the rink's page.&#x0a;2. Click the whole-rink picture. It opens on Google Drive: press Download there (right-clicking the picture on the site only saves a small copy).&#x0a;3. Choose the file here, or drop it on this card. The logo and line are made from it, ready to check and write. Nothing here contacts the site." />
+                                        <TextBlock Style="{StaticResource Caption}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                   Text="TheFaceoff.net's graphics are for personal use with credit." />
+                                    </StackPanel>
+                                </DockPanel>
+                                <local:CenterIcePanel x:Name="IceEditor" PreviewMaxHeight="500" />
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
         </Grid>
     </Grid>

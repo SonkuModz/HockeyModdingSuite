@@ -32,6 +32,12 @@ public static class CenterIce
     private const int LineLeft = 4, LineRight = 60;
     private const double TintBlack = 85, TintWhite = 238, PaintLow = 19, PaintHigh = 228;
 
+    /// <summary>The width of the site's full-size layouts, and the least a picture needs to be worth converting.</summary>
+    public const int FullWidth = 5000, LeastWidth = 1000;
+
+    /// <summary>Whether a picture has the shape of a whole top-down rink layout (5000×2236, or a smaller copy of it).</summary>
+    public static bool IsRinkShape(int w, int h) => h > 0 && Math.Abs((double)w / h - 5000.0 / 2236) < 0.03;
+
     /// <summary>Finds the rink in a top-down picture (RGBA).</summary>
     public static RinkGeometry Measure(byte[] rgba, int w, int h)
     {

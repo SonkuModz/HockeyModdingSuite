@@ -1121,18 +1121,19 @@ public partial class MainWindow : Window
             }
             if (a.ContainsKey("tsave")) { await TeamsPage.SaveAsync(); await Task.Delay(1500); }
             if (a.TryGetValue("tlogoexport", out var tle)) await TeamsPage.ExportLogos(tle);
+            if (a.TryGetValue("ticepicture", out var tip)) { await TeamsPage.ShowCenterIce(tip == "-" ? null : tip); await Task.Delay(1500); }
             if (a.TryGetValue("tfaceoff", out var tfo) && TeamsPage.OpenFaceoff() is { } fw)
             {
                 await Task.Delay(1500);
                 if (a.TryGetValue("tfosat", out var tfs) && double.TryParse(tfs, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double fsat))
-                    fw.SetLook(fsat, 0.06);
+                    fw.IcePanel.SetLook(fsat, 0.06);
                 if (a.TryGetValue("tfotint", out var tft) && double.TryParse(tft, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ftint))
-                    fw.TintSlider.Value = ftint;
+                    fw.IcePanel.TintSlider.Value = ftint;
                 if (a.TryGetValue("tfosearch", out var tfq)) fw.Search.Text = tfq;
                 if (tfo.StartsWith("http")) await fw.OpenRink(tfo); else await fw.PickRink(tfo);
                 await Task.Delay(1500);
-                if (a.ContainsKey("tfodark")) { fw.IceToggle.IsChecked = true; fw.SetLook(fw.SatSlider.Value, fw.CutSlider.Value + 0.0001); await Task.Delay(1200); }
-                if (a.ContainsKey("tfowrite")) { await fw.Write(); await Task.Delay(1500); }
+                if (a.ContainsKey("tfodark")) { fw.IcePanel.IceToggle.IsChecked = true; fw.IcePanel.SetLook(fw.IcePanel.SatSlider.Value, fw.IcePanel.CutSlider.Value + 0.0001); await Task.Delay(1200); }
+                if (a.ContainsKey("tfowrite")) { await fw.IcePanel.Write(); await Task.Delay(1500); }
             }
             if (a.TryGetValue("tlogo", out var tlw) && a.TryGetValue("tlogofile", out var tlf)) { await TeamsPage.ReplaceLogos(tlw, tlf); await Task.Delay(1500); }
             await Task.Delay(1500);
