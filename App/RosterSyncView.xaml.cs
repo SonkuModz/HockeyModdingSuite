@@ -97,7 +97,7 @@ public partial class RosterSyncView : UserControl
 
     private async void OnFetch(object sender, RoutedEventArgs e) => await FetchAsync();
 
-    /// <summary>Fetches the NHL's rosters and compares them with the game's database as it is now.</summary>
+    /// <summary>Fetches the NHL's rosters and compares them with the game's database as it is now. The NHL, AHL and draft-pick fetches are three independent streams that run at the same time — each sequential within its own host, never concurrent within PuckPedia — and the player compare runs once the NHL and AHL fetches are both done, since it dedupes across both.</summary>
     public async Task FetchAsync()
     {
         if (_mods == null || _busy) return;
@@ -107,51 +107,90 @@ public partial class RosterSyncView : UserControl
         LoadPagesButton.IsEnabled = false;
         try
         {
+            bool includeAhl = AhlBox.IsChecked == true;
+            bool includePicks = PicksBox.IsChecked == true;
+
+            // Shared progress: each stream updates only its own line, and the status text is
+            // recomposed from all three, so the streams never overwrite each other.
+            string nhlState = "NHL rosters…", ahlState = includeAhl ? "AHL rosters…" : null, pickState = includePicks ? "draft picks…" : null;
+            void RefreshFetchStatus()
+            {
+                var parts = new List<string>();
+                if (nhlState != null) parts.Add(nhlState);
+                if (ahlState != null) parts.Add(ahlState);
+                if (pickState != null) parts.Add(pickState);
+                FetchStatus.Text = parts.Count == 0 ? "Fetching…" : "Fetching " + string.Join("  ·  ", parts);
+            }
+            RefreshFetchStatus();
+
+            // NHL stream: fetch only. The compare needs the AHL fetch too (one shared matched
+            // set), so it runs below, once both player fetches are done.
             int done = 0;
-            var progress = new Progress<string>(t => FetchStatus.Text = $"Fetching NHL rosters… {++done}/{NhlApi.Teams.Length} ({t})");
+            var progress = new Progress<string>(t => { nhlState = $"NHL rosters… {++done}/{NhlApi.Teams.Length} ({t})"; RefreshFetchStatus(); });
             var sink = (IProgress<string>)progress;
-            _api = await Task.Run(() => NhlApi.AllRostersAsync(t => sink.Report(t)));
-            _ahl = null;
-            _ahlError = null;
-            _ahlSkipped = new List<string>();
-            if (AhlBox.IsChecked == true)
+            Task<List<NhlPlayer>> nhlTask = Task.Run(() => NhlApi.AllRostersAsync(t => sink.Report(t)));
+
+            // AHL stream: fetch only, and only when ticked.
+            Task<List<(AhlTeam Team, List<AhlPlayer> Players)>> ahlTask = null;
+            if (includeAhl)
             {
-                // The AHL fetch must not wipe the NHL results: it has its own try/catch, and a failure
-                // is reported in the status line while the NHL rows are still shown.
-                try
-                {
-                    int ahlDone = 0;
-                    var ahlProgress = new Progress<string>(t => FetchStatus.Text = $"Fetching AHL rosters… {++ahlDone}/32 ({t})");
-                    var ahlSink = (IProgress<string>)ahlProgress;
-                    _ahl = await Task.Run(() => AhlApi.AllRostersAsync(t => ahlSink.Report(t)));
-                }
-                catch (Exception ex) { _ahl = null; _ahlError = ex.Message; }
+                int ahlDone = 0;
+                var ahlProgress = new Progress<string>(t => { ahlState = $"AHL rosters… {++ahlDone}/32 ({t})"; RefreshFetchStatus(); });
+                var ahlSink = (IProgress<string>)ahlProgress;
+                ahlTask = Task.Run(() => AhlApi.AllRostersAsync(t => ahlSink.Report(t)));
             }
-            FetchStatus.Text = "Comparing with the game…";
-            await CompareAsync();
-            try
+
+            // Picks stream: fetch (live, retries + bundled-folder fallback) and compare, on its
+            // own. It never throws — a failure just clears the pick rows — so it cannot take the
+            // player streams down with it.
+            Task picksTask = Task.CompletedTask;
+            if (includePicks)
             {
-                FetchStatus.Text = "Fetching draft picks from PuckPedia…";
-                _picksFromFiles = false;
-                _pickSource = "";
                 int pdone = 0;
-                var fetch = await PuckPediaPicks.AllPicksWithBundledFallbackAsync(slug => FetchStatus.Text = $"Fetching draft picks from PuckPedia… {++pdone}/{PuckPediaPicks.Teams.Length} ({slug})");
-                _picks = fetch.Picks.ToList();
-                _pickFailed = fetch.FailedTeams.ToList();
-                _pickSource = PuckPediaPicks.SourceSummary(fetch);
-                await ComparePicksAsync();
+                picksTask = FetchPicksAsync(slug => { pickState = $"draft picks… {++pdone}/{PuckPediaPicks.Teams.Length} ({slug})"; RefreshFetchStatus(); });
             }
-            catch (Exception ex)
+            else
             {
-                // a picks failure never wipes the player results: the pick rows just clear
+                // Unticked: the picks are not pulled, and any pick rows from an earlier fetch go away.
                 _picks = null;
                 _pickResult = null;
                 _pickRows = new List<SyncRow>();
-                _pickFailed = new List<PuckPediaFailure> { new("all teams", PuckPediaPicks.FailureReason(ex)) };
+                _pickFailed = new List<PuckPediaFailure>();
+                _pickSource = "";
+                _picksFromFiles = false;
                 ApplyFilter();
             }
-            FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.")
-                + PickFailureText() + _pickSource;
+
+            // Await the NHL fetch. A failure means no player list at all, but the picks stream
+            // still runs to completion on its own.
+            string nhlError = null;
+            try { _api = await nhlTask; nhlState = "NHL rosters done"; }
+            catch (Exception ex) { _api = null; nhlError = ex.Message; nhlState = "NHL rosters failed"; }
+            RefreshFetchStatus();
+
+            // Await the AHL fetch (only when it ran). A failure is reported in the status line
+            // while the NHL rows are still shown.
+            _ahl = null;
+            _ahlError = null;
+            _ahlSkipped = new List<string>();
+            if (ahlTask != null)
+            {
+                try { _ahl = await ahlTask; ahlState = "AHL rosters done"; }
+                catch (Exception ex) { _ahl = null; _ahlError = ex.Message; ahlState = "AHL rosters failed"; }
+                RefreshFetchStatus();
+            }
+
+            // The combined player compare: AHL first, NHL second, one shared matched set. The
+            // picks stream may still be fetching; its progress keeps updating the line.
+            if (_api != null) await CompareAsync();
+
+            // Wait for the picks stream to finish (no-op when unticked).
+            await picksTask;
+
+            FetchStatus.Text = _api == null
+                ? $"Couldn't fetch the NHL rosters: {nhlError}. " + PickCounts().TrimStart() + PickFailureText() + _pickSource
+                : $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.")
+                  + PickFailureText() + _pickSource;
             FilterBar.IsEnabled = true;
         }
         catch (Exception ex)
@@ -165,6 +204,30 @@ public partial class RosterSyncView : UserControl
             LoadPagesButton.IsEnabled = true;
             FetchLabel.Text = _api == null ? "Fetch NHL rosters & picks" : "Fetch again";
             SetButtons();
+        }
+    }
+
+    /// <summary>One picks stream: live PuckPedia fetch (retries + bundled-folder fallback), then compare. Never throws: a failure just clears the pick rows and records the reason, so the player results survive.</summary>
+    private async Task FetchPicksAsync(Action<string> progress)
+    {
+        _picksFromFiles = false;
+        _pickSource = "";
+        try
+        {
+            var fetch = await PuckPediaPicks.AllPicksWithBundledFallbackAsync(progress);
+            _picks = fetch.Picks.ToList();
+            _pickFailed = fetch.FailedTeams.ToList();
+            _pickSource = PuckPediaPicks.SourceSummary(fetch);
+            await ComparePicksAsync();
+        }
+        catch (Exception ex)
+        {
+            // a picks failure never wipes the player results: the pick rows just clear
+            _picks = null;
+            _pickResult = null;
+            _pickRows = new List<SyncRow>();
+            _pickFailed = new List<PuckPediaFailure> { new("all teams", PuckPediaPicks.FailureReason(ex)) };
+            ApplyFilter();
         }
     }
 
@@ -365,6 +428,32 @@ public partial class RosterSyncView : UserControl
         await CompareAsync();
         FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() +
             (_ahlError == null ? "" : $" AHL: {_ahlError}");
+    }
+
+    /// <summary>Ticking/unticking the draft picks box after a fetch: fetch the picks (not the rosters again), or drop the pick rows.</summary>
+    private async void OnPicks(object sender, RoutedEventArgs e)
+    {
+        if (_mods == null || _busy) return;
+        if (PicksBox.IsChecked == true && _picks == null)
+        {
+            int pdone = 0;
+            await FetchPicksAsync(slug => FetchStatus.Text = $"Fetching draft picks from PuckPedia… {++pdone}/{PuckPediaPicks.Teams.Length} ({slug})");
+            FetchStatus.Text = _api == null
+                ? PickCounts().TrimStart() + PickFailureText() + _pickSource
+                : $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() + (_ahlError == null ? "" : $" AHL: {_ahlError}") + PickFailureText() + _pickSource;
+        }
+        else if (PicksBox.IsChecked != true)
+        {
+            _picks = null;
+            _pickResult = null;
+            _pickRows = new List<SyncRow>();
+            _pickFailed = new List<PuckPediaFailure>();
+            _pickSource = "";
+            _picksFromFiles = false;
+            ApplyFilter();
+            if (_api != null)
+                FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() + (_ahlError == null ? "" : $" AHL: {_ahlError}") + PickFailureText() + _pickSource;
+        }
     }
 
     private void OnTickAll(object sender, RoutedEventArgs e) { foreach (var r in Shown) r.Selected = true; }
