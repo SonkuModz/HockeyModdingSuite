@@ -47,6 +47,9 @@ public sealed class SyncChange
     public int NewWeight { get; init; }
     /// <summary>True when the player was matched by name only (his birth date differs or is missing).</summary>
     public bool NameOnly { get; init; }
+    /// <summary>A Missing player's full bio (with where he was drafted), looked up after the compare (MissingPlayers.BioAsync)
+    /// for the create-player pipeline. Null until looked up, or when the lookup failed.</summary>
+    public PlayerBio Bio { get; set; }
     /// <summary>Ticked by default: moves, joins and number changes are; departures and unmatched players aren't.</summary>
     public bool Selected { get; set; }
 

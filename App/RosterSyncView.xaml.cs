@@ -5,6 +5,29 @@ using NHL27Kit.Core;
 
 namespace NHL27Kit.App;
 
+/// <summary>Where one sync stream stands. Off is gray (not run, or its box is unticked), Running gold, Done green, Failed red.</summary>
+public enum StageState { Off, Running, Done, Failed }
+
+/// <summary>One sync stream's status chip above the list (NHL rosters, AHL rosters, draft picks, missing players' bios).</summary>
+public sealed class SyncStage : Observable
+{
+    private StageState _state;
+    private string _detail = "";
+
+    public SyncStage(string label) => Label = label;
+
+    public string Label { get; }
+    public StageState State { get => _state; private set => Set(ref _state, value); }
+    /// <summary>Short text after the label (the chip has a fixed width): "12/32 · MIN", "748 players", "off", the error.</summary>
+    public string Detail { get => _detail; private set => Set(ref _detail, value); }
+
+    public void Update(StageState state, string detail = "")
+    {
+        State = state;
+        Detail = detail;
+    }
+}
+
 /// <summary>One difference in the sync list, with its tick box.</summary>
 public sealed class SyncRow : Observable
 {
@@ -38,10 +61,10 @@ public sealed class SyncRow : Observable
     public string Note => IsPick ? "" : Change.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." :
         Change.Kind == SyncKind.Join && Change.NeedsNewRow ? "In the game as a free agent with no roster row — Sync will create one." :
         Change.Kind == SyncKind.Left ? "Unticked: he may be injured, sent down or gone. Tick it to send him to the AHL affiliate." :
-        Change.Kind == SyncKind.Missing ? "Not in the game's database, so it can't be applied yet." : "";
+        Change.Kind == SyncKind.Missing ? Change.Bio?.Text ?? "Not in the game's database, so it can't be applied yet." : "";
     public string KindText => IsPick ? "PICK" : Change.Kind switch
     {
-        SyncKind.Move => "TRADE", SyncKind.Join => "CALL-UP", SyncKind.Update => "NUMBER", SyncKind.Left => "LEFT NHL", _ => "NOT IN GAME",
+        SyncKind.Move => "TRADE", SyncKind.Join => "CALL-UP", SyncKind.Update => "INFO", SyncKind.Left => "LEFT NHL", _ => "NOT IN GAME",
     };
     public Brush KindBrush => new SolidColorBrush(IsPick ? Color.FromRgb(0xB7, 0x8C, 0xFF) : Change.Kind switch
     {
@@ -50,6 +73,9 @@ public sealed class SyncRow : Observable
     });
     /// <summary>Everything the search box matches on for a pick row.</summary>
     public string SearchText => $"{Name} {Description}";
+
+    /// <summary>Called when the Missing player's bio arrives, so the row's note shows it.</summary>
+    public void BioLoaded() => Raise(nameof(Note));
 
     public bool Selected
     {
@@ -90,7 +116,39 @@ public partial class RosterSyncView : UserControl
     /// <summary>Raised after changes were written (the roster list reloads).</summary>
     public event Action Applied;
 
-    public RosterSyncView() => InitializeComponent();
+    /// <summary>Missing players' bios from this fetch, by source and id ("NHL:8485414", "AHL:11419"). Every compare
+    /// (after Apply, ticking sizes or AHL) builds new rows, so they take their bios from here instead of losing them;
+    /// a new Fetch starts it empty.</summary>
+    private readonly Dictionary<string, PlayerBio> _bios = new();
+
+    private static string BioKey(SyncChange c) => c.Api != null ? $"NHL:{c.Api.Id}" : c.Ahl != null ? $"AHL:{c.Ahl.Id}" : null;
+
+    private readonly SyncStage _nhlStage = new("NHL rosters");
+    private readonly SyncStage _ahlStage = new("AHL rosters");
+    private readonly SyncStage _picksStage = new("Draft picks");
+    private readonly SyncStage _biosStage = new("Missing bios");
+
+    public RosterSyncView()
+    {
+        InitializeComponent();
+        StageList.ItemsSource = new[] { _nhlStage, _ahlStage, _picksStage, _biosStage };
+    }
+
+    /// <summary>The AHL chip after a fetch or compare: off when unticked, red when the fetch or compare failed, else green with the counts.</summary>
+    private void ShowAhlStage()
+    {
+        if (AhlBox.IsChecked != true) _ahlStage.Update(StageState.Off, "off");
+        else if (_ahlError != null) _ahlStage.Update(StageState.Failed, _ahlError);
+        else if (_ahl != null) _ahlStage.Update(StageState.Done, $"{_ahl.Sum(t => t.Players.Count)} players");
+    }
+
+    /// <summary>The picks chip after the bundled file was read: red when it couldn't be used, else green with how many owners differ.</summary>
+    private void ShowPicksStage()
+    {
+        if (PicksBox.IsChecked != true) _picksStage.Update(StageState.Off, "off");
+        else if (_pickError != null) _picksStage.Update(StageState.Failed, _pickError);
+        else if (_pickResult != null) _picksStage.Update(StageState.Done, $"{_pickRows.Count} to change");
+    }
 
     public void SetMods(ModService mods) => _mods = mods;
 
@@ -108,23 +166,18 @@ public partial class RosterSyncView : UserControl
             bool includeAhl = AhlBox.IsChecked == true;
             bool includePicks = PicksBox.IsChecked == true;
 
-            // Shared progress: each stream updates only its own line, and the status text is
-            // recomposed from all three, so the streams never overwrite each other.
-            string nhlState = "NHL rosters…", ahlState = includeAhl ? "AHL rosters…" : null, pickState = includePicks ? "draft picks…" : null;
-            void RefreshFetchStatus()
-            {
-                var parts = new List<string>();
-                if (nhlState != null) parts.Add(nhlState);
-                if (ahlState != null) parts.Add(ahlState);
-                if (pickState != null) parts.Add(pickState);
-                FetchStatus.Text = parts.Count == 0 ? "Fetching…" : "Fetching " + string.Join("  ·  ", parts);
-            }
-            RefreshFetchStatus();
+            // Each stream reports on its own chip, so the streams never overwrite each other; the
+            // text line below the chips gets the summary once everything is done.
+            FetchStatus.Text = "Fetching…";
+            _nhlStage.Update(StageState.Running, "starting…");
+            _ahlStage.Update(includeAhl ? StageState.Running : StageState.Off, includeAhl ? "starting…" : "off");
+            _picksStage.Update(includePicks ? StageState.Running : StageState.Off, includePicks ? "reading file…" : "off");
+            _biosStage.Update(StageState.Off, "waiting");
 
             // NHL stream: fetch only. The compare needs the AHL fetch too (one shared matched
             // set), so it runs below, once both player fetches are done.
             int done = 0;
-            var progress = new Progress<string>(t => { nhlState = $"NHL rosters… {++done}/{NhlApi.Teams.Length} ({t})"; RefreshFetchStatus(); });
+            var progress = new Progress<string>(t => _nhlStage.Update(StageState.Running, $"{++done}/{NhlApi.Teams.Length} · {t}"));
             var sink = (IProgress<string>)progress;
             Task<List<NhlPlayer>> nhlTask = Task.Run(() => NhlApi.AllRostersAsync(t => sink.Report(t)));
 
@@ -133,7 +186,7 @@ public partial class RosterSyncView : UserControl
             if (includeAhl)
             {
                 int ahlDone = 0;
-                var ahlProgress = new Progress<string>(t => { ahlState = $"AHL rosters… {++ahlDone}/32 ({t})"; RefreshFetchStatus(); });
+                var ahlProgress = new Progress<string>(t => _ahlStage.Update(StageState.Running, $"{++ahlDone}/32 · {t}"));
                 var ahlSink = (IProgress<string>)ahlProgress;
                 ahlTask = Task.Run(() => AhlApi.AllRostersAsync(t => ahlSink.Report(t)));
             }
@@ -144,7 +197,7 @@ public partial class RosterSyncView : UserControl
             Task picksTask = Task.CompletedTask;
             if (includePicks)
             {
-                picksTask = FetchPicksAsync(() => { pickState = "draft picks done"; RefreshFetchStatus(); });
+                picksTask = FetchPicksAsync(ShowPicksStage);
             }
             else
             {
@@ -161,9 +214,8 @@ public partial class RosterSyncView : UserControl
             // Await the NHL fetch. A failure means no player list at all, but the picks stream
             // still runs to completion on its own.
             string nhlError = null;
-            try { _api = await nhlTask; nhlState = "NHL rosters done"; }
-            catch (Exception ex) { _api = null; nhlError = ex.Message; nhlState = "NHL rosters failed"; }
-            RefreshFetchStatus();
+            try { _api = await nhlTask; _nhlStage.Update(StageState.Done, $"{_api.Count} players"); }
+            catch (Exception ex) { _api = null; nhlError = ex.Message; _nhlStage.Update(StageState.Failed, ex.Message); }
 
             // Await the AHL fetch (only when it ran). A failure is reported in the status line
             // while the NHL rows are still shown.
@@ -172,14 +224,22 @@ public partial class RosterSyncView : UserControl
             _ahlSkipped = new List<string>();
             if (ahlTask != null)
             {
-                try { _ahl = await ahlTask; ahlState = "AHL rosters done"; }
-                catch (Exception ex) { _ahl = null; _ahlError = ex.Message; ahlState = "AHL rosters failed"; }
-                RefreshFetchStatus();
+                try { _ahl = await ahlTask; }
+                catch (Exception ex) { _ahl = null; _ahlError = ex.Message; }
             }
 
             // The combined player compare: AHL first, NHL second, one shared matched set. The
-            // picks stream may still be fetching; its progress keeps updating the line.
+            // picks stream may still be running on its own chip.
+            _bios.Clear();
             if (_api != null) await CompareAsync();
+            // After the compare, which can fail the AHL side on its own.
+            ShowAhlStage();
+
+            // Full bios for the players not in the game (the create-player pipeline needs them). Only
+            // known once the compare has run, since it decides who is Missing.
+            int bioFailed = 0;
+            if (_api != null) bioFailed = await LookUpBiosAsync();
+            else _biosStage.Update(StageState.Off, "skipped");
 
             // Wait for the picks stream to finish (no-op when unticked).
             await picksTask;
@@ -187,12 +247,16 @@ public partial class RosterSyncView : UserControl
             FetchStatus.Text = _api == null
                 ? $"Couldn't fetch the NHL rosters: {nhlError}. " + PickCounts().TrimStart() + _pickSource
                 : $"{_api.Count} players on NHL rosters{AhlSummary()}, fetched {DateTime.Now:HH:mm}. " + Counts() + (_ahlError == null ? "" : $" AHL failed: {_ahlError}.")
+                  + (bioFailed == 0 ? "" : $" Bios couldn't be fetched for {bioFailed} missing player{(bioFailed == 1 ? "" : "s")}.")
                   + _pickSource;
             FilterBar.IsEnabled = true;
         }
         catch (Exception ex)
         {
             FetchStatus.Text = "Couldn't fetch the NHL rosters: " + ex.Message;
+            // Whatever was still running stopped with it.
+            foreach (var s in new[] { _nhlStage, _ahlStage, _picksStage, _biosStage })
+                if (s.State == StageState.Running) s.Update(StageState.Failed, ex.Message);
         }
         finally
         {
@@ -201,6 +265,45 @@ public partial class RosterSyncView : UserControl
             FetchLabel.Text = _api == null ? "Fetch NHL rosters & picks" : "Fetch again";
             SetButtons();
         }
+    }
+
+    /// <summary>
+    /// Looks up the full bio of each player who is not in the game (MissingPlayers.BioAsync): NHL roster players from
+    /// the NHL API's player page, AHL roster players from the AHL feed's player view. The two run side by side, one
+    /// player at a time each with a short pause (both hosts turn away bursts), and each row's note shows the bio as it
+    /// arrives. A failed lookup leaves that row without a bio. Players whose bio is already known (from _bios) are not
+    /// looked up again. Progress and the outcome go on the bios chip. Returns the number of failures.
+    /// </summary>
+    private async Task<int> LookUpBiosAsync()
+    {
+        var missing = _rows.Where(r => r.Change.Kind == SyncKind.Missing && r.Change.Bio == null).ToList();
+        var nhl = missing.Where(r => r.Change.Api != null).ToList();
+        var ahl = missing.Where(r => r.Change.Ahl is { Id: > 0 }).ToList();
+        int total = nhl.Count + ahl.Count, done = 0, failed = 0;
+        void report(string s) => _biosStage.Update(StageState.Running, s);
+        if (total > 0) report($"0/{total}");
+
+        async Task Run(List<SyncRow> rows)
+        {
+            foreach (var r in rows)
+            {
+                try
+                {
+                    r.Change.Bio = await MissingPlayers.BioAsync(r.Change);
+                    if (r.Change.Bio != null && BioKey(r.Change) is { } key) _bios[key] = r.Change.Bio;
+                    r.BioLoaded();
+                }
+                catch (Exception) { failed++; }
+                report($"{++done}/{total}");
+                await Task.Delay(150);
+            }
+        }
+
+        await Task.WhenAll(Run(nhl), Run(ahl));
+        int all = _rows.Count(r => r.Change.Kind == SyncKind.Missing), withBio = _rows.Count(r => r.Change.Kind == SyncKind.Missing && r.Change.Bio != null);
+        if (failed > 0) _biosStage.Update(StageState.Failed, $"{failed} of {all} failed");
+        else _biosStage.Update(StageState.Done, all == 0 ? "no players missing" : $"{withBio} players");
+        return failed;
     }
 
     /// <summary>One picks stream: read the bundled draft-picks.json next to the exe, then compare. Never throws: a missing or unreadable file just clears the pick rows and records the reason, so the player results survive.</summary>
@@ -248,6 +351,8 @@ public partial class RosterSyncView : UserControl
         {
             changes = await Task.Run(() => RosterSync.Compare(db, api, sizes));
         }
+        foreach (var c in changes)
+            if (c.Kind == SyncKind.Missing && BioKey(c) is { } key && _bios.TryGetValue(key, out var bio)) c.Bio = bio;
         _rows = changes.Select(c => new SyncRow(c, SetButtons)).ToList();
         ApplyFilter();
     }
@@ -272,10 +377,10 @@ public partial class RosterSyncView : UserControl
     {
         int N(SyncKind k) => _rows.Count(r => !r.Change.IsAhl && r.Change.Kind == k);
         int A(SyncKind k) => _rows.Count(r => r.Change.IsAhl && r.Change.Kind == k);
-        string s = $"{N(SyncKind.Move)} trades, {N(SyncKind.Join)} call-ups/signings, {N(SyncKind.Update)} number changes, " +
+        string s = $"{N(SyncKind.Move)} trades, {N(SyncKind.Join)} call-ups/signings, {N(SyncKind.Update)} info changes, " +
                $"{N(SyncKind.Left)} no longer on an NHL roster, {N(SyncKind.Missing)} not in the game.";
         if (_rows.Any(r => r.Change.IsAhl))
-            s += $" AHL: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} number changes, {A(SyncKind.Missing)} not in the game.";
+            s += $" AHL: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} info changes, {A(SyncKind.Missing)} not in the game.";
         if (_pickResult == null) return s;
         return s + PickCounts();
     }
@@ -337,16 +442,21 @@ public partial class RosterSyncView : UserControl
             try
             {
                 int ahlDone = 0;
-                var ahlProgress = new Progress<string>(t => FetchStatus.Text = $"Fetching AHL rosters… {++ahlDone}/32 ({t})");
+                _ahlStage.Update(StageState.Running, "starting…");
+                var ahlProgress = new Progress<string>(t => _ahlStage.Update(StageState.Running, $"{++ahlDone}/32 · {t}"));
                 var ahlSink = (IProgress<string>)ahlProgress;
                 _ahl = await Task.Run(() => AhlApi.AllRostersAsync(t => ahlSink.Report(t))); _ahlError = null;
             }
-            catch (Exception ex) { _ahl = null; _ahlError = ex.Message; FetchStatus.Text = "Couldn't fetch the AHL rosters: " + ex.Message; return; }
+            catch (Exception ex) { _ahl = null; _ahlError = ex.Message; ShowAhlStage(); FetchStatus.Text = "Couldn't fetch the AHL rosters: " + ex.Message; return; }
         }
         else if (AhlBox.IsChecked != true) { _ahl = null; _ahlError = null; _ahlSkipped = new List<string>(); }
         await CompareAsync();
+        ShowAhlStage();
+        // Newly listed AHL players not in the game need their bios too (ones already fetched come from _bios).
+        int bioFailed = await LookUpBiosAsync();
         FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() +
-            (_ahlError == null ? "" : $" AHL: {_ahlError}");
+            (_ahlError == null ? "" : $" AHL: {_ahlError}") +
+            (bioFailed == 0 ? "" : $" Bios couldn't be fetched for {bioFailed} missing player{(bioFailed == 1 ? "" : "s")}.");
     }
 
     /// <summary>Ticking/unticking the draft picks box after a fetch: read the bundled file (not the rosters again), or drop the pick rows.</summary>
@@ -355,7 +465,8 @@ public partial class RosterSyncView : UserControl
         if (_mods == null || _busy) return;
         if (PicksBox.IsChecked == true && _picks == null)
         {
-            await FetchPicksAsync();
+            _picksStage.Update(StageState.Running, "reading file…");
+            await FetchPicksAsync(ShowPicksStage);
             FetchStatus.Text = _api == null
                 ? PickCounts().TrimStart() + _pickSource
                 : $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() + (_ahlError == null ? "" : $" AHL: {_ahlError}") + _pickSource;
@@ -369,6 +480,7 @@ public partial class RosterSyncView : UserControl
             _pickError = null;
             _pickSource = "";
             ApplyFilter();
+            ShowPicksStage();
             if (_api != null)
                 FetchStatus.Text = $"{_api.Count} players on NHL rosters{AhlSummary()}. " + Counts() + (_ahlError == null ? "" : $" AHL: {_ahlError}") + _pickSource;
         }

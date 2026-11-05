@@ -71,7 +71,7 @@ public static class AhlApi
 
     /// <summary>
     /// Every AHL team's current roster, one team at a time (the feed turns away bursts with 429, so there is a
-    /// 250 ms pause between teams, like NhlApi.AllRostersAsync). Progress is reported per team (team name).
+    /// 250 ms pause between teams, like NhlApi.AllRostersAsync). Progress is reported per team (the feed's team_code, e.g. "ABB"; the name when a team has none).
     /// Roughly 32 teams x ~25 players, so about 800 players in 2026-27.
     /// </summary>
     public static async Task<List<(AhlTeam Team, List<AhlPlayer> Players)>> AllRostersAsync(Action<string> progress = null, CancellationToken ct = default)
@@ -82,7 +82,7 @@ public static class AhlApi
         foreach (var t in teams)
         {
             all.Add((t, await RosterAsync(t.Id, season, t.Name, ct)));
-            progress?.Invoke(t.Name);
+            progress?.Invoke(string.IsNullOrEmpty(t.Code) ? t.Name : t.Code);
             await Task.Delay(250, ct);
         }
         return all;
@@ -121,6 +121,38 @@ public static class AhlApi
             }
         }
         return list;
+    }
+
+    /// <summary>
+    /// The player's full bio from the feed's player view (what theahl.com/stats/player/{id} shows): number, position,
+    /// shoots (catches for goalies), height, weight, birth date, birth city (the feed's "City, Region" line cut to the
+    /// city, as the game stores it), and where he was drafted into the NHL. info.drafts lists every draft he went
+    /// through (NHL and others); the latest NHL one wins, since a player who went unsigned can be drafted again.
+    /// draft_rank is the overall pick. No NHL entry means undrafted. Position may be just "F", as on the roster.
+    /// </summary>
+    public static async Task<PlayerBio> BioAsync(int playerId, CancellationToken ct = default)
+    {
+        string url = $"{FeedBase}&view=player&player_id={playerId}&season_id={SeasonId}&league_id={LeagueId}&statsType=standard&key={Key}&client_code={ClientCode}&site_id={SiteId}&lang=en";
+        using var doc = JsonDocument.Parse(await GetAsync(url, ct));
+        if (!doc.RootElement.TryGetProperty("info", out var info)) throw new InvalidOperationException($"The AHL feed has no player {playerId}.");
+        DraftInfo best = DraftInfo.Undrafted;
+        if (info.TryGetProperty("drafts", out var drafts) && drafts.ValueKind == JsonValueKind.Array)
+            foreach (var d in drafts.EnumerateArray())
+            {
+                if (!string.Equals(Str(d, "draft_league"), "NHL", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!int.TryParse(Str(d, "draft_year"), out int year) || year <= best.Year) continue;
+                int.TryParse(Str(d, "draft_round"), out int round);
+                int.TryParse(Str(d, "draft_rank"), out int overall);
+                best = new DraftInfo(year, NhlApi.TeamAbbr(Str(d, "draft_team")), round, overall);
+            }
+        string position = Str(info, "position");
+        return new PlayerBio(
+            Str(info, "firstName"), Str(info, "lastName"),
+            int.TryParse(Str(info, "jerseyNumber"), out int n) ? n : -1,
+            position, Str(info, position == "G" ? "catches" : "shoots"),
+            ParseHeight(Str(info, "height_hyphenated")), int.TryParse(Str(info, "weight"), out int w) ? w : 0,
+            DateTime.TryParse(Str(info, "birthDate"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var b) ? b : null,
+            MissingPlayers.BirthCity(Str(info, "birthPlace")), best, "AHL");
     }
 
     /// <summary>"6-3" -> 75 inches. Anything unparsable -> 0 (unknown, never written).</summary>
