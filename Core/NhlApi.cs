@@ -98,24 +98,24 @@ public static class NhlApi
         return ids;
     }
 
-    /// <summary>Full NHL team names (as other sources write them) to abbreviations. Current teams come from PickSnapshot's slugs;
-    /// relocated and renamed franchises are listed here so older draft years still resolve.</summary>
+    /// <summary>Full NHL team names (as other sources write them) to abbreviations. Current teams come from CapWages'
+    /// page slugs; relocated and renamed franchises are listed here so older draft years still resolve.</summary>
     private static readonly Dictionary<string, string> FormerTeams = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["arizona-coyotes"] = "ARI", ["phoenix-coyotes"] = "PHX", ["utah-hockey-club"] = "UTA", ["utah-hc"] = "UTA",
-        ["atlanta-thrashers"] = "ATL", ["mighty-ducks-of-anaheim"] = "ANA",
+        ["arizona_coyotes"] = "ARI", ["phoenix_coyotes"] = "PHX", ["utah_hockey_club"] = "UTA", ["utah_hc"] = "UTA",
+        ["atlanta_thrashers"] = "ATL", ["mighty_ducks_of_anaheim"] = "ANA",
     };
 
     /// <summary>"Minnesota Wild" -> "MIN". The name as given when it isn't a known NHL team.</summary>
     public static string TeamAbbr(string fullName)
     {
         string slug = Slug(fullName);
-        foreach (var (s, abbr) in PickSnapshot.Teams)
+        foreach (var (abbr, s) in CapWagesApi.Teams)
             if (s == slug) return abbr;
         return FormerTeams.TryGetValue(slug, out var former) ? former : fullName;
     }
 
-    /// <summary>"Montréal Canadiens" -> "montreal-canadiens", matching PuckPedia's team slugs.</summary>
+    /// <summary>"Montréal Canadiens" -> "montreal_canadiens", matching CapWages' team slugs.</summary>
     private static string Slug(string name)
     {
         var sb = new System.Text.StringBuilder();
@@ -123,9 +123,9 @@ public static class NhlApi
         {
             if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
             if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
-            else if (sb.Length > 0 && sb[^1] != '-') sb.Append('-');
+            else if (sb.Length > 0 && sb[^1] != '_') sb.Append('_');
         }
-        return sb.ToString().Trim('-');
+        return sb.ToString().Trim('_');
     }
 
     /// <summary>A GET that waits and tries again when the API says too many requests (429), up to five times.</summary>

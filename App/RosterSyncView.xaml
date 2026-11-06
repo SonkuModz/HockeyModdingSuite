@@ -67,7 +67,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock x:Name="FetchStatus" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
-                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and, when ticked, all 32 teams' rosters from the AHL (theahl.com) and the draft picks from the bundled draft-picks.json file next to HMS.exe (no network). Nothing changes until you press Apply." />
+                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and, when ticked, all 32 teams' rosters from the AHL (theahl.com) and every team's contracts and draft picks from CapWages (capwages.com). Nothing changes until you press Apply." />
                     </StackPanel>
                 </DockPanel>
                 <StackPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="True">
@@ -81,11 +81,14 @@
                                 <RadioButton x:Name="KindUpdate" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Info" Checked="OnFilter" />
                                 <RadioButton x:Name="KindLeft" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Left NHL" Checked="OnFilter" />
                                 <RadioButton x:Name="KindMissing" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Not in game" Checked="OnFilter" />
+                                <RadioButton x:Name="KindContracts" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Contracts" Checked="OnFilter" />
                                 <RadioButton x:Name="KindPicks" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Picks" Checked="OnFilter" />
                             </StackPanel>
                         </Border>
                     </DockPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <CheckBox x:Name="ContractsBox" Content="Include contracts" VerticalAlignment="Center" Margin="0,0,16,0"
+                                  IsChecked="True" Checked="OnContracts" Unchecked="OnContracts" Foreground="{StaticResource TextDim}" />
                         <CheckBox x:Name="PicksBox" Content="Include draft picks" VerticalAlignment="Center" Margin="0,0,16,0"
                                   IsChecked="True" Checked="OnPicks" Unchecked="OnPicks" Foreground="{StaticResource TextDim}" />
                         <CheckBox x:Name="AhlBox" Content="Include AHL" VerticalAlignment="Center" Margin="0,0,16,0"

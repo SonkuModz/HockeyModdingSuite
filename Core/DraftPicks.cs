@@ -29,7 +29,7 @@ public sealed class DraftPicks
                                     Int(db, t, r, "owner"), Int(db, t, r, "origteamid")));
     }
 
-    /// <summary>The earliest stored draft year in exhibitiondraftpick, or -1 when the table is missing or empty. The picks tab and the pick snapshot both derive their years from this, never from a hard-coded year.</summary>
+    /// <summary>The earliest stored draft year in exhibitiondraftpick, or -1 when the table is missing or empty. The picks tab and the CapWages pick sync both derive their years from this, never from a hard-coded year.</summary>
     public static int FirstStoredYear(T3Db db)
     {
         var t = db.Table(Table);
