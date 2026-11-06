@@ -8,6 +8,8 @@ public enum ContractChangeKind
     Contract,
     /// <summary>A team's retained-salary yearly totals differ (stockteamsalaryextras): rebuilt from every retained contract.</summary>
     TeamRetention,
+    /// <summary>A team's buyout and terminated-contract cap charges differ (stockteamsalaryextras cbaexpenseyearN).</summary>
+    TeamBuyouts,
 }
 
 /// <summary>A player's contract as the game stores it (or should): status, his team's share in dollars, years left, the
@@ -38,15 +40,29 @@ public sealed class ContractChange
     public int[] NewCounts { get; init; }
 
     public bool Selected { get; set; }
-    public bool CanApply => Kind == ContractChangeKind.TeamRetention ? Team >= 0 : BioRow >= 0;
+    /// <summary>A team row (retained totals or buyouts) rather than a player's contract.</summary>
+    public bool IsTeam => Kind != ContractChangeKind.Contract;
+    public bool CanApply => IsTeam ? Team >= 0 : BioRow >= 0;
     /// <summary>Identifies the change across a fresh re-compare (Apply re-compares, then applies the ticked keys).</summary>
     public (ContractChangeKind, int, int) Key => (Kind, GameId, Team);
 
     /// <summary>What applying does, in words.</summary>
-    public string Description => Kind == ContractChangeKind.TeamRetention
+    public string Description => Kind == ContractChangeKind.TeamBuyouts ? BuyoutText()
+        : Kind == ContractChangeKind.TeamRetention
         ? $"retained salary {ContractSync.Millions(OldTotals[0])} → {ContractSync.Millions(NewTotals[0])} this season ({OldCounts[0]} → {NewCounts[0]} player{(NewCounts[0] == 1 ? "" : "s")})"
           + (OldTotals.Skip(1).SequenceEqual(NewTotals.Skip(1)) ? "" : ", later seasons too")
         : string.Join("  ·  ", Parts());
+
+    /// <summary>"buyouts $2.6M → $2.6M this season, 2 → 4 seasons left".</summary>
+    private string BuyoutText()
+    {
+        static int Seasons(long[] d) => Array.FindLastIndex(d, v => v != 0) + 1;
+        string s = $"buyouts {ContractSync.Millions(OldTotals[0])} → {ContractSync.Millions(NewTotals[0])} this season";
+        int o = Seasons(OldTotals), n = Seasons(NewTotals);
+        if (o != n) s += $", {o} → {n} season{(n == 1 ? "" : "s")} left";
+        else if (!OldTotals.Skip(1).SequenceEqual(NewTotals.Skip(1))) s += ", later seasons too";
+        return s;
+    }
 
     private IEnumerable<string> Parts()
     {
@@ -79,10 +95,13 @@ public sealed class ContractChange
 ///   only in CapWages' free text), so clauses are written only for a deal that is new or changed; an unchanged deal
 ///   keeps the game's own clauses.
 /// - retainedsalarytrades = how many former teams retain part of his salary.
-/// - stockteamsalaryextras: per team, 25 yearly slots of retained dollars (whole dollars) and how many players they cover.
+/// - stockteamsalaryextras: per team, 25 yearly slots of retained dollars (whole dollars) and how many players they cover,
+///   and cbaexpenseyearN: the team's buyout and terminated-contract cap charges per season (whole dollars). Matched
+///   against CapWages for all 9 teams with charges in the shipped data: Buffalo 6,444,445 = Skinner's buyout, Minnesota
+///   1,666,666 = Parise + Suter, Nashville 3,555,556 = Turris + Duchene, Los Angeles = Richards' termination (600,000
+///   ×3, 500,000 ×2, 400,000). Buried contracts and LTIR overage aren't in it.
 /// Never written, because they don't mean what their names suggest in the shipped data: contractneedsentrylevel (0 for
-/// all 213 players on entry-level deals) and contractismultiyear (doesn't follow the deal's length). Buyouts and other
-/// dead cap (cbaexpenseyearN) aren't synced: that field mixes buyouts with other charges and isn't decoded yet.
+/// all 213 players on entry-level deals) and contractismultiyear (doesn't follow the deal's length).
 ///
 /// Seasons map by distance from now, not calendar year: CapWages' current season (CapWagesApi.CurrentSeason) is the
 /// game's year 0 in either game, so a 6-year deal is 6 years left in NHL 24 too.
@@ -191,6 +210,7 @@ public static class ContractSync
             }
 
         changes.AddRange(CompareRetention(db, teams, now));
+        changes.AddRange(CompareBuyouts(db, teams, now));
         return changes.OrderBy(c => c.Kind).ThenBy(c => c.TeamAbbr).ThenBy(c => c.Name).ToList();
     }
 
@@ -314,8 +334,70 @@ public static class ContractSync
         }
     }
 
-    /// <summary>Writes the ticked changes: a player's contract fields, or a team's 25 yearly retention slots. Values out of a
-    /// field's range are skipped, never wrapped.</summary>
+    /// <summary>Buyout charges this close to CapWages' count as the same: the shipped data rounds a third of a dollar up
+    /// where CapWages rounds down (Skinner 6,444,445 vs 6,444,444), and such a row would only churn.</summary>
+    public const long BuyoutSlack = 5;
+
+    /// <summary>
+    /// The teams whose buyout and terminated-contract charges (cbaexpenseyearN) differ from CapWages': each team's
+    /// charges summed per season from its own page's dead cap lists, mapped by distance from now like contracts. Teams
+    /// within BuyoutSlack every season get no row.
+    /// </summary>
+    private static IEnumerable<ContractChange> CompareBuyouts(T3Db db, IReadOnlyList<CapTeam> teams, int now)
+    {
+        var t = db.Table(SalaryExtrasTable);
+        if (t == null) yield break;
+        var f = t.Fields.ToDictionary(x => x.Name);
+        if (!f.ContainsKey("index") || !Enumerable.Range(0, RetentionYears).All(y => f.ContainsKey($"cbaexpenseyear{y}"))) yield break;
+        var index = RosterSync.TeamIndex(db);
+        var totals = new Dictionary<int, long[]>();
+        var who = new Dictionary<int, List<string>>();
+        foreach (var team in teams)
+        {
+            if (!index.TryGetValue(team.Abbr, out int ti)) continue;
+            foreach (var b in team.Buyouts)
+            {
+                bool counted = false;
+                foreach (var (year, hit) in b.Seasons.Where(s => s.StartYear >= now && s.StartYear < now + RetentionYears))
+                {
+                    if (!totals.TryGetValue(ti, out var tt)) totals[ti] = tt = new long[RetentionYears];
+                    tt[year - now] += hit;
+                    counted = true;
+                }
+                if (!counted) continue;
+                if (!who.TryGetValue(ti, out var w)) who[ti] = w = new List<string>();
+                w.Add(Flip(b.Name) + (b.Kind.Contains("terminat", StringComparison.OrdinalIgnoreCase) ? " (terminated)" : ""));
+            }
+        }
+        var names = new Roster(db).Teams;
+        for (int r = 0; r < t.WrittenRecords; r++)
+        {
+            if (db.IsInvalid(t, r)) continue;
+            int ti = (int)db.Get(t, r, f["index"]);
+            if (!index.ContainsValue(ti)) continue;
+            var oldD = Enumerable.Range(0, RetentionYears).Select(y => (long)(int)db.Get(t, r, f[$"cbaexpenseyear{y}"])).ToArray();
+            var newD = totals.TryGetValue(ti, out var nt) ? nt : new long[RetentionYears];
+            if (oldD.Zip(newD).All(p => Math.Abs(p.First - p.Second) <= BuyoutSlack)) continue;
+            string abbr = names.TryGetValue(ti, out var tm) ? tm.Abbr : $"team {ti}";
+            yield return new ContractChange
+            {
+                Kind = ContractChangeKind.TeamBuyouts, Team = ti, TeamAbbr = abbr, Name = names.TryGetValue(ti, out var tn) ? tn.Name : abbr,
+                OldTotals = oldD, NewTotals = newD, Selected = true,
+                Source = who.TryGetValue(ti, out var list) ? "CapWages buyouts: " + string.Join(", ", list) : "CapWages lists no buyouts for this team",
+            };
+        }
+    }
+
+    /// <summary>"Skinner, Jeff" -> "Jeff Skinner".</summary>
+    private static string Flip(string name)
+    {
+        name ??= "";
+        int comma = name.IndexOf(',');
+        return comma > 0 ? $"{name[(comma + 1)..].Trim()} {name[..comma].Trim()}" : name;
+    }
+
+    /// <summary>Writes the ticked changes: a player's contract fields, a team's 25 yearly retention slots, or its 25
+    /// yearly buyout charges. Values out of a field's range are skipped, never wrapped.</summary>
     public static string Apply(T3Db db, IEnumerable<ContractChange> changes)
     {
         using var batch = db.Batch();
@@ -329,15 +411,29 @@ public static class ContractSync
             long max = f.RangeLow + (1L << f.Depth) - 1;
             if (v >= f.RangeLow && v <= max) db.Set(t, row, f, (int)v);
         }
-        int players = 0, teams = 0;
+        int players = 0, teams = 0, buyouts = 0;
+        int TeamRow(int team)
+        {
+            for (int r = 0; r < st.WrittenRecords; r++)
+                if (!db.IsInvalid(st, r) && (int)db.Get(st, r, sf["index"]) == team) return r;
+            return -1;
+        }
         foreach (var c in changes.Where(c => c.CanApply))
         {
+            if (c.Kind == ContractChangeKind.TeamBuyouts)
+            {
+                if (st == null) continue;
+                int brow = TeamRow(c.Team);
+                if (brow < 0) continue;
+                for (int y = 0; y < RetentionYears; y++)
+                    SetIn(st, brow, sf, $"cbaexpenseyear{y}", c.NewTotals[y]);
+                buyouts++;
+                continue;
+            }
             if (c.Kind == ContractChangeKind.TeamRetention)
             {
                 if (st == null) continue;
-                int row = -1;
-                for (int r = 0; r < st.WrittenRecords && row < 0; r++)
-                    if (!db.IsInvalid(st, r) && (int)db.Get(st, r, sf["index"]) == c.Team) row = r;
+                int row = TeamRow(c.Team);
                 if (row < 0) continue;
                 for (int y = 0; y < RetentionYears; y++)
                 {
@@ -366,6 +462,7 @@ public static class ContractSync
         var parts = new List<string>();
         if (players > 0) parts.Add($"{players} contract{(players == 1 ? "" : "s")} updated");
         if (teams > 0) parts.Add($"retained salary rebuilt for {teams} team{(teams == 1 ? "" : "s")}");
+        if (buyouts > 0) parts.Add($"buyouts updated for {buyouts} team{(buyouts == 1 ? "" : "s")}");
         return "Contracts: " + (parts.Count == 0 ? "nothing written" : string.Join(", ", parts));
     }
 }

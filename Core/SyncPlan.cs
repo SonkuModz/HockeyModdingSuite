@@ -19,9 +19,13 @@ public static class SyncPlan
     /// Applies the ticked roster changes (<paramref name="picked"/>: game id, kind, to-team, AHL) and creates the ticked
     /// missing players (<paramref name="toCreate"/>: bio key → bio) in <paramref name="db"/>. <paramref name="cap"/> is
     /// given when contracts are synced too (a new player's NHL club comes from his CapWages deal), else null.
+    /// <paramref name="compared"/>: the list's own changes, when <paramref name="db"/> is a fresh read of the same game
+    /// database they were compared against (the preview), which saves the 7-second compare; Apply leaves it null and
+    /// compares afresh against the database it saves.
     /// </summary>
     public static PlayerResult ApplyPlayers(T3Db db, List<NhlPlayer> api, List<(AhlTeam Team, List<AhlPlayer> Players)> ahl, bool sizes,
-        ISet<(int GameId, SyncKind Kind, int ToTeam, bool IsAhl)> picked, IReadOnlyDictionary<string, PlayerBio> toCreate, IReadOnlyList<CapTeam> cap)
+        ISet<(int GameId, SyncKind Kind, int ToTeam, bool IsAhl)> picked, IReadOnlyDictionary<string, PlayerBio> toCreate, IReadOnlyList<CapTeam> cap,
+        IReadOnlyList<SyncChange> compared = null)
     {
         var summaries = new List<string>();
         var created = new HashSet<int>();
@@ -30,7 +34,8 @@ public static class SyncPlan
         // Re-compare fresh with the same combined compare the list uses (AHL first, NHL second, one shared matched
         // set — see CompareCombined), so the list can't hold two changes for the same player that overwrite each
         // other. Safety net: if a duplicate somehow remains, keep one change per player, preferring the AHL one.
-        List<SyncChange> fresh = ahl != null ? RosterSync.CompareCombined(db, api, ahl, sizes).Changes : RosterSync.Compare(db, api, sizes);
+        List<SyncChange> fresh = compared?.ToList()
+            ?? (ahl != null ? RosterSync.CompareCombined(db, api, ahl, sizes).Changes : RosterSync.Compare(db, api, sizes));
         var missing = fresh.Where(c => c.Kind == SyncKind.Missing && BioKey(c) is { } k && toCreate.ContainsKey(k)).ToList();
         foreach (var c in missing) c.Bio = toCreate[BioKey(c)];
         fresh = fresh.Where(c => c.Kind != SyncKind.Missing && picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
@@ -54,5 +59,19 @@ public static class SyncPlan
                 summaries.Add("not created: " + string.Join(", ", made.Skipped.Take(5).Select(s => $"{s.Name} ({s.Reason})")) + (made.Skipped.Count > 5 ? ", …" : ""));
         }
         return new PlayerResult(summaries, created);
+    }
+
+    /// <summary>
+    /// After ApplyPlayers: the DailyFaceoff lineup players the NHL's roster lists missed (LineupCallUps), compared on
+    /// <paramref name="db"/> as the roster changes left it, and the ticked ones applied (<paramref name="ticks"/>: game id →
+    /// ticked; a player not in it keeps his default when <paramref name="othersByDefault"/>, as the preview does, and is
+    /// left out otherwise, as Apply does). Returns every such call-up, for the list, and Apply's summary or null.
+    /// </summary>
+    public static (List<SyncChange> CallUps, string Summary) ApplyLineupCallUps(T3Db db, IReadOnlyList<(string Abbr, LineTeam Team, string Error)> lines,
+        List<NhlPlayer> api, List<(AhlTeam Team, List<AhlPlayer> Players)> ahl, IReadOnlyList<CapTeam> cap, IReadOnlyDictionary<int, bool> ticks, bool othersByDefault)
+    {
+        var callUps = LineupCallUps.Compare(db, lines, api, ahl, cap);
+        var picked = callUps.Where(c => ticks.TryGetValue(c.GameId, out bool t) ? t : othersByDefault && c.Selected).ToList();
+        return (callUps, picked.Count > 0 ? RosterSync.Apply(db, picked) : null);
     }
 }

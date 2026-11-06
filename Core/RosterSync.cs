@@ -9,7 +9,7 @@ public enum SyncKind
     Move,
     /// <summary>In the game but on no NHL team (junior, AHL, Europe, national team): a call-up or a new signing.</summary>
     Join,
-    /// <summary>On the right team; only the number (or height/weight) differs.</summary>
+    /// <summary>On the right team; only the number (or height/weight, or birth date) differs.</summary>
     Update,
     /// <summary>On an NHL team in the game but on no NHL roster now (sent down, released, retired).</summary>
     Left,
@@ -47,6 +47,13 @@ public sealed class SyncChange
     public int NewWeight { get; init; }
     /// <summary>True when the player was matched by name only (his birth date differs or is missing).</summary>
     public bool NameOnly { get; init; }
+    /// <summary>A call-up from a DailyFaceoff lineup that the NHL's roster lists missed (LineupCallUps): why, for the row's note. Null otherwise.</summary>
+    public string Lineup { get; init; }
+    /// <summary>His birth date in the game (null when it isn't a real date) and in the source (null when it gives none).</summary>
+    public DateTime? OldBorn { get; init; }
+    public DateTime? NewBorn { get; init; }
+    /// <summary>The source has a believable birth date and the game's differs: Apply corrects the game's.</summary>
+    public bool BornChanges => NewBorn is { } n && n.Year >= 1950 && n <= DateTime.Today && n != OldBorn;
     /// <summary>A Missing player's full bio (with where he was drafted), looked up after the compare (MissingPlayers.BioAsync)
     /// for the create-player pipeline. Null until looked up, or when the lookup failed.</summary>
     public PlayerBio Bio { get; set; }
@@ -77,6 +84,7 @@ public sealed class SyncChange
         if (NumberChanges) parts.Add(OldNumber >= 0 ? $"#{OldNumber} → #{NewNumber}" : $"#{NewNumber}");
         if (WithSizes && NewHeight > 0 && NewHeight != OldHeight) parts.Add($"{OldHeight}→{NewHeight} in");
         if (WithSizes && NewWeight > 0 && NewWeight != OldWeight) parts.Add($"{OldWeight}→{NewWeight} lb");
+        if (BornChanges) parts.Add($"born {(OldBorn is { } o ? o.ToString("yyyy-MM-dd") : "?")} → {NewBorn:yyyy-MM-dd}");
         return parts.Count == 0 ? "" : "  ·  " + string.Join(", ", parts);
     }
 }
@@ -211,10 +219,10 @@ public static class RosterSync
                 PlayerIndex = p.PlayerIndex,
                 FromTeam = from, ToTeam = to, FromTeamName = fromName, ToTeamName = TeamName(to),
                 OldNumber = oldNo, NewNumber = a.Number, OldHeight = oldH, NewHeight = a.HeightIn, OldWeight = oldW, NewWeight = a.WeightLb,
-                NameOnly = nameOnly, WithSizes = sizes,
+                NameOnly = nameOnly, WithSizes = sizes, OldBorn = matcher.Born(p), NewBorn = a.Born,
             };
             bool sizeDiffers = (a.HeightIn > 0 && a.HeightIn != oldH) || (a.WeightLb > 0 && a.WeightLb != oldW);
-            if (kind == SyncKind.Update && !c.NumberChanges && !(sizes && sizeDiffers)) continue;
+            if (kind == SyncKind.Update && !c.NumberChanges && !(sizes && sizeDiffers) && !c.BornChanges) continue;
             c.Selected = true;
             changes.Add(c);
         }
@@ -335,10 +343,10 @@ public static class RosterSync
                 PlayerIndex = p.PlayerIndex,
                 FromTeam = from, ToTeam = ahlTeam, FromTeamName = fromName, ToTeamName = TeamName(ahlTeam),
                 OldNumber = oldNo, NewNumber = a.Number, OldHeight = oldH, NewHeight = a.HeightIn, OldWeight = oldW, NewWeight = a.WeightLb,
-                NameOnly = nameOnly, WithSizes = sizes,
+                NameOnly = nameOnly, WithSizes = sizes, OldBorn = matcher.Born(p), NewBorn = a.Born,
             };
             bool sizeDiffers = (a.HeightIn > 0 && a.HeightIn != oldH) || (a.WeightLb > 0 && a.WeightLb != oldW);
-            if (kind == SyncKind.Update && !c.NumberChanges && !(sizes && sizeDiffers)) continue;
+            if (kind == SyncKind.Update && !c.NumberChanges && !(sizes && sizeDiffers) && !c.BornChanges) continue;
             c.Selected = true;
             changes.Add(c);
         }
@@ -402,7 +410,7 @@ public static class RosterSync
     /// <summary>
     /// Writes the changes into the database (in place): the player's row in both roster tables (team, jersey; a player
     /// changing team gets his line slots and captaincy cleared and is marked active, so the game places him in its own
-    /// lines) and the bio's team, jersey, height and weight. Returns a summary.
+    /// lines) and the bio's team, jersey, height, weight and birth date. Returns a summary.
     /// </summary>
     public static string Apply(T3Db db, IEnumerable<SyncChange> changes)
     {
@@ -419,7 +427,7 @@ public static class RosterSync
         var full = new List<string>();
         bool ArrivesIn(T3Table t, Dictionary<int, int> rowOf, int pi, SyncChange c) =>
             rowOf.TryGetValue(pi, out int at) ? (int)db.Get(t, at, t.Fields.First(f => f.Name == "team")) != c.ToTeam : c.RosterRow < 0;
-        int moved = 0, numbers = 0, sizes = 0;
+        int moved = 0, numbers = 0, sizes = 0, births = 0;
         void SetIn(T3Table t, int row, T3Field f, int v)
         {
             long max = f.RangeLow + (1L << f.Depth) - 1;
@@ -439,6 +447,14 @@ public static class RosterSync
             // stayed. Only when he has no roster row (a bio-only free agent) is there no row to
             // read from, and PlayerIndex is the only source for creating one.
             int pi = c.RosterRow >= 0 ? (int)db.Get(rt, c.RosterRow, rf["playerindex"]) : c.PlayerIndex;
+            // His birth date is his own, whatever happens to the move: the bio stores year - 1900, month - 1, day - 1.
+            if (c.BornChanges && c.NewBorn is { } born && bf.ContainsKey("year") && bf.ContainsKey("month") && bf.ContainsKey("day"))
+            {
+                SetIn(bio, c.BioRow, bf["year"], born.Year - 1900);
+                SetIn(bio, c.BioRow, bf["month"], born.Month - 1);
+                SetIn(bio, c.BioRow, bf["day"], born.Day - 1);
+                births++;
+            }
             // a team with 40 players takes no more: he stays where he is, the other changes still go in
             if (tables.Any(x => ArrivesIn(x.Table, x.RowOf, pi, c) && !HasFreeSlot(db, x.Table, c.ToTeam)))
             {
@@ -521,7 +537,7 @@ public static class RosterSync
             SortByKey(db, t);
         }
         string left = full.Count == 0 ? "" : $"; {full.Count} not moved, their team has 40 players ({string.Join(", ", full.Take(5))}{(full.Count > 5 ? ", ..." : "")})";
-        return $"Roster sync: {moved} moved, {numbers} numbers, {sizes} heights/weights, {createdPis.Count} new roster rows, lines rebuilt for {touched.Count} teams{left}";
+        return $"Roster sync: {moved} moved, {numbers} numbers, {sizes} heights/weights, {births} birth dates, {createdPis.Count} new roster rows, lines rebuilt for {touched.Count} teams{left}";
     }
 
     /// <summary>

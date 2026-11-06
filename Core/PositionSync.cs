@@ -42,22 +42,29 @@ public static class PositionSync
         "C" => 0, "LW" => 1, "RW" => 2, "LD" => 3, "RD" => 4, _ => -1,
     };
 
-    /// <summary>The primary and secondary CapWages gives (secondary -1 when it lists only one), or null when it gives none the game can use.</summary>
-    public static (int Primary, int Secondary)? Listed(CapPlayer cp)
+    /// <summary>
+    /// The primary and secondary CapWages gives, or null when it gives none the game can use. The game can't make a
+    /// player both a forward and a defenceman, so the secondary is the next listed position in the primary's group
+    /// (Landon Sim, "LD, RW": LD and no secondary). Secondary is -1 when there's none; Several says whether CapWages
+    /// listed more than one position.
+    /// </summary>
+    public static (int Primary, int Secondary, bool Several)? Listed(CapPlayer cp)
     {
         var listed = (cp.Pos ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => Code(s) >= 0).ToList();
         if (listed.Count == 0) return null;
         // by games played, CapWages' own order breaking ties
-        var order = listed.Select((s, i) => (s, i)).OrderByDescending(x => cp.PositionGames.GetValueOrDefault(x.s)).ThenBy(x => x.i).Select(x => Code(x.s)).ToList();
-        return (order[0], order.Count > 1 ? order[1] : -1);
+        var order = listed.Select((s, i) => (s, i)).OrderByDescending(x => cp.PositionGames.GetValueOrDefault(x.s)).ThenBy(x => x.i).Select(x => Code(x.s)).Distinct().ToList();
+        int secondary = order.Skip(1).Where(p => IsDefence(p) == IsDefence(order[0])).DefaultIfEmpty(-1).First();
+        return (order[0], secondary, order.Count > 1);
     }
 
-    /// <summary>What the game should have: CapWages' positions, with the game's own second position kept when CapWages lists one.</summary>
+    /// <summary>What the game should have: CapWages' positions, with the game's own second position kept when CapWages
+    /// lists only one. When CapWages lists several but none in the primary's group, the secondary is dropped.</summary>
     public static (int Primary, int Secondary)? Target(CapPlayer cp, int oldPrimary, int oldSecondary)
     {
         if (oldPrimary == 5 || Listed(cp) is not { } l) return null;
         int secondary = l.Secondary;
-        if (secondary < 0)
+        if (secondary < 0 && !l.Several)
         {
             bool Fits(int p) => p is >= 0 and <= 4 && p != l.Primary && IsDefence(p) == IsDefence(l.Primary);
             secondary = Fits(oldSecondary) ? oldSecondary : Fits(oldPrimary) ? oldPrimary : -1;

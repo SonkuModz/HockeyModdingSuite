@@ -26,9 +26,17 @@ public sealed record CapPlayer(string First, string Last, DateTime? Born, string
 /// <summary>A draft pick a team's page lists: real draft year, round, the original team's full name, and whether the team traded it away.</summary>
 public sealed record CapPick(int Year, int Round, string OriginalTeam, bool TradedAway);
 
+/// <summary>A bought-out or terminated contract still charged to a team's cap: whose it was ("Skinner, Jeff"), what kind
+/// ("buyout history", "terminated penalty") and the cap hit per season (StartYear 2026 = 2026-27), whole dollars.</summary>
+public sealed record CapBuyout(string Name, string Kind, IReadOnlyList<(int StartYear, long CapHit)> Seasons);
+
 /// <summary>One NHL team's CapWages page, parsed.</summary>
 public sealed record CapTeam(string Abbr, string Name, IReadOnlyList<CapPlayer> Players, IReadOnlyList<CapPick> Picks)
 {
+    /// <summary>Buyouts and terminated contracts charged to this team (the page's dead cap lists, minus retained salary,
+    /// buried contracts and LTIR, which the game works out or stores elsewhere).</summary>
+    public IReadOnlyList<CapBuyout> Buyouts { get; init; } = Array.Empty<CapBuyout>();
+
     /// <summary>The affiliate's players on AHL contracts (the page's "AHL Contracts" table: name, birth date, one position, no
     /// NHL contract). Kept apart from Players so contracts and picks never see them; only their positions are used.</summary>
     public IReadOnlyList<CapPlayer> AhlPlayers { get; init; } = Array.Empty<CapPlayer>();
@@ -41,8 +49,9 @@ public sealed record CapTeam(string Abbr, string Name, IReadOnlyList<CapPlayer> 
 /// players by group ("roster", "non-roster", "inactive", "dead cap"), each with contracts and per-season cap hits,
 /// clauses and retention; props.pageProps.draftPicks holds the picks the team owns or traded away. This class is the
 /// only code that knows that layout: if CapWages changes it, parsing fails here and the sync reports CapWages failed.
-/// The "dead cap" group (retained salary, buyouts, buried contracts) is skipped: retained players are read from their
-/// own team's roster, where each season carries a retention list, so nobody is counted twice.
+/// The "dead cap" group (retained salary, buyouts, terminated contracts, buried contracts, LTIR) isn't read as players:
+/// retained players are read from their own team's roster, where each season carries a retention list, so nobody is
+/// counted twice. Only its buyouts and terminated contracts are kept, as the team's Buyouts (each season's buyout.capHit).
 /// </summary>
 public static class CapWagesApi
 {
@@ -144,7 +153,43 @@ public static class CapWagesApi
                 string last = comma > 0 ? full[..comma].Trim() : full, first = comma > 0 ? full[(comma + 1)..].Trim() : "";
                 ahl.Add(new CapPlayer(first, last, ParseDate(Str(p, "born")), "ahl", "", Array.Empty<CapContract>()) { Pos = Str(p, "pos") });
             }
-        return new CapTeam(abbr, name, players, picks) { AhlPlayers = ahl };
+        return new CapTeam(abbr, name, players, picks) { AhlPlayers = ahl, Buyouts = ParseBuyouts(pp, abbr) };
+    }
+
+    /// <summary>
+    /// The dead cap lists' bought-out and terminated contracts: every season that carries a "buyout" object charged to
+    /// this team counts with that object's capHit (a buyout whose cap charge has ended but is still being paid shows $0
+    /// and adds nothing). Buried contracts and LTIR overage have no buyout object. The retained salary list is skipped:
+    /// a retained contract that another team later bought out carries that team's buyout too (Utah, which retains part
+    /// of Ekman-Larsson's deal from Arizona, lists Vancouver's buyout of it), and buyout.teamName says whose it is.
+    /// </summary>
+    private static List<CapBuyout> ParseBuyouts(JsonElement pp, string abbr)
+    {
+        var all = new List<CapBuyout>();
+        if (!pp.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object
+            || !data.TryGetProperty("dead cap", out var dead) || dead.ValueKind != JsonValueKind.Object) return all;
+        foreach (var group in dead.EnumerateObject())
+        {
+            if (group.Value.ValueKind != JsonValueKind.Array || group.Name == "retained salary") continue;
+            foreach (var p in group.Value.EnumerateArray())
+            {
+                var seasons = new List<(int, long)>();
+                if (p.TryGetProperty("contracts", out var cs) && cs.ValueKind == JsonValueKind.Array)
+                    foreach (var c in cs.EnumerateArray())
+                        if (c.TryGetProperty("details", out var ds) && ds.ValueKind == JsonValueKind.Array)
+                            foreach (var d in ds.EnumerateArray())
+                            {
+                                string season = Str(d, "season");
+                                if (season.Length < 4 || !int.TryParse(season[..4], out int start)) continue;
+                                if (!d.TryGetProperty("buyout", out var b) || b.ValueKind != JsonValueKind.Object) continue;
+                                string charged = Str(b, "teamName");
+                                if (charged.Length > 0 && NhlApi.TeamAbbr(charged) != abbr) continue;
+                                if (Money(Str(b, "capHit")) is { } hit && hit > 0) seasons.Add((start, hit));
+                            }
+                if (seasons.Count > 0) all.Add(new CapBuyout(Str(p, "name"), group.Name, seasons));
+            }
+        }
+        return all;
     }
 
     private static CapPlayer ParsePlayer(JsonElement p, string section)

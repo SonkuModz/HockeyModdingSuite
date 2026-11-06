@@ -3004,7 +3004,8 @@ public static class Program
         var teams = FetchCapWages();
         var changes = ContractSync.Compare(db, teams);
         Console.WriteLine($"Contracts from CapWages: real season {CapWagesApi.CurrentSeason(teams)}; {changes.Count(c => c.Kind == ContractChangeKind.Contract)} player differences, "
-            + $"{changes.Count(c => c.Kind == ContractChangeKind.TeamRetention)} teams' retained totals");
+            + $"{changes.Count(c => c.Kind == ContractChangeKind.TeamRetention)} teams' retained totals, "
+            + $"{changes.Count(c => c.Kind == ContractChangeKind.TeamBuyouts)} teams' buyouts");
         var shown = changes.AsEnumerable();
         if (opts.Get("team") is { } team) shown = shown.Where(c => string.Equals(c.TeamAbbr, team, StringComparison.OrdinalIgnoreCase));
         if (opts.Get("player") is { } player) shown = shown.Where(c => c.Name?.Contains(player, StringComparison.OrdinalIgnoreCase) == true);

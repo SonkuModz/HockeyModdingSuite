@@ -100,6 +100,12 @@ public partial class RosterPage : UserControl
     /// <summary>Applies the ticked sync changes (scripted runs).</summary>
     public Task SyncApplyAsync() => SyncView.ApplyAsync();
 
+    /// <summary>Flips the tick of the first sync row whose name contains <paramref name="name"/> (scripted runs).</summary>
+    public bool SyncTick(string name) => SyncView.TickByName(name);
+
+    /// <summary>Shows one kind of sync row (scripted runs).</summary>
+    public void SyncShow(string kind) => SyncView.ShowKind(kind);
+
     /// <summary>Scrolls the profile to the retained salary section (scripted runs).</summary>
     public void ShowRetained() => RetainedSection.BringIntoView();
 

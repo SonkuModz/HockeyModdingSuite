@@ -1180,6 +1180,9 @@ public partial class MainWindow : Window
             await Task.Delay(2500);
             await RosterPage.SyncAsync(rsync);
             await Task.Delay(800);
+            // --rsynctick NAME: flip that row's tick; --rsyncshow KIND: the filter to shoot after its re-check (--wait)
+            if (a.TryGetValue("rsynctick", out var tick)) { RosterPage.SyncTick(tick); await Task.Delay(300); }
+            if (a.TryGetValue("rsyncshow", out var show)) RosterPage.SyncShow(show);
             if (a.ContainsKey("rsyncapply")) { await RosterPage.SyncApplyAsync(); await Task.Delay(800); }
         }
         if (a.TryGetValue("rsearch", out var rsearch))
