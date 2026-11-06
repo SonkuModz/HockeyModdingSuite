@@ -22,10 +22,12 @@ public sealed class LineChange
     public bool Selected { get; set; }
 
     public bool CanApply => Error == null && Team >= 0;
+    /// <summary>The lines can be written: read, and every player in the lineup is on the team.</summary>
+    public bool Ready => CanApply && NotOnTeam.Count == 0;
 
     public string Description =>
         Error != null ? $"lines couldn't be read: {Error}" :
-        NotOnTeam.Count > 0 ? $"{Names(NotOnTeam)} not on the {TeamName} in the game yet; checked again after the roster changes, else this team is skipped" :
+        NotOnTeam.Count > 0 ? $"left alone: {Names(NotOnTeam)} not on the {TeamName} in the game after the roster changes" :
         $"{Changed} of {New.Count} line spots change" + (Dressed.Count > 0 ? $"  ·  dresses {Names(Dressed)}" : "") + (Scratched.Count > 0 ? $"  ·  scratches {Names(Scratched)}" : "");
 
     /// <summary>Where the lines come from, for the row's note.</summary>
@@ -66,7 +68,7 @@ public static class LineSync
             }
             var c = Plan(db, roster, team, name, lt);
             if (c.NotOnTeam.Count == 0 && c.Changed == 0) continue;
-            c.Selected = c.CanApply;
+            c.Selected = c.Ready;
             changes.Add(c);
         }
         return changes.OrderBy(c => c.TeamName).ToList();
