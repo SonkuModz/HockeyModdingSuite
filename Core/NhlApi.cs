@@ -81,7 +81,10 @@ public static class NhlApi
             Str(p, "position") switch { "L" => "LW", "R" => "RW", var pos => pos },
             Str(p, "shootsCatches"), Int(p, "heightInInches"), Int(p, "weightInPounds"),
             DateTime.TryParse(Str(p, "birthDate"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var b) ? b : null,
-            Text(p, "birthCity"), draft, "NHL");
+            Text(p, "birthCity"), draft, "NHL")
+        {
+            BirthCountry = Str(p, "birthCountry"), BirthRegion = Text(p, "birthStateProvince"),
+        };
     }
 
     /// <summary>NHL player ids whose full name matches exactly (case-insensitive), from the NHL's player search

@@ -60,6 +60,7 @@ public static class Program
                 "ahl-sync" => AhlSyncCmd(game, opts),
                 "picks-sync" => PicksSyncCmd(game, opts),
                 "contracts-sync" => ContractsSyncCmd(game, opts),
+                "create-players" => CreatePlayersCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -3014,6 +3015,85 @@ public static class Program
             var again = ContractSync.Compare(db, teams);
             Console.WriteLine($"in memory: CRCs {ok}/{total}; ticked differences left: {again.Count(c => c.Selected)} (unticked: {again.Count(c => !c.Selected)})");
         }
+        return 0;
+    }
+
+    /// <summary>
+    /// create-players [--team CODE|NAME] [--ahl] [--player NAME] [--limit N] [--no-contracts] [--dry 1]: creates the players
+    /// the roster sync finds missing from the game (NHL rosters, and AHL rosters too with --ahl), from their bios on their
+    /// own player pages, with their CapWages contracts unless --no-contracts. --dry creates them in memory only and checks
+    /// that a second compare matches every one; without it, the result is saved as a mod (the Mods page can restore it).
+    /// </summary>
+    private static int CreatePlayersCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        Console.WriteLine("NHL rosters...");
+        var api = NhlApi.AllRostersAsync().GetAwaiter().GetResult();
+        List<(AhlTeam Team, List<AhlPlayer> Players)> ahl = null;
+        if (opts.Has("ahl")) { Console.WriteLine("AHL rosters..."); ahl = AhlApi.AllRostersAsync().GetAwaiter().GetResult(); }
+        var cap = opts.Has("no-contracts") ? null : FetchCapWages();
+        List<SyncChange> Missing(T3Db d) => (ahl != null ? RosterSync.CompareCombined(d, api, ahl).Changes : RosterSync.Compare(d, api))
+            .Where(c => c.Kind == SyncKind.Missing).ToList();
+        static string Key(SyncChange c) => c.Api != null ? $"NHL:{c.Api.Id}" : $"AHL:{c.Ahl?.Id}";
+
+        string team = opts.Get("team"), player = opts.Get("player");
+        var missing = Missing(db).Where(c => team == null || string.Equals(c.Api?.Team, team, StringComparison.OrdinalIgnoreCase)
+                                             || c.Ahl?.TeamName?.Contains(team, StringComparison.OrdinalIgnoreCase) == true || c.ToTeamName?.Contains(team, StringComparison.OrdinalIgnoreCase) == true)
+                                 .Where(c => player == null || c.Name.Contains(player, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (int.TryParse(opts.Get("limit"), out int limit)) missing = missing.Take(limit).ToList();
+        Console.WriteLine($"{missing.Count} players not in the game; reading their bios...");
+        foreach (var c in missing)
+        {
+            try { c.Bio = MissingPlayers.BioAsync(c).GetAwaiter().GetResult(); }
+            catch (Exception e) { Console.WriteLine($"  ! {c.Name}: bio failed ({e.Message})"); }
+            string problem = PlayerCreator.Problem(c);
+            Console.WriteLine($"  {(problem == null ? "[x]" : "[ ]")} {c.Name,-26} {c.ToTeamName,-24} {c.Bio?.Text}{(problem == null ? "" : $"  -- {problem}")}"
+                + (c.Bio == null ? "" : $"  · from {c.Bio.BirthCountry}{(c.Bio.BirthRegion.Length > 0 ? "/" + c.Bio.BirthRegion : "")}"));
+            Thread.Sleep(150);
+        }
+        var bios = missing.Where(c => c.CanCreate).ToDictionary(Key, c => c.Bio);
+
+        CreateResult last = null;
+        string Run(T3Db d)
+        {
+            // a fresh compare of the database being written, given the bios read above
+            var fresh = Missing(d).Where(c => bios.ContainsKey(Key(c))).ToList();
+            foreach (var c in fresh) c.Bio = bios[Key(c)];
+            var made = PlayerCreator.Create(d, fresh, cap);
+            last = made;
+            foreach (var m in made.Created)
+                Console.WriteLine($"  + {m.Name,-26} {Roster.PositionDisplay(m.Bio.Primary, m.Bio.Secondary),-5} {m.TeamName,-24} game id {m.GameId}, index {m.PlayerIndex}, art {m.ArtId}, surname id {m.SurnameId}, country/state {m.Country}/{m.State}, {m.Bio.BirthCity}; ratings and gear from {m.Template} ({m.TemplateOverall})");
+            foreach (var (name, reason) in made.Skipped) Console.WriteLine($"  - {name}: {reason}");
+            if (made.Created.Count == 0) return null;
+            var contracts = PlayerCreator.Contracts(d, cap, made.CreatedIds);
+            foreach (var c in contracts) Console.WriteLine($"    contract {c.Name,-26} {c.Description}");
+            return made.Summary + "; " + (contracts.Count > 0 ? ContractSync.Apply(d, contracts) : "no CapWages contracts for them");
+        }
+
+        if (!opts.Has("dry"))
+        {
+            RefuseWhileRunning();
+            var entry = DbEditor.Save(index, Mods(), game, Roster.Database, Run, Console.WriteLine, "Roster sync");
+            Console.WriteLine(entry == null ? "nothing created" : $"{entry.Summary}\nstate: {Mods().State(entry, game)}");
+            return 0;
+        }
+        Console.WriteLine(Run(db) ?? "nothing created");
+        var (ok, total) = db.CheckCrcs();
+        // every created player must now be found by the matcher the syncs use, on his team, with nothing left to create
+        var roster = new Roster(db);
+        var matcher = new PlayerMatcher(db, roster);
+        int found = 0, placed = 0;
+        foreach (var m in last?.Created ?? new List<CreatedPlayer>())
+        {
+            var (p, nameOnly) = matcher.Find(m.Bio.First, m.Bio.Last, m.Bio.Born);
+            if (p?.GameId == m.GameId && !nameOnly) found++;
+            if (p?.RosterRow >= 0) placed++;
+        }
+        var again = Missing(db).Where(c => bios.ContainsKey(Key(c))).ToList();
+        int contractsLeft = last == null ? 0 : PlayerCreator.Contracts(db, cap, last.CreatedIds).Count;
+        Console.WriteLine($"in memory: CRCs {ok}/{total}; created {last?.Created.Count ?? 0}, matched again {found}, on a roster {placed}; "
+            + $"still missing {again.Count}{(again.Count > 0 ? " (" + string.Join(", ", again.Select(c => $"{c.Name} {Key(c)}")) + ")" : "")}; contract differences left for them {contractsLeft}");
         return 0;
     }
 

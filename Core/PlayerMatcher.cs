@@ -48,5 +48,7 @@ public sealed class PlayerMatcher
         return y > 1900 && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m) ? new DateTime(y, m, d) : null;
     }
 
-    private static string Key(string first, string last) => RosterSync.Norm(first) + " " + RosterSync.Norm(last);
+    /// <summary>The whole name normalised, wherever the first/last split falls: the AHL roster splits on the last space
+    /// ("Eskild Bakke" + "Olsen", "Hunter St." + "Martin"), the game and the AHL player page don't ("Eskild" + "Bakke Olsen").</summary>
+    private static string Key(string first, string last) => RosterSync.Norm(first) + RosterSync.Norm(last);
 }

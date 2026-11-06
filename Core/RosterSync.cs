@@ -54,6 +54,8 @@ public sealed class SyncChange
     public bool Selected { get; set; }
 
     public bool CanApply => Kind != SyncKind.Missing && BioRow >= 0 && ToTeam >= 0 && (RosterRow >= 0 || PlayerIndex >= 0);
+    /// <summary>A Missing player whose bio is complete enough to create him (PlayerCreator.Problem says why not).</summary>
+    public bool CanCreate => Kind == SyncKind.Missing && PlayerCreator.Problem(this) == null;
     public bool NumberChanges => NewNumber >= 0 && NewNumber != OldNumber;
 
     /// <summary>What applying does, in words.</summary>
@@ -97,7 +99,7 @@ public static class RosterSync
     public const string OnlineRosterTable = "customonlinerostertable";
 
     /// <summary>The roster tables a player's row is in (exhibition first, then the online copy), by his playerindex.</summary>
-    private static List<(T3Table Table, Dictionary<int, int> RowOf)> RosterTables(T3Db db)
+    internal static List<(T3Table Table, Dictionary<int, int> RowOf)> RosterTables(T3Db db)
     {
         var list = new List<(T3Table, Dictionary<int, int>)>();
         foreach (var name in new[] { Roster.RosterTable, OnlineRosterTable })
@@ -410,6 +412,7 @@ public static class RosterSync
         var bf = bio.Fields.ToDictionary(x => x.Name);
         var rf = rt.Fields.ToDictionary(x => x.Name);
         var tables = RosterTables(db);
+        var nhlTeams = TeamIndex(db).Values.ToHashSet();
         var arrivals = new HashSet<int>();
         var touched = new HashSet<int>();
         var createdPis = new HashSet<int>();
@@ -489,7 +492,9 @@ public static class RosterSync
             if (teamChanged || (int)db.Get(bio, c.BioRow, bf["team"]) != c.ToTeam)
             {
                 SetIn(bio, c.BioRow, bf["team"], c.ToTeam);
-                if (bf.TryGetValue("proteam", out var pt) && c.Kind != SyncKind.Left) SetIn(bio, c.BioRow, pt, c.ToTeam);
+                // proteam is the NHL club holding his contract (an AHL player's is his NHL parent, or -1 on an AHL-only
+                // deal), so only a move onto an NHL team changes it; an AHL team's index never goes in.
+                if (bf.TryGetValue("proteam", out var pt) && c.Kind != SyncKind.Left && nhlTeams.Contains(c.ToTeam)) SetIn(bio, c.BioRow, pt, c.ToTeam);
                 moved++;
             }
             if (c.NumberChanges && c.NewNumber is >= 0 and <= 99)
@@ -584,7 +589,7 @@ public static class RosterSync
         throw new InvalidOperationException($"Team {team} already has 40 players.");
     }
 
-    private static bool HasFreeSlot(T3Db db, T3Table t, int team)
+    internal static bool HasFreeSlot(T3Db db, T3Table t, int team)
     {
         var kf = t.Fields.First(f => f.Name == "key");
         int used = 0;
@@ -748,7 +753,7 @@ public static class RosterSync
     }
 
     /// <summary>Each NHL team's AHL affiliate (exhibitionteams.ahlaffiliate).</summary>
-    private static Dictionary<int, int> AhlAffiliates(T3Db db)
+    internal static Dictionary<int, int> AhlAffiliates(T3Db db)
     {
         var t = db.Table(Roster.TeamsTable);
         var f = t.Fields.ToDictionary(x => x.Name);

@@ -19,6 +19,10 @@ public sealed record PlayerBio(string First, string Last, int Number, string Pos
     public int Secondary { get; init; } = -1;
     /// <summary>True when the AHL listed him only as "F", so the split into primary/secondary was worked out, not read (see MissingPlayers.GamePositions).</summary>
     public bool PositionFromF { get; init; }
+    /// <summary>Birth country as a 3-letter code ("CAN", "SWE"), or "" when the source doesn't say.</summary>
+    public string BirthCountry { get; init; } = "";
+    /// <summary>Province or state code for players born in Canada or the USA ("ON", "MN"), or "".</summary>
+    public string BirthRegion { get; init; } = "";
 
     /// <summary>"#81 C · 5'11" 183 lb · shoots R · born 2007-04-19 · birthplace Coquitlam · drafted 2025 PIT, round 1 (#11)".</summary>
     public string Text
@@ -100,4 +104,97 @@ public static class MissingPlayers
 
     /// <summary>The city from the AHL's one-line birthplace: "Rosemount, MN" -> "Rosemount", "Minsk, Belarus" -> "Minsk".</summary>
     public static string BirthCity(string place) => (place ?? "").Split(',')[0].Trim();
+
+    private static readonly string[] Provinces = { "AB", "BC", "MB", "NB", "NL", "NT", "NS", "NU", "ON", "PE", "QC", "SK", "YT" };
+    private static readonly string[] States =
+    {
+        "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+        "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD",
+        "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+    };
+
+    // the same order as Provinces and States: the full names the NHL API sometimes gives instead of the code
+    private static readonly string[] ProvinceNames =
+    {
+        "Alberta", "British Columbia", "Manitoba", "New Brunswick", "Newfoundland and Labrador", "Northwest Territories", "Nova Scotia",
+        "Nunavut", "Ontario", "Prince Edward Island", "Quebec", "Saskatchewan", "Yukon",
+    };
+    private static readonly string[] StateNames =
+    {
+        "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "District of Columbia", "Florida",
+        "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
+        "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire",
+        "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
+        "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington",
+        "West Virginia", "Wisconsin", "Wyoming",
+    };
+
+    /// <summary>Where a province/state code or full name ("ON", "Ontario", "Québec", "Newfoundland") is in the list; -1 if it isn't.</summary>
+    private static int RegionIndex(string[] codes, string[] names, string region)
+    {
+        string r = RosterSync.Norm(region);
+        if (r.Length == 0) return -1;
+        for (int i = 0; i < codes.Length; i++)
+            if (r == codes[i].ToLowerInvariant() || r == RosterSync.Norm(names[i]) || RosterSync.Norm(names[i]).StartsWith(r) && r.Length >= 4) return i;
+        return -1;
+    }
+
+    private static readonly Dictionary<string, string> CountryNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Canada"] = "CAN", ["USA"] = "USA", ["United States"] = "USA", ["Sweden"] = "SWE", ["Finland"] = "FIN", ["Russia"] = "RUS",
+        ["Czechia"] = "CZE", ["Czech Republic"] = "CZE", ["Slovakia"] = "SVK", ["Germany"] = "DEU", ["Switzerland"] = "CHE",
+        ["Austria"] = "AUT", ["Denmark"] = "DNK", ["Norway"] = "NOR", ["Latvia"] = "LVA", ["Belarus"] = "BLR", ["France"] = "FRA",
+        ["Estonia"] = "EST", ["Kazakhstan"] = "KAZ", ["Lithuania"] = "LTU", ["Ukraine"] = "UKR", ["England"] = "GBR",
+        ["Scotland"] = "GBR", ["United Kingdom"] = "GBR", ["Great Britain"] = "GBR", ["Hungary"] = "HUN", ["Italy"] = "ITA",
+        ["Netherlands"] = "NLD", ["Poland"] = "POL", ["Slovenia"] = "SVN", ["China"] = "CHN", ["Japan"] = "JPN",
+        ["South Korea"] = "KOR", ["Korea"] = "KOR",
+    };
+
+    /// <summary>
+    /// The country and province/state of an AHL birthplace line: "Rosemount, MN" -> ("USA", "MN"), "Calgary, AB" ->
+    /// ("CAN", "AB"), "Minsk, Belarus" -> ("BLR", ""). ("", "") when the last part is none of those.
+    /// </summary>
+    public static (string Country, string Region) BirthCountry(string place)
+    {
+        var parts = (place ?? "").Split(',');
+        if (parts.Length < 2) return ("", "");
+        string last = parts[^1].Trim();
+        if (Provinces.Contains(last, StringComparer.OrdinalIgnoreCase)) return ("CAN", last.ToUpperInvariant());
+        if (States.Contains(last, StringComparer.OrdinalIgnoreCase)) return ("USA", last.ToUpperInvariant());
+        if (CountryNames.TryGetValue(last, out var iso)) return (iso, "");
+        return last.Length == 3 && last.All(char.IsLetter) ? (last.ToUpperInvariant(), "") : ("", "");
+    }
+
+    /// <summary>
+    /// The game's intlcountry and state values for a birth country and province/state. Both fields use one list:
+    /// Canada 0, its provinces and territories 1-13 (alphabetical by name), USA 14, its states 15-65 (alphabetical by
+    /// name, DC included), then other countries (Sweden 69, Finland 67, …), 127 for any other. A player born outside
+    /// North America has state = intlcountry. Decoded from 757 NHL players matched against the NHL API.
+    /// (-1, -1) when the country is unknown.
+    /// </summary>
+    public static (int Country, int State) GameCountry(string country, string region)
+    {
+        switch ((country ?? "").ToUpperInvariant())
+        {
+            case "CAN":
+            {
+                int i = RegionIndex(Provinces, ProvinceNames, region);
+                return (0, i >= 0 ? i + 1 : 0);
+            }
+            case "USA":
+            {
+                int i = RegionIndex(States, StateNames, region);
+                return (14, i >= 0 ? i + 15 : 14);
+            }
+            case "": return (-1, -1);
+        }
+        int v = (country ?? "").ToUpperInvariant() switch
+        {
+            "DNK" => 66, "FIN" => 67, "NOR" => 68, "SWE" => 69, "BLR" => 70, "EST" => 71, "KAZ" => 72, "LVA" => 74, "LTU" => 75,
+            "RUS" => 76, "UKR" => 77, "AUT" => 78, "CZE" => 82, "GBR" => 83, "FRA" => 84, "DEU" => 85, "HUN" => 86, "ITA" => 87,
+            "NLD" => 89, "POL" => 91, "SVK" => 95, "SVN" => 96, "CHE" => 97, "CHN" => 103, "JPN" => 109, "KOR" => 118,
+            _ => 127,
+        };
+        return (v, v);
+    }
 }

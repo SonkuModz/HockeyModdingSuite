@@ -37,7 +37,7 @@ public sealed class SyncRow : Observable
     public SyncRow(SyncChange c, Action changed)
     {
         Change = c;
-        _selected = c.Selected && c.CanApply;
+        _selected = c.Selected && (c.CanApply || c.CanCreate);
         _changed = changed;
     }
 
@@ -70,28 +70,44 @@ public sealed class SyncRow : Observable
         IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? $"{Contract.TeamAbbr}  ·  team retained salary  ·  CapWages" : $"{Contract.Position}  ·  {Contract.TeamAbbr}  ·  CapWages") :
         $"{Change.Position}" + (Change.Ahl is { } h ? $"  ·  AHL id {h.Id}" + (h.Born is { } b ? $"  ·  born {b:yyyy-MM-dd}" : "") : Change.Api is { } a ? $"  ·  NHL id {a.Id}" + (a.Born is { } b2 ? $"  ·  born {b2:yyyy-MM-dd}" : "") : $"  ·  game id {Change.GameId}");
     public string Description => IsPick ? Pick.Description : IsContract ? Contract.Description : Change.Description;
-    public bool CanApply => IsPick ? Pick.CanApply : IsContract ? Contract.CanApply : Change.CanApply;
+    public bool CanApply => IsPick ? Pick.CanApply : IsContract ? Contract.CanApply : Change.CanApply || Change.CanCreate;
     public string Note => IsPick ? "" :
         IsContract ? (Contract.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." : Contract.Source) :
         Change.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." :
         Change.Kind == SyncKind.Join && Change.NeedsNewRow ? "In the game as a free agent with no roster row — Sync will create one." :
         Change.Kind == SyncKind.Left ? "Unticked: he may be injured, sent down or gone. Tick it to send him to the AHL affiliate." :
-        Change.Kind == SyncKind.Missing ? Change.Bio?.Text ?? "Not in the game's database, so it can't be applied yet." : "";
+        Change.Kind == SyncKind.Missing ? MissingNote() : "";
+
+    /// <summary>A Missing row's note: his bio and that Sync will create him, or why he can't be created.</summary>
+    private string MissingNote()
+    {
+        if (Change.Bio == null) return "Not in the game's database. His bio is needed to create him.";
+        string problem = PlayerCreator.Problem(Change);
+        return Change.Bio.Text + (problem == null
+            ? "  ·  Sync will create him, with ratings and gear copied from a similar player and a generic face."
+            : $"  ·  Can't be created: {problem}.");
+    }
     public string KindText => IsPick ? "PICK" : IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? "RETAINED" : "CONTRACT") : Change.Kind switch
     {
-        SyncKind.Move => "TRADE", SyncKind.Join => "CALL-UP", SyncKind.Update => "INFO", SyncKind.Left => "LEFT NHL", _ => "NOT IN GAME",
+        SyncKind.Move => "TRADE", SyncKind.Join => "CALL-UP", SyncKind.Update => "INFO", SyncKind.Left => "LEFT NHL",
+        _ => Change.CanCreate ? "CREATE" : "NOT IN GAME",
     };
     public Brush KindBrush => new SolidColorBrush(IsPick ? Color.FromRgb(0xB7, 0x8C, 0xFF) :
         IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? Color.FromRgb(0xE8, 0x9E, 0xC9) : Color.FromRgb(0x4F, 0xC9, 0xC4)) : Change.Kind switch
     {
         SyncKind.Move => Color.FromRgb(0xF2, 0xA6, 0x3B), SyncKind.Join => Color.FromRgb(0x5B, 0xC2, 0x8C), SyncKind.Update => Color.FromRgb(0x7C, 0xA7, 0xF5),
-        SyncKind.Left => Color.FromRgb(0xB8, 0xBE, 0xC9), _ => Color.FromRgb(0xE0, 0x6C, 0x6C),
+        SyncKind.Left => Color.FromRgb(0xB8, 0xBE, 0xC9),
+        _ => Change.CanCreate ? Color.FromRgb(0xE6, 0xC1, 0x5A) : Color.FromRgb(0xE0, 0x6C, 0x6C),
     });
     /// <summary>Everything the search box matches on for a pick or contract row.</summary>
     public string SearchText => IsContract ? $"{Name} {Contract.TeamAbbr} {Description}" : $"{Name} {Description}";
 
-    /// <summary>Called when the Missing player's bio arrives, so the row's note shows it.</summary>
-    public void BioLoaded() => Raise(nameof(Note));
+    /// <summary>Called when the Missing player's bio arrives: the row shows it, and a player who can be created is ticked.</summary>
+    public void BioLoaded()
+    {
+        foreach (var p in new[] { nameof(Note), nameof(KindText), nameof(KindBrush), nameof(CanApply) }) Raise(p);
+        if (Change.CanCreate && !_selected) { _selected = true; Raise(nameof(Selected)); _changed?.Invoke(); }
+    }
 
     public bool Selected
     {
@@ -394,7 +410,7 @@ public partial class RosterSyncView : UserControl
             changes = await Task.Run(() => RosterSync.Compare(db, api, sizes));
         }
         foreach (var c in changes)
-            if (c.Kind == SyncKind.Missing && BioKey(c) is { } key && _bios.TryGetValue(key, out var bio)) c.Bio = bio;
+            if (c.Kind == SyncKind.Missing && BioKey(c) is { } key && _bios.TryGetValue(key, out var bio)) { c.Bio = bio; c.Selected = c.CanCreate; }
         _rows = changes.Select(c => new SyncRow(c, SetButtons)).ToList();
         ApplyFilter();
     }
@@ -565,6 +581,7 @@ public partial class RosterSyncView : UserControl
         TickAll.IsEnabled = TickNone.IsEnabled = !_busy && Shown.Any();
         ApplyLabel.Text = n > 0 ? $"Apply {n} to game" : "Apply to game";
         ApplyStatus.Text = _api == null && _cap == null ? "" : $"{n} of {total} ticked. Players who change team get their line spots cleared; the game puts them in its own lines."
+            + (_rows.Any(r => r.Change.CanCreate) ? " Create rows add the player with ratings and gear copied from a similar player, a generic face and (with Contracts ticked) his CapWages deal." : "")
             + (_contractRows.Count > 0 ? " Contract rows write the deal, extension, clauses and retention; an unchanged deal keeps the game's clauses." : "")
             + (_pickRows.Count > 0 ? " Pick rows only change the pick's owner." : "");
     }
@@ -575,10 +592,15 @@ public partial class RosterSyncView : UserControl
     public async Task ApplyAsync()
     {
         // IsAhl is part of the key: an NHL change and an AHL change for the same player/kind/team must not be confused.
-        var picked = _rows.Where(r => r.Selected).Select(r => (r.Change.GameId, r.Change.Kind, r.Change.ToTeam, r.Change.IsAhl)).ToHashSet();
+        var picked = _rows.Where(r => r.Selected && r.Change.Kind != SyncKind.Missing).Select(r => (r.Change.GameId, r.Change.Kind, r.Change.ToTeam, r.Change.IsAhl)).ToHashSet();
+        // Missing players to create, by source id (every Missing row has game id -1, so the key above can't tell them apart),
+        // with the bios looked up for them: the fresh compare's rows have none.
+        var toCreate = _rows.Where(r => r.Selected && r.Change.CanCreate && BioKey(r.Change) != null)
+            .GroupBy(r => BioKey(r.Change)).ToDictionary(g => g.Key, g => g.First().Change.Bio);
+        bool contractsOn = ContractsBox.IsChecked == true;
         var pickedPicks = _pickRows.Where(r => r.Selected).Select(r => (r.Pick.Year, r.Pick.Round, r.Pick.OriginalTeam)).ToHashSet();
         var pickedContracts = _contractRows.Where(r => r.Selected).Select(r => r.Contract.Key).ToHashSet();
-        if (picked.Count == 0 && pickedPicks.Count == 0 && pickedContracts.Count == 0 || _busy) return;
+        if (picked.Count == 0 && toCreate.Count == 0 && pickedPicks.Count == 0 && pickedContracts.Count == 0 || _busy) return;
         if (ModService.GameRunning)
         {
             MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -591,7 +613,7 @@ public partial class RosterSyncView : UserControl
         var picks = _picks;
         var cap = _cap;
         bool sizes = SizesBox.IsChecked == true;
-        int totalPicked = picked.Count + pickedPicks.Count + pickedContracts.Count;
+        int totalPicked = picked.Count + toCreate.Count + pickedPicks.Count + pickedContracts.Count;
         StatusChanged?.Invoke($"Writing {totalPicked} roster change(s) into the game…");
         string summary = null;
         try
@@ -607,7 +629,9 @@ public partial class RosterSyncView : UserControl
                 List<SyncChange> fresh = api == null ? new List<SyncChange>() : ahl != null
                     ? RosterSync.CompareCombined(db, api, ahl, sizes).Changes
                     : RosterSync.Compare(db, api, sizes);
-                fresh = fresh.Where(c => picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
+                var missing = fresh.Where(c => c.Kind == SyncKind.Missing && BioKey(c) is { } k && toCreate.ContainsKey(k)).ToList();
+                foreach (var c in missing) c.Bio = toCreate[BioKey(c)];
+                fresh = fresh.Where(c => c.Kind != SyncKind.Missing && picked.Contains((c.GameId, c.Kind, c.ToTeam, c.IsAhl))).ToList();
                 var deduped = new List<SyncChange>(fresh.Count);
                 var byGame = new Dictionary<int, int>(); // GameId -> index in deduped (GameId -1 rows are never deduped)
                 foreach (var c in fresh)
@@ -619,11 +643,22 @@ public partial class RosterSyncView : UserControl
                 fresh = deduped;
                 var summaries = new List<string>();
                 if (fresh.Count > 0) summaries.Add(RosterSync.Apply(db, fresh));
-                // Contracts after the roster moves (a traded player's retention depends on his new team), re-compared
-                // fresh against the database being saved, then only the ticked ones.
-                if (cap != null && pickedContracts.Count > 0)
+                // New players after the moves (so a team's 40-player limit counts the moves), then their contracts below.
+                var created = new HashSet<int>();
+                if (missing.Count > 0)
                 {
-                    var freshContracts = ContractSync.Compare(db, cap).Where(c => pickedContracts.Contains(c.Key)).ToList();
+                    var made = PlayerCreator.Create(db, missing, contractsOn ? cap : null);
+                    created = made.CreatedIds;
+                    if (made.Summary.Length > 0) summaries.Add(made.Summary);
+                    if (made.Skipped.Count > 0)
+                        summaries.Add("not created: " + string.Join(", ", made.Skipped.Take(5).Select(s => $"{s.Name} ({s.Reason})")) + (made.Skipped.Count > 5 ? ", …" : ""));
+                }
+                // Contracts after the roster moves (a traded player's retention depends on his new team), re-compared
+                // fresh against the database being saved: the ticked ones, and every new player's (he starts unsigned).
+                if (cap != null && (pickedContracts.Count > 0 || contractsOn && created.Count > 0))
+                {
+                    var freshContracts = ContractSync.Compare(db, cap).Where(c => pickedContracts.Contains(c.Key) ||
+                        contractsOn && c.Kind == ContractChangeKind.Contract && created.Contains(c.GameId) && !c.NameOnly).ToList();
                     if (freshContracts.Count > 0) summaries.Add(ContractSync.Apply(db, freshContracts));
                 }
                 if (picks != null)

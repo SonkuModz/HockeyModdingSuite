@@ -146,13 +146,17 @@ public static class AhlApi
                 best = new DraftInfo(year, NhlApi.TeamAbbr(Str(d, "draft_team")), round, overall);
             }
         string position = Str(info, "position");
+        var (country, region) = MissingPlayers.BirthCountry(Str(info, "birthPlace"));
         return new PlayerBio(
             Str(info, "firstName"), Str(info, "lastName"),
             int.TryParse(Str(info, "jerseyNumber"), out int n) ? n : -1,
             position, Str(info, position == "G" ? "catches" : "shoots"),
             ParseHeight(Str(info, "height_hyphenated")), int.TryParse(Str(info, "weight"), out int w) ? w : 0,
             DateTime.TryParse(Str(info, "birthDate"), CultureInfo.InvariantCulture, DateTimeStyles.None, out var b) ? b : null,
-            MissingPlayers.BirthCity(Str(info, "birthPlace")), best, "AHL");
+            MissingPlayers.BirthCity(Str(info, "birthPlace")), best, "AHL")
+        {
+            BirthCountry = country, BirthRegion = region,
+        };
     }
 
     /// <summary>"6-3" -> 75 inches. Anything unparsable -> 0 (unknown, never written).</summary>
