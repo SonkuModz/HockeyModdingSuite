@@ -487,6 +487,7 @@ public partial class RosterSyncView : UserControl
             var sink = (IProgress<string>)progress;
             _cap = await Task.Run(() => CapWagesApi.AllTeamsAsync(t => sink.Report(t)));
             _capPages.Update(StageState.Done, $"{_cap.Count} teams read");
+            await SaveRetainedNotesAsync();
         }
         catch (Exception ex)
         {
@@ -494,6 +495,24 @@ public partial class RosterSyncView : UserControl
             _capError = ex.Message;
             _capPages.Update(StageState.Failed, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Saves who retains whom from CapWages (RetainedSalary notes, in the game's mod folder) for the player profile's
+    /// retained salary section: the game only says how many teams retain part of a player's salary. The profile checks
+    /// the notes against the game's own retained totals before showing them. A failure only costs the profile its detail.
+    /// </summary>
+    private async Task SaveRetainedNotesAsync(T3Db db = null)
+    {
+        try
+        {
+            var cap = _cap;
+            if (cap == null) return;
+            db ??= await _mods.OpenDbAsync(Roster.Database);
+            var notes = await Task.Run(() => RetainedSalary.FromCapWages(db, cap));
+            RetainedSalary.SaveNotes(_mods.Store.Dir, notes);
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException) { }
     }
 
     /// <summary>Reads every NHL team's DailyFaceoff page. A team whose page fails keeps its error and the others go on; never throws.</summary>
@@ -987,6 +1006,8 @@ public partial class RosterSyncView : UserControl
             }, "Roster sync");
             if (summary != null)
             {
+                // the retained players as the game now has them (a new player or a traded one can change them)
+                await SaveRetainedNotesAsync();
                 StatusChanged?.Invoke($"{summary}. The Mods page can restore the original.");
                 Applied?.Invoke();
             }

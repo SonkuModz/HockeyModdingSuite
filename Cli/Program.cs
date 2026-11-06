@@ -60,6 +60,7 @@ public static class Program
                 "ahl-sync" => AhlSyncCmd(game, opts),
                 "picks-sync" => PicksSyncCmd(game, opts),
                 "contracts-sync" => ContractsSyncCmd(game, opts),
+                "retained-check" => RetainedCheckCmd(game, opts),
                 "create-players" => CreatePlayersCmd(game, opts),
                 "lines-sync" => LinesSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
@@ -3016,6 +3017,57 @@ public static class Program
             var again = ContractSync.Compare(db, teams);
             Console.WriteLine($"in memory: CRCs {ok}/{total}; ticked differences left: {again.Count(c => c.Selected)} (unticked: {again.Count(c => !c.Selected)})");
         }
+        return 0;
+    }
+
+    /// <summary>
+    /// retained-check [--player NAME]: what the player profile shows for every retained player (RetainedSalary.Solve,
+    /// worked out from the game's data alone), scored against CapWages: the retaining team(s) and this season's retained
+    /// dollars. Right, wrong (should never happen) or undetermined (shown as —).
+    /// </summary>
+    private static int RetainedCheckCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var solved = RetainedSalary.Solve(db);
+        Console.WriteLine($"{solved.Count} retained players in the game, solved in {sw.ElapsedMilliseconds} ms");
+        var teams = FetchCapWages();
+        int now = CapWagesApi.CurrentSeason(teams);
+        var roster = new Roster(db);
+        var matcher = new PlayerMatcher(db, roster);
+        var abbrOf = RosterSync.TeamIndex(db).ToDictionary(x => x.Value, x => x.Key);
+        // --saved: the notes the app saved (mods folder) instead of this run's CapWages read
+        var notes = opts.Has("saved") ? RetainedSalary.LoadNotes(KitPaths.ModsFor(null)) ?? throw new InvalidOperationException("no saved notes could be read") : RetainedSalary.FromCapWages(db, teams);
+        bool withNotes = !opts.Has("game-only");
+        // --stale: every note's amount off by $100,000, as if the game changed since CapWages was read (must fall back)
+        if (opts.Has("stale")) notes = notes with { Players = notes.Players.Select(n => n with { Current = n.Current + 100_000 }).ToList() };
+        Console.WriteLine(withNotes ? $"with the sync's CapWages notes ({notes.Players.Count} retained players)" : "from the game's data alone");
+        int right = 0, wrong = 0, partial = 0, unknown = 0, notRetained = 0;
+        var seen = new HashSet<int>();
+        foreach (var team in teams)
+            foreach (var cp in team.Players)
+            {
+                var s0 = cp.Contracts.SelectMany(c => c.Seasons).FirstOrDefault(x => x.StartYear == now);
+                var truth = s0?.Retention.Where(r => r.Team != "*").Select(r => (Abbr: NhlApi.TeamAbbr(r.Team), r.CapHit)).Where(r => r.Abbr != team.Abbr).ToList();
+                if (truth == null || truth.Count == 0) continue;
+                var (p, _) = matcher.Find(cp.First, cp.Last, cp.Born);
+                if (p == null || !seen.Add(p.GameId)) continue;
+                if (opts.Get("player") is { } name && !p.Name.Contains(name, StringComparison.OrdinalIgnoreCase)) continue;
+                string want = string.Join(" + ", truth.OrderBy(x => x.Abbr).Select(x => $"{x.Abbr} {x.CapHit / 1000}k"));
+                if (!solved.ContainsKey(p.GameId)) { notRetained++; Console.WriteLine($"  NOT FLAGGED {p.Name,-24} {team.Abbr}  CapWages: {want}"); continue; }
+                var shown = RetainedSalary.For(db, p.GameId, withNotes ? notes : null);
+                var a = shown.Attribution;
+                string got = (shown.FromCapWages ? "[CW] " : "") + string.Join(" + ", a.Shares.Select(x => $"{(x.Team is { } t ? abbrOf.GetValueOrDefault(t, $"#{t}") : "—")} {(x.Dollars is { } d ? $"{d / 1000}k" : "—")}"));
+                bool anyWrong = a.Shares.Any(x => x.Team is { } t && !truth.Any(tr => tr.Abbr == abbrOf.GetValueOrDefault(t)))
+                    || a.Shares.Any(x => x.Team is { } t && x.Dollars is { } d && truth.FirstOrDefault(tr => tr.Abbr == abbrOf.GetValueOrDefault(t)) is var tr2 && tr2.Abbr != null && Math.Abs(tr2.CapHit - d) > 1000);
+                bool full = a.Shares.All(x => x.Team != null && x.Dollars != null);
+                bool none = a.Shares.All(x => x.Team == null);
+                string verdict = anyWrong ? "WRONG" : full ? "right" : none ? "unknown" : "partial";
+                if (anyWrong) wrong++; else if (full) right++; else if (none) unknown++; else partial++;
+                Console.WriteLine($"  {verdict,-7} {p.Name,-24} {team.Abbr} {a.CurrentDollars / 1000}k, {(Roster.Field(db.Table(Roster.BioTable), "contractlength") is { } lf ? (int)db.Get(db.Table(Roster.BioTable), p.BioRow, lf) : 0)}y  shows: {got,-26} CapWages: {want}");
+            }
+        Console.WriteLine($"right {right}, partial {partial}, undetermined {unknown}, WRONG {wrong}; retained on CapWages but not flagged in the game {notRetained}");
         return 0;
     }
 

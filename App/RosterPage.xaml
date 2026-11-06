@@ -363,7 +363,7 @@
                                         <ItemsControl x:Name="ContractToggles" ItemTemplate="{StaticResource ToggleTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Margin="0,2,0,0" />
                                         <StackPanel x:Name="RetainedSection" Visibility="Collapsed">
                                             <TextBlock Text="RETAINED SALARY" Style="{StaticResource Overline}" Margin="0,12,0,10" />
-                                            <TextBlock Text="Read from the game, not edited: the full salary, the retained share and the retaining team are worked out from the teams' yearly retained totals, and shown only when they point to exactly one team — anything the data can't pin down shows as —." Style="{StaticResource Caption}" Margin="0,0,0,10" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="RetainedNote" Style="{StaticResource Caption}" Margin="0,0,0,10" TextWrapping="Wrap" />
                                             <ItemsControl x:Name="RetainedFields" ItemTemplate="{StaticResource ReadOnlyTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" />
                                         </StackPanel>
                                         <StackPanel x:Name="ClauseSection">

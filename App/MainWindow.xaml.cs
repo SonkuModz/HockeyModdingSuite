@@ -1192,6 +1192,8 @@ public partial class MainWindow : Window
             await Task.Delay(2500);
             RosterPage.SelectIndex(rn);
             await Task.Delay(3000);
+            // --rretained: scroll the profile to the retained salary section
+            if (a.ContainsKey("rretained")) { RosterPage.ShowRetained(); await Task.Delay(800); }
         }
         if (a.TryGetValue("tsearch", out var tsearch))
             TexturePage.SetSearch(tsearch);

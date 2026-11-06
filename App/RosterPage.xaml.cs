@@ -100,6 +100,9 @@ public partial class RosterPage : UserControl
     /// <summary>Applies the ticked sync changes (scripted runs).</summary>
     public Task SyncApplyAsync() => SyncView.ApplyAsync();
 
+    /// <summary>Scrolls the profile to the retained salary section (scripted runs).</summary>
+    public void ShowRetained() => RetainedSection.BringIntoView();
+
     public void SelectIndex(int n)
     {
         var list = TextMode ? TextList : PlayerList;
@@ -324,30 +327,41 @@ public partial class RosterPage : UserControl
             ContractStatusText.Text = status == 0 ? "Under contract" : status == -1 ? "No NHL contract" : $"Contract status {status}";
         }
 
-        // Retained salary: shown, never edited. The bio says whether the player is retained and what his
-        // current team pays; the full salary, the retained share and the retaining team are worked out from
-        // the teams' yearly retained totals (RetainedSalary) and shown only when they point to exactly one
-        // team — otherwise "—", never a guess. These are plain display values, not FieldEdits, so they never
-        // count as changes and never get written. The totals are read only for a retained player.
+        // Retained salary: shown, never edited. The game only says how many former teams retain part of his salary
+        // and what his team pays; who retains it and how much comes from CapWages, as the NHL sync saved it, when that
+        // still fits the game's retained totals, else from what those totals prove on their own (RetainedSalary) —
+        // "—" where they could fit more than one team, never a guess. Plain display values, not FieldEdits: they
+        // never count as changes and never get written.
         int BioInt(string name) => Roster.Field(bio, name) is { } f ? (int)db.Get(bio, p.BioRow, f) : 0;
         int retainedTrades = BioInt("retainedsalarytrades");
-        int retainedLength = BioInt("contractlength");
-        long retainedHit = (long)BioInt("contractdollars") * 5000;
-        var retained = retainedTrades >= 1
-            ? RetainedSalary.Attribute(db, retainedTrades, retainedLength, retainedHit, p.Team)
-            : null;
-        RetainedSection.Visibility = retainedTrades >= 1 ? Visibility.Visible : Visibility.Collapsed;
-        RetainedFields.ItemsSource = retainedTrades >= 1
-            ? new[]
+        var notes = retainedTrades >= 1 ? RetainedSalary.LoadNotes(_mods.Store.Dir) : null;
+        var retained = retainedTrades >= 1 ? RetainedSalary.For(db, p.GameId, notes) : null;
+        RetainedSection.Visibility = retained != null ? Visibility.Visible : Visibility.Collapsed;
+        if (retained != null)
+        {
+            var a = retained.Attribution;
+            var shown = new List<ReadOnlyField>
             {
-                new ReadOnlyField("Full salary", retained?.FullDollars is { } full ? RetainedMoney(full) : "—"),
-                new ReadOnlyField("Retained", retained?.RetainedDollars is { } dollars && retained.Percent is { } pct
-                    ? $"{RetainedPercent(pct)} — {RetainedMoney(dollars)}" : "—"),
-                new ReadOnlyField("Retained by", retained?.RetainingTeam is { } retainingTeam && roster.Teams.TryGetValue(retainingTeam, out var tm) ? tm.Name : "—"),
+                new("Full cap hit", a.FullDollars is { } full ? RetainedMoney(full) : "—"),
+                new($"{p.TeamAbbr} pays", RetainedMoney(a.CurrentDollars)),
+            };
+            for (int i = 0; i < a.Shares.Count; i++)
+            {
+                var s = a.Shares[i];
+                string which = a.Shares.Count > 1 ? $" ({i + 1} of {a.Shares.Count})" : "";
+                shown.Add(new($"Retained by{which}", s.Team is { } rt && roster.Teams.TryGetValue(rt, out var tm) ? tm.Name : "—"));
+                shown.Add(new($"Retained{which}", s.Dollars is { } d ? (a.Percent(s) is { } pct ? $"{RetainedPercent(pct)} — " : "") + RetainedMoney(d) : "—"));
             }
-            : null;
+            RetainedFields.ItemsSource = shown;
+            RetainedNote.Text = retained.FromCapWages
+                ? $"Read-only. From CapWages as the NHL sync read it on {notes.Saved:MMM d}, checked against the game's retained totals."
+                : (notes == null
+                    ? "Read-only. Worked out from the game's retained totals alone, which often fit more than one team (—). Fetch in the NHL sync to fill these in from CapWages."
+                    : $"Read-only. CapWages' figures from {notes.Saved:MMM d} no longer match the game's, so this is worked out from the game's retained totals alone (— where they fit more than one team). Fetch again in the NHL sync.");
+        }
+        else RetainedFields.ItemsSource = null;
 
-        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0 && retainedTrades < 1
+        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0 && retained == null
             ? Visibility.Collapsed : Visibility.Visible;
 
         foreach (var f in _fields) f.PropertyChanged -= OnFieldChanged;
