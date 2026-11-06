@@ -323,7 +323,31 @@ public partial class RosterPage : UserControl
             int status = (int)db.Get(bio, p.BioRow, statusField);
             ContractStatusText.Text = status == 0 ? "Under contract" : status == -1 ? "No NHL contract" : $"Contract status {status}";
         }
-        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0
+
+        // Retained salary: shown, never edited. The bio says whether the player is retained and what his
+        // current team pays; the full salary, the retained share and the retaining team are worked out from
+        // the teams' yearly retained totals (RetainedSalary) and shown only when they point to exactly one
+        // team — otherwise "—", never a guess. These are plain display values, not FieldEdits, so they never
+        // count as changes and never get written. The totals are read only for a retained player.
+        int BioInt(string name) => Roster.Field(bio, name) is { } f ? (int)db.Get(bio, p.BioRow, f) : 0;
+        int retainedTrades = BioInt("retainedsalarytrades");
+        int retainedLength = BioInt("contractlength");
+        long retainedHit = (long)BioInt("contractdollars") * 5000;
+        var retained = retainedTrades >= 1
+            ? RetainedSalary.Attribute(db, retainedTrades, retainedLength, retainedHit, p.Team)
+            : null;
+        RetainedSection.Visibility = retainedTrades >= 1 ? Visibility.Visible : Visibility.Collapsed;
+        RetainedFields.ItemsSource = retainedTrades >= 1
+            ? new[]
+            {
+                new ReadOnlyField("Full salary", retained?.FullDollars is { } full ? RetainedMoney(full) : "—"),
+                new ReadOnlyField("Retained", retained?.RetainedDollars is { } dollars && retained.Percent is { } pct
+                    ? $"{RetainedPercent(pct)} — {RetainedMoney(dollars)}" : "—"),
+                new ReadOnlyField("Retained by", retained?.RetainingTeam is { } retainingTeam && roster.Teams.TryGetValue(retainingTeam, out var tm) ? tm.Name : "—"),
+            }
+            : null;
+
+        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0 && retainedTrades < 1
             ? Visibility.Collapsed : Visibility.Visible;
 
         foreach (var f in _fields) f.PropertyChanged -= OnFieldChanged;
@@ -421,6 +445,14 @@ public partial class RosterPage : UserControl
             return "A skater can't become a goalie (or the reverse) here: the ratings wouldn't match the position.";
         return null;
     }
+
+    /// <summary>"$4.9M" for millions, "$615,000" below that — the retained display's money format.</summary>
+    private static string RetainedMoney(long dollars) => dollars >= 1_000_000
+        ? "$" + (dollars / 1_000_000.0).ToString("0.##", CultureInfo.InvariantCulture) + "M"
+        : "$" + dollars.ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>"50%", "26.32%" — the retained display's percent format.</summary>
+    private static string RetainedPercent(double pct) => pct.ToString("0.##", CultureInfo.InvariantCulture) + "%";
 
     private async void OnDiscard(object sender, RoutedEventArgs e)
     {
