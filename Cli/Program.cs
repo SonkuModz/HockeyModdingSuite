@@ -61,6 +61,7 @@ public static class Program
                 "picks-sync" => PicksSyncCmd(game, opts),
                 "contracts-sync" => ContractsSyncCmd(game, opts),
                 "create-players" => CreatePlayersCmd(game, opts),
+                "lines-sync" => LinesSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -3094,6 +3095,76 @@ public static class Program
         int contractsLeft = last == null ? 0 : PlayerCreator.Contracts(db, cap, last.CreatedIds).Count;
         Console.WriteLine($"in memory: CRCs {ok}/{total}; created {last?.Created.Count ?? 0}, matched again {found}, on a roster {placed}; "
             + $"still missing {again.Count}{(again.Count > 0 ? " (" + string.Join(", ", again.Select(c => $"{c.Name} {Key(c)}")) + ")" : "")}; contract differences left for them {contractsLeft}");
+        return 0;
+    }
+
+    /// <summary>
+    /// lines-sync [--team CODE] [--all] [--roster] [--dry 1]: (--roster first applies the roster changes and creates the missing players, in memory, as the app does) compares every NHL team's lines with DailyFaceoff's line combinations.
+    /// --dry writes the ticked teams' lines in memory only, then checks them: every slot held by exactly one player, every
+    /// dressed player in a slot, and a second compare finding nothing left. Without --dry, nothing is written (the app's
+    /// roster sync applies lines).
+    /// </summary>
+    private static int LinesSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        int done = 0;
+        var teams = DailyFaceoffApi.AllTeamsAsync(t => Console.Write($"\rDailyFaceoff {++done}/32 {t}   ")).GetAwaiter().GetResult();
+        Console.WriteLine();
+        if (opts.Get("team") is { } only) teams = teams.Where(t => string.Equals(t.Abbr, only, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (opts.Has("roster"))
+        {
+            // the app's Apply order, in memory: NHL + AHL roster changes, then the missing players created, then lines
+            var api = NhlApi.AllRostersAsync().GetAwaiter().GetResult();
+            var ahl = AhlApi.AllRostersAsync().GetAwaiter().GetResult();
+            var moves = RosterSync.CompareCombined(db, api, ahl, true).Changes;
+            Console.WriteLine(RosterSync.Apply(db, moves.Where(c => c.Selected && c.Kind != SyncKind.Missing)));
+            var missing = moves.Where(c => c.Kind == SyncKind.Missing).ToList();
+            foreach (var c in missing)
+            {
+                try { c.Bio = MissingPlayers.BioAsync(c).GetAwaiter().GetResult(); } catch (Exception e) { Console.WriteLine($"  ! {c.Name}: {e.Message}"); }
+                Thread.Sleep(150);
+            }
+            Console.WriteLine(PlayerCreator.Create(db, RosterSync.CompareCombined(db, api, ahl, true).Changes
+                .Where(c => c.Kind == SyncKind.Missing && missing.FirstOrDefault(m => m.Api?.Id == c.Api?.Id && m.Ahl?.Id == c.Ahl?.Id)?.Bio is { } bio && (c.Bio = bio) != null)
+                .ToList()).Summary);
+        }
+        var changes = LineSync.Compare(db, teams);
+        Console.WriteLine($"{teams.Count} teams read ({teams.Count(t => t.Error != null)} failed); {changes.Count} teams' lines differ");
+        foreach (var c in changes)
+        {
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.TeamAbbr,-4} {c.Description}");
+            Console.WriteLine($"         {c.Source}");
+            if (opts.Has("all") && c.CanApply)
+            {
+                var nameOf = new Roster(db).Players.Where(p => p.PlayerIndex >= 0).GroupBy(p => p.PlayerIndex).ToDictionary(g => g.Key, g => g.First().Name);
+                foreach (var unit in c.New.Where(kv => kv.Key.StartsWith("l") || kv.Key.StartsWith("pp_") || kv.Key.StartsWith("pk4_") || kv.Key is "g1" or "g2")
+                                          .GroupBy(kv => RosterLines.Unit(kv.Key)))
+                    Console.WriteLine($"         {unit.Key,-6} " + string.Join("  ", unit.OrderBy(kv => RosterLines.SlotRank(kv.Key)).Select(kv => $"{kv.Key}={nameOf.GetValueOrDefault(kv.Value, kv.Value.ToString())}")));
+            }
+        }
+        if (!opts.Has("dry")) return 0;
+        var picked = changes.Where(c => c.Selected).Select(c => c.TeamAbbr).ToHashSet();
+        Console.WriteLine(LineSync.Apply(db, teams, picked));
+        var (ok, total) = db.CheckCrcs();
+        var codes = RosterSync.TeamIndex(db);
+        var ids = picked.Where(codes.ContainsKey).Select(a => codes[a]).ToList();
+        var bad = new[] { Roster.RosterTable, RosterSync.OnlineRosterTable }.Select(db.Table).Where(t => t != null)
+            .SelectMany(t => RosterLines.TeamsNeedingLines(db, t, ids).Select(i => $"{t.Name}:{i}")).ToList();
+        foreach (var t in new[] { db.Table(RosterSync.OnlineRosterTable) }.Where(t => t != null))
+            foreach (int team in RosterLines.TeamsNeedingLines(db, t, ids))
+            {
+                // what is wrong: slots held by nobody or by two, dressed players without a slot
+                var f = t.Fields.ToDictionary(x => x.Name);
+                var rows = Enumerable.Range(0, t.WrittenRecords).Where(r => !db.IsInvalid(t, r) && (int)db.Get(t, r, f["team"]) == team).ToList();
+                var slotFields = t.Fields.Where(x => x.Type == T3FieldType.Integer && x.Depth == 1 && RosterLines.Category(x.Name) != null).ToList();
+                var wrong = slotFields.Select(sf => (sf.Name, N: rows.Count(r => (int)db.Get(t, r, sf) == 1))).Where(x => x.N != 1).Select(x => $"{x.Name}x{x.N}");
+                int idle = rows.Count(r => (int)db.Get(t, r, f["rosterstatus"]) == 1 && !slotFields.Any(sf => (int)db.Get(t, r, sf) == 1));
+                Console.WriteLine($"  team {team} ({codes.FirstOrDefault(kv => kv.Value == team).Key}): {rows.Count} players; slots {string.Join(" ", wrong)}; dressed without a slot {idle}");
+            }
+        var again = LineSync.Compare(db, teams.Where(t => picked.Contains(t.Abbr)).ToList());
+        Console.WriteLine($"in memory: CRCs {ok}/{total}; teams with broken lines {bad.Count}{(bad.Count > 0 ? " (" + string.Join(", ", bad) + ")" : "")}; "
+            + $"differences left {again.Count(c => c.NotOnTeam.Count == 0 && c.CanApply)} (skipped for players not on the team: {again.Count(c => c.NotOnTeam.Count > 0)})");
         return 0;
     }
 
