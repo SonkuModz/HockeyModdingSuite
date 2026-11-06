@@ -121,23 +121,45 @@ public sealed class SyncRow : Observable
         _changed = changed;
     }
 
+    /// <summary>A player's positions from CapWages.</summary>
+    public SyncRow(PositionChange p, Action changed)
+    {
+        Pos = p;
+        _selected = p.Selected && p.CanApply;
+        _changed = changed;
+    }
+
+    /// <summary>A player with no play-by-play name call whose last name the game has a recording for.</summary>
+    public SyncRow(NameCallChange n, Action changed)
+    {
+        Call = n;
+        _selected = n.Selected && n.CanApply;
+        _changed = changed;
+    }
+
     public SyncChange Change { get; }
     public PickSyncChange Pick { get; }
     public ContractChange Contract { get; }
     public LineChange Line { get; }
+    public PositionChange Pos { get; }
+    public NameCallChange Call { get; }
     public bool IsPick => Pick != null;
+    public bool IsPosition => Pos != null;
+    public bool IsNameCall => Call != null;
     public bool IsContract => Contract != null;
     public bool IsLines => Line != null;
-    /// <summary>A roster row (trade, call-up, info, left, not in game), as opposed to a pick, contract or lines row.</summary>
+    /// <summary>A roster row (trade, call-up, info, left, not in game), as opposed to a pick, contract, position, name call or lines row.</summary>
     public bool IsPlayer => Change != null;
 
-    public string Name => IsLines ? $"{Line.TeamName} lines" : IsPick ? $"{Pick.Year + 1900} {PickSync.Ordinal(Pick.Round)} round pick ({Pick.OriginalAbbr})" : IsContract ? Contract.Name : Change.Name;
-    public string Meta => IsLines ? $"{Line.TeamAbbr}  ·  lines  ·  DailyFaceoff" : IsPick ? "Draft pick  ·  CapWages" :
+    public string Name => IsPosition ? Pos.Name : IsNameCall ? Call.Name : IsLines ? $"{Line.TeamName} lines" : IsPick ? $"{Pick.Year + 1900} {PickSync.Ordinal(Pick.Round)} round pick ({Pick.OriginalAbbr})" : IsContract ? Contract.Name : Change.Name;
+    public string Meta => IsPosition ? $"{Roster.PositionDisplay(Pos.OldPrimary, Pos.OldSecondary)}  ·  {Pos.TeamAbbr}  ·  CapWages" :
+        IsNameCall ? $"{Call.Position}  ·  {Call.TeamAbbr}  ·  game id {Call.GameId}" : IsLines ? $"{Line.TeamAbbr}  ·  lines  ·  DailyFaceoff" : IsPick ? "Draft pick  ·  CapWages" :
         IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? $"{Contract.TeamAbbr}  ·  team retained salary  ·  CapWages" : $"{Contract.Position}  ·  {Contract.TeamAbbr}  ·  CapWages") :
         $"{Change.Position}" + (Change.Ahl is { } h ? $"  ·  AHL id {h.Id}" + (h.Born is { } b ? $"  ·  born {b:yyyy-MM-dd}" : "") : Change.Api is { } a ? $"  ·  NHL id {a.Id}" + (a.Born is { } b2 ? $"  ·  born {b2:yyyy-MM-dd}" : "") : $"  ·  game id {Change.GameId}");
-    public string Description => IsLines ? Line.Description : IsPick ? Pick.Description : IsContract ? Contract.Description : Change.Description;
-    public bool CanApply => IsLines ? Line.Ready : IsPick ? Pick.CanApply : IsContract ? Contract.CanApply : Change.CanApply || Change.CanCreate;
-    public string Note => IsLines ? Line.Source : IsPick ? "" :
+    public string Description => IsPosition ? Pos.Description : IsNameCall ? Call.Description : IsLines ? Line.Description : IsPick ? Pick.Description : IsContract ? Contract.Description : Change.Description;
+    public bool CanApply => IsPosition ? Pos.CanApply : IsNameCall ? Call.CanApply : IsLines ? Line.Ready : IsPick ? Pick.CanApply : IsContract ? Contract.CanApply : Change.CanApply || Change.CanCreate;
+    public string Note => IsPosition ? (Pos.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player.  ·  " : "") + Pos.Source :
+        IsNameCall ? "The game has a commentary recording of this name; he has none set." : IsLines ? Line.Source : IsPick ? "" :
         IsContract ? (Contract.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." : Contract.Source) :
         Change.NameOnly ? "Matched by name only: the birth dates differ. Check it's the same player." :
         Change.Kind == SyncKind.Join && Change.NeedsNewRow ? "In the game as a free agent with no roster row — Sync will create one." :
@@ -153,12 +175,12 @@ public sealed class SyncRow : Observable
             ? "  ·  Sync will create him, with ratings and gear copied from a similar player and a generic face."
             : $"  ·  Can't be created: {problem}.");
     }
-    public string KindText => IsLines ? "LINES" : IsPick ? "PICK" : IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? "RETAINED" : "CONTRACT") : Change.Kind switch
+    public string KindText => IsPosition ? "POSITION" : IsNameCall ? "NAME CALL" : IsLines ? "LINES" : IsPick ? "PICK" : IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? "RETAINED" : "CONTRACT") : Change.Kind switch
     {
         SyncKind.Move => "TRADE", SyncKind.Join => "CALL-UP", SyncKind.Update => "INFO", SyncKind.Left => "LEFT NHL",
         _ => Change.CanCreate ? "CREATE" : "NOT IN GAME",
     };
-    public Brush KindBrush => new SolidColorBrush(IsLines ? (Line.Ready ? Color.FromRgb(0x9A, 0xD0, 0x5E) : Color.FromRgb(0xE0, 0x6C, 0x6C)) : IsPick ? Color.FromRgb(0xB7, 0x8C, 0xFF) :
+    public Brush KindBrush => new SolidColorBrush(IsPosition ? Color.FromRgb(0xF0, 0xD0, 0x8A) : IsNameCall ? Color.FromRgb(0x9F, 0xB8, 0xE8) : IsLines ? (Line.Ready ? Color.FromRgb(0x9A, 0xD0, 0x5E) : Color.FromRgb(0xE0, 0x6C, 0x6C)) : IsPick ? Color.FromRgb(0xB7, 0x8C, 0xFF) :
         IsContract ? (Contract.Kind == ContractChangeKind.TeamRetention ? Color.FromRgb(0xE8, 0x9E, 0xC9) : Color.FromRgb(0x4F, 0xC9, 0xC4)) : Change.Kind switch
     {
         SyncKind.Move => Color.FromRgb(0xF2, 0xA6, 0x3B), SyncKind.Join => Color.FromRgb(0x5B, 0xC2, 0x8C), SyncKind.Update => Color.FromRgb(0x7C, 0xA7, 0xF5),
@@ -166,7 +188,7 @@ public sealed class SyncRow : Observable
         _ => Change.CanCreate ? Color.FromRgb(0xE6, 0xC1, 0x5A) : Color.FromRgb(0xE0, 0x6C, 0x6C),
     });
     /// <summary>Everything the search box matches on for a pick, contract or lines row.</summary>
-    public string SearchText => IsContract ? $"{Name} {Contract.TeamAbbr} {Description}" : IsLines ? $"{Name} {Line.TeamAbbr} {Description}" : $"{Name} {Description}";
+    public string SearchText => IsPosition ? $"{Name} {Pos.TeamAbbr} {Description}" : IsNameCall ? $"{Name} {Call.TeamAbbr} {Description}" : IsContract ? $"{Name} {Contract.TeamAbbr} {Description}" : IsLines ? $"{Name} {Line.TeamAbbr} {Description}" : $"{Name} {Description}";
 
     /// <summary>Called when the Missing player's bio arrives: the row shows it, and a player who can be created is ticked.</summary>
     public void BioLoaded()
@@ -179,6 +201,13 @@ public sealed class SyncRow : Observable
     {
         get => _selected;
         set { if (Set(ref _selected, value && CanApply)) _changed?.Invoke(); }
+    }
+
+    /// <summary>Puts back the tick a rebuilt row had, without telling the page: it isn't the user ticking it, so it must
+    /// not start another check (which would rebuild the rows and put the tick back again, endlessly).</summary>
+    public void Restore(bool selected)
+    {
+        if (_selected != (selected && CanApply)) { _selected = selected && CanApply; Raise(nameof(Selected)); }
     }
 }
 
@@ -212,6 +241,9 @@ public partial class RosterSyncView : UserControl
     private PickCompareResult _pickResult;
     private List<SyncRow> _pickRows = new();
     private List<SyncRow> _contractRows = new();
+    private List<SyncRow> _positionRows = new();
+    /// <summary>Players with no name call whose last name the game has a recording of (from the game's own name list).</summary>
+    private List<SyncRow> _nameRows = new();
     /// <summary>Every NHL team's DailyFaceoff lines as fetched (a team that failed has its error), or null when the source is unticked.</summary>
     private List<(string Abbr, LineTeam Team, string Error)> _lines;
     private List<SyncRow> _lineRows = new();
@@ -243,6 +275,7 @@ public partial class RosterSyncView : UserControl
     private readonly SyncStage _ahlBios = new("New players' bios");
     private readonly SyncStage _capPages = new("Team pages");
     private readonly SyncStage _contractsStage = new("Contracts");
+    private readonly SyncStage _positionsStage = new("Positions");
     private readonly SyncStage _picksStage = new("Draft picks");
     private readonly SyncStage _linePages = new("Team pages");
     private readonly SyncStage _linesStage = new("Lines");
@@ -260,8 +293,8 @@ public partial class RosterSyncView : UserControl
             "The NHL's public API: all 32 teams' current rosters, and each new player's birth date, birthplace, size, hand and draft.", _nhlRosters, _nhlBios);
         _ahlSource = new SyncSource("TheAHL.com", "lscluster.hockeytech.com", "AHL rosters (call-ups and send-downs), and the bios of AHL players to create.", true,
             "The AHL's stats feed (HockeyTech, which theahl.com reads): all 32 AHL teams' rosters and each new player's bio.", _ahlRosters, _ahlBios);
-        _capSource = new SyncSource("CapWages", "capwages.com", "Contracts, extensions, clauses, retained salary and draft pick owners.", true,
-            "CapWages' team pages: every NHL team's contracts and draft picks. Checked once the rosters and new players are planned.", _capPages, _contractsStage, _picksStage);
+        _capSource = new SyncSource("CapWages", "capwages.com", "Contracts, extensions, clauses, retained salary, positions and draft pick owners.", true,
+            "CapWages' team pages: every NHL team's contracts, each player's positions (where he has played) and the draft picks. Checked once the rosters and new players are planned.", _capPages, _contractsStage, _positionsStage, _picksStage);
         _linesSource = new SyncSource("DailyFaceoff", "dailyfaceoff.com", "Forward lines, D pairs, power play, penalty kill and the starting goalie.", true,
             "DailyFaceoff's line combinations for each team's next game. Checked once the rosters and new players are planned.", _linePages, _linesStage);
         SourceList.ItemsSource = new[] { _nhlSource, _ahlSource, _capSource, _linesSource };
@@ -303,17 +336,17 @@ public partial class RosterSyncView : UserControl
     {
         if (!CapOn)
         {
-            foreach (var s in new[] { _capPages, _contractsStage, _picksStage }) s.Update(StageState.Off, "off");
+            foreach (var s in new[] { _capPages, _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Off, "off");
             return;
         }
         if (_capError != null)
         {
-            _contractsStage.Update(StageState.Failed, "not checked");
-            _picksStage.Update(StageState.Failed, "not checked");
+            foreach (var s in new[] { _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Failed, "not checked");
             return;
         }
         if (_cap == null) return;
         _contractsStage.Update(StageState.Done, $"{_contractRows.Count} to change");
+        _positionsStage.Update(StageState.Done, $"{_positionRows.Count} to change");
         _picksStage.Update(StageState.Done, $"{_pickRows.Count} to change");
     }
 
@@ -330,7 +363,7 @@ public partial class RosterSyncView : UserControl
     /// <summary>The steps that run after the rosters, shown as waiting for them.</summary>
     private void ShowPlanWaiting()
     {
-        if (CapOn) { _contractsStage.Update(StageState.Waiting, "after new players"); _picksStage.Update(StageState.Waiting, "after new players"); }
+        if (CapOn) foreach (var s in new[] { _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Waiting, "after new players");
         if (LinesOn) _linesStage.Update(StageState.Waiting, "after new players");
     }
 
@@ -362,12 +395,13 @@ public partial class RosterSyncView : UserControl
             _ahlBios.Update(includeAhl ? StageState.Waiting : StageState.Off, includeAhl ? "after rosters" : "off");
             _capPages.Update(includeCap ? StageState.Running : StageState.Off, includeCap ? "starting…" : "off");
             _linePages.Update(includeLines ? StageState.Running : StageState.Off, includeLines ? "starting…" : "off");
-            if (!includeCap) { _contractsStage.Update(StageState.Off, "off"); _picksStage.Update(StageState.Off, "off"); }
+            if (!includeCap) foreach (var s in new[] { _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Off, "off");
             if (!includeLines) _linesStage.Update(StageState.Off, "off");
             ShowPlanWaiting();
 
             // Earlier rows go away: everything below is compared from this fetch.
             _rows = new List<SyncRow>();
+            _nameRows = new List<SyncRow>();
             ClearCap();
             _lines = null;
             _lineRows = new List<SyncRow>();
@@ -430,7 +464,7 @@ public partial class RosterSyncView : UserControl
         catch (Exception ex)
         {
             FetchStatus.Text = "Couldn't fetch: " + ex.Message;
-            foreach (var s in new[] { _nhlRosters, _nhlBios, _ahlRosters, _ahlBios, _capPages, _contractsStage, _picksStage, _linePages, _linesStage })
+            foreach (var s in new[] { _nhlRosters, _nhlBios, _ahlRosters, _ahlBios, _capPages, _contractsStage, _positionsStage, _picksStage, _linePages, _linesStage })
                 if (s.State is StageState.Running or StageState.Waiting) s.Update(StageState.Failed, ex.Message);
         }
         finally
@@ -560,22 +594,24 @@ public partial class RosterSyncView : UserControl
         _rows.Where(r => r.Selected && r.Change.CanCreate && BioKey(r.Change) != null).GroupBy(r => BioKey(r.Change)).ToDictionary(g => g.Key, g => g.First().Change.Bio);
 
     /// <summary>
-    /// Compares CapWages' contracts and pick owners and DailyFaceoff's lines with a copy of the game's database in
-    /// which the ticked roster changes are made and the ticked missing players created, exactly as Apply does first. The
-    /// contract and lines rows then show what Apply will write: a traded player's retention on his new team, a new
-    /// player in his team's lineup, no "not on the team yet". New players' own contracts aren't listed: creating a
-    /// player writes his CapWages deal with him. Rows that were there before keep their ticks.
+    /// Compares CapWages' contracts, positions and pick owners, the game's name calls and DailyFaceoff's lines with a copy
+    /// of the game's database in which the ticked roster changes are made and the ticked missing players created, exactly
+    /// as Apply does first; the ticked positions go in before the lines are compared, since the lines are built by
+    /// position. The rows then show what Apply will write: a traded player's retention on his new team, a new player in
+    /// his team's lineup, no "not on the team yet". New players' own contracts and positions aren't listed: creating a
+    /// player writes his CapWages deal and positions with him. Rows that were there before keep their ticks.
     /// </summary>
     private async Task PlanAsync()
     {
         if (_mods == null) return;
         int run = ++_planRun;
-        bool capOn = CapOn && _cap != null, linesOn = LinesOn && _lines != null;
+        bool capOn = CapOn && _cap != null, linesOn = LinesOn && _lines != null, namesOn = _api != null;
         if (!capOn) ClearCap(keepPages: true);
         if (!linesOn) _lineRows = new List<SyncRow>();
-        if (!capOn && !linesOn) { ShowCapStages(); ShowLinesStage(); ApplyFilter(); return; }
+        if (!namesOn) _nameRows = new List<SyncRow>();
+        if (!capOn && !linesOn && !namesOn) { ShowCapStages(); ShowLinesStage(); ApplyFilter(); return; }
 
-        if (capOn) { _contractsStage.Update(StageState.Running, "checking…"); _picksStage.Update(StageState.Running, "checking…"); }
+        if (capOn) foreach (var s in new[] { _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Running, "checking…");
         if (linesOn) _linesStage.Update(StageState.Running, "checking…");
         _planning = true;
         SetButtons();
@@ -586,6 +622,7 @@ public partial class RosterSyncView : UserControl
         bool sizes = SizesBox.IsChecked == true;
         var picked = PickedMoves();
         var toCreate = PickedCreates();
+        var posTicks = _positionRows.ToDictionary(r => r.Pos.GameId, r => r.Selected);
         try
         {
             var db = await _mods.OpenDbAsync(Roster.Database);
@@ -593,10 +630,19 @@ public partial class RosterSyncView : UserControl
             {
                 var players = SyncPlan.ApplyPlayers(db, api, ahl, sizes, picked, toCreate, capOn ? cap : null);
                 var contracts = capOn ? ContractSync.Compare(db, cap).Where(c => !players.Created.Contains(c.GameId)).ToList() : null;
+                List<PositionChange> positions = null;
+                if (capOn)
+                {
+                    var all = PositionSync.Compare(db, cap);
+                    positions = all.Where(c => !players.Created.Contains(c.GameId)).ToList();
+                    // the positions Apply will write (ticked ones, and every new player's), so the lines below are built on them
+                    PositionSync.Apply(db, all.Where(c => players.Created.Contains(c.GameId) || (posTicks.TryGetValue(c.GameId, out var t) ? t : c.Selected)));
+                }
                 var owners = capOn ? PickOwners.FromCapWages(cap, db) : null;
                 var pickResult = capOn ? PickSync.Compare(db, owners.Picks) : null;
+                var names = namesOn ? NameCalls.Compare(db) : null;
                 var lineChanges = linesOn ? LineSync.Compare(db, lines) : null;
-                return (contracts, owners, pickResult, lineChanges);
+                return (contracts, positions, owners, pickResult, names, lineChanges);
             });
             if (run != _planRun) return;
 
@@ -604,6 +650,7 @@ public partial class RosterSyncView : UserControl
             {
                 var oldContracts = _contractRows.ToDictionary(r => r.Contract.Key, r => r.Selected);
                 _contractRows = result.contracts.Select(c => Keep(new SyncRow(c, SetButtons), oldContracts.TryGetValue(c.Key, out var s) ? s : null)).ToList();
+                _positionRows = result.positions.Select(c => Keep(new SyncRow(c, OnPlayerTick), posTicks.TryGetValue(c.GameId, out var s) ? s : null)).ToList();
                 var oldPicks = _pickRows.ToDictionary(r => (r.Pick.Year, r.Pick.Round, r.Pick.OriginalTeam), r => r.Selected);
                 _picks = result.owners.Picks;
                 _pickResult = result.pickResult;
@@ -612,6 +659,11 @@ public partial class RosterSyncView : UserControl
                 string range = owners.Picks.Count == 0 ? "" : $" ({owners.Picks.Min(p => p.DraftYear) - owners.Offset}–{owners.Picks.Max(p => p.DraftYear) - owners.Offset})";
                 _pickSource = $" Draft picks from CapWages: {owners.Picks.Count} picks{range}; game first draft year {(owners.GameFirstYear < 0 ? "unknown" : owners.GameFirstYear.ToString())}, offset {owners.Offset}"
                     + (owners.Conflicts > 0 ? $"; {owners.Conflicts} picks listed by two teams (first kept)" : "") + ".";
+            }
+            if (namesOn)
+            {
+                var oldNames = _nameRows.ToDictionary(r => r.Call.GameId, r => r.Selected);
+                _nameRows = result.names.Select(c => Keep(new SyncRow(c, SetButtons), oldNames.TryGetValue(c.GameId, out var s) ? s : null)).ToList();
             }
             if (linesOn)
             {
@@ -625,7 +677,7 @@ public partial class RosterSyncView : UserControl
         catch (Exception ex)
         {
             if (run != _planRun) return;
-            if (capOn) { _contractsStage.Update(StageState.Failed, ex.Message); _picksStage.Update(StageState.Failed, ex.Message); }
+            if (capOn) foreach (var s in new[] { _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Failed, ex.Message);
             if (linesOn) _linesStage.Update(StageState.Failed, ex.Message);
         }
         finally
@@ -637,7 +689,7 @@ public partial class RosterSyncView : UserControl
     /// <summary>A rebuilt row keeps the tick it had before (when it had one).</summary>
     private static SyncRow Keep(SyncRow row, bool? was)
     {
-        if (was is { } s) row.Selected = s;
+        if (was is { } s) row.Restore(s);
         return row;
     }
 
@@ -659,6 +711,7 @@ public partial class RosterSyncView : UserControl
         _pickResult = null;
         _pickRows = new List<SyncRow>();
         _contractRows = new List<SyncRow>();
+        _positionRows = new List<SyncRow>();
         _pickSource = "";
     }
 
@@ -682,6 +735,7 @@ public partial class RosterSyncView : UserControl
                    $"{N(SyncKind.Left)} no longer on an NHL roster, {N(SyncKind.Missing)} not in the game.";
         if (_rows.Any(r => r.Change.IsAhl))
             s += $" AHL: {A(SyncKind.Join)} call-ups, {A(SyncKind.Move)} moves, {A(SyncKind.Update)} info changes, {A(SyncKind.Missing)} not in the game.";
+        if (_nameRows.Count > 0) s += $" {_nameRows.Count} player{(_nameRows.Count == 1 ? "" : "s")} can get a play-by-play name call.";
         return s + CapCounts() + LinesCounts();
     }
 
@@ -704,7 +758,7 @@ public partial class RosterSyncView : UserControl
         {
             int players = _contractRows.Count(r => r.Contract.Kind == ContractChangeKind.Contract);
             int teams = _contractRows.Count - players;
-            s += $" {players} contract{(players == 1 ? "" : "s")} and {teams} team{(teams == 1 ? "" : "s")}' retained salary differ from CapWages.";
+            s += $" {players} contract{(players == 1 ? "" : "s")}, {teams} team{(teams == 1 ? "" : "s")}' retained salary and {_positionRows.Count} player{(_positionRows.Count == 1 ? "'s" : "s'")} positions differ from CapWages.";
         }
         if (_pickResult != null)
         {
@@ -733,10 +787,12 @@ public partial class RosterSyncView : UserControl
     {
         if (ChangeList == null) return;
         var kind = Kind;
-        bool picksOnly = KindPicks.IsChecked == true, contractsOnly = KindContracts.IsChecked == true, linesOnly = KindLines.IsChecked == true;
+        bool picksOnly = KindPicks.IsChecked == true, contractsOnly = KindContracts.IsChecked == true, linesOnly = KindLines.IsChecked == true,
+             positionsOnly = KindPositions.IsChecked == true;
         string q = SyncSearch.Text.Trim();
-        var rows = _rows.Concat(_contractRows).Concat(_pickRows).Concat(_lineRows).Where(r =>
-            (picksOnly ? r.IsPick : contractsOnly ? r.IsContract : linesOnly ? r.IsLines : kind == null || r.IsPlayer && r.Change.Kind == kind) &&
+        var rows = _rows.Concat(_nameRows).Concat(_contractRows).Concat(_positionRows).Concat(_pickRows).Concat(_lineRows).Where(r =>
+            (picksOnly ? r.IsPick : contractsOnly ? r.IsContract : linesOnly ? r.IsLines : positionsOnly ? r.IsPosition :
+             kind == null || r.IsPlayer && r.Change.Kind == kind || r.IsNameCall && kind == SyncKind.Update) &&
             (q.Length == 0 || (!r.IsPlayer ? r.SearchText.Contains(q, StringComparison.OrdinalIgnoreCase)
                 : r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Description.Contains(q, StringComparison.OrdinalIgnoreCase)
                   || (r.Change.Api?.Team ?? r.Change.Ahl?.TeamName ?? "").Equals(q, StringComparison.OrdinalIgnoreCase)))).ToList();
@@ -798,7 +854,7 @@ public partial class RosterSyncView : UserControl
     private async void OnCap()
     {
         if (!CapOn) { ShowCapStages(); ClearCap(keepPages: true); ApplyFilter(); }
-        else if (!_fetched) foreach (var s in new[] { _capPages, _contractsStage, _picksStage }) s.Update(StageState.Off);
+        else if (!_fetched) foreach (var s in new[] { _capPages, _contractsStage, _positionsStage, _picksStage }) s.Update(StageState.Off);
         if (_mods == null || _busy || !_fetched) return;
         SetBusy(true);
         try
@@ -840,13 +896,15 @@ public partial class RosterSyncView : UserControl
 
     private void SetButtons()
     {
-        int n = _rows.Count(r => r.Selected) + _contractRows.Count(r => r.Selected) + _pickRows.Count(r => r.Selected) + _lineRows.Count(r => r.Selected);
-        int total = _rows.Count + _contractRows.Count + _pickRows.Count + _lineRows.Count;
+        var all = _rows.Concat(_nameRows).Concat(_contractRows).Concat(_positionRows).Concat(_pickRows).Concat(_lineRows).ToList();
+        int n = all.Count(r => r.Selected), total = all.Count;
         ApplyButton.IsEnabled = !_busy && !_planning && n > 0;
         TickAll.IsEnabled = TickNone.IsEnabled = !_busy && Shown.Any();
         ApplyLabel.Text = _planning ? "Checking…" : n > 0 ? $"Apply {n} to game" : "Apply to game";
         ApplyStatus.Text = _api == null && _cap == null && _lines == null ? "" : $"{n} of {total} ticked. Players who change team get their line spots cleared; the game puts them in its own lines."
-            + (_rows.Any(r => r.Change.CanCreate) ? " Create rows add the player with ratings and gear copied from a similar player, a generic face and (with CapWages ticked) his CapWages deal." : "")
+            + (_rows.Any(r => r.Change.CanCreate) ? " Create rows add the player with ratings and gear copied from a similar player, a generic face, his play-by-play name when the game has it and (with CapWages ticked) his CapWages deal and positions." : "")
+            + (_positionRows.Count > 0 ? " Position rows set the primary and secondary position from where he has played." : "")
+            + (_nameRows.Count > 0 ? " Name call rows give the commentators his name." : "")
             + (_contractRows.Count > 0 ? " Contract rows write the deal, extension, clauses and retention; an unchanged deal keeps the game's clauses." : "")
             + (_pickRows.Count > 0 ? " Pick rows only change the pick's owner." : "")
             + (_lineRows.Count > 0 ? " Lines rows set the team's lines, special teams and goalies from DailyFaceoff, after the roster changes and new players." : "");
@@ -858,7 +916,7 @@ public partial class RosterSyncView : UserControl
 
     /// <summary>
     /// Writes the ticked changes into the game, on a fresh read of the database, in order: roster changes, new players
-    /// (and their contracts), the ticked contracts, lines, draft picks — each matched afresh against the database as
+    /// (and their contracts and positions), the ticked contracts, positions, name calls, lines, draft picks — each matched afresh against the database as
     /// the step before left it.
     /// </summary>
     public async Task ApplyAsync()
@@ -869,8 +927,11 @@ public partial class RosterSyncView : UserControl
         bool contractsOn = CapOn;
         var pickedPicks = _pickRows.Where(r => r.Selected).Select(r => (r.Pick.Year, r.Pick.Round, r.Pick.OriginalTeam)).ToHashSet();
         var pickedContracts = _contractRows.Where(r => r.Selected).Select(r => r.Contract.Key).ToHashSet();
+        var pickedPositions = _positionRows.Where(r => r.Selected).Select(r => r.Pos.GameId).ToHashSet();
+        var pickedNames = _nameRows.Where(r => r.Selected).Select(r => r.Call.GameId).ToHashSet();
         var pickedLines = _lineRows.Where(r => r.Selected).Select(r => r.Line.TeamAbbr).ToHashSet();
-        if (picked.Count == 0 && toCreate.Count == 0 && pickedPicks.Count == 0 && pickedContracts.Count == 0 && pickedLines.Count == 0 || _busy || _planning) return;
+        if (picked.Count == 0 && toCreate.Count == 0 && pickedPicks.Count == 0 && pickedContracts.Count == 0 && pickedLines.Count == 0
+            && pickedPositions.Count == 0 && pickedNames.Count == 0 || _busy || _planning) return;
         if (ModService.GameRunning)
         {
             MessageBox.Show(Window.GetWindow(this), "KytyPS5 is running. Close the game first: its files can't be changed while it reads them.", "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -883,7 +944,7 @@ public partial class RosterSyncView : UserControl
         var cap = _cap;
         var lines = _lines;
         bool sizes = SizesBox.IsChecked == true;
-        int totalPicked = picked.Count + toCreate.Count + pickedPicks.Count + pickedContracts.Count + pickedLines.Count;
+        int totalPicked = picked.Count + toCreate.Count + pickedPicks.Count + pickedContracts.Count + pickedLines.Count + pickedPositions.Count + pickedNames.Count;
         StatusChanged?.Invoke($"Writing {totalPicked} roster change(s) into the game…");
         string summary = null;
         try
@@ -900,6 +961,18 @@ public partial class RosterSyncView : UserControl
                     var freshContracts = ContractSync.Compare(db, cap).Where(c => pickedContracts.Contains(c.Key) ||
                         contractsOn && c.Kind == ContractChangeKind.Contract && created.Contains(c.GameId) && !c.NameOnly).ToList();
                     if (freshContracts.Count > 0) summaries.Add(ContractSync.Apply(db, freshContracts));
+                }
+                // Positions before the lines (the lines are built by position): the ticked ones, and every new player's.
+                if (cap != null && (pickedPositions.Count > 0 || contractsOn && created.Count > 0))
+                {
+                    var freshPositions = PositionSync.Compare(db, cap).Where(c => pickedPositions.Contains(c.GameId) ||
+                        contractsOn && created.Contains(c.GameId) && !c.NameOnly).ToList();
+                    if (freshPositions.Count > 0) summaries.Add(PositionSync.Apply(db, freshPositions));
+                }
+                if (pickedNames.Count > 0)
+                {
+                    var freshNames = NameCalls.Compare(db).Where(c => pickedNames.Contains(c.GameId)).ToList();
+                    if (freshNames.Count > 0) summaries.Add(NameCalls.Apply(db, freshNames));
                 }
                 // Lines last among the roster parts: the moves and new players are in, so the lineups can find them.
                 if (lines != null && pickedLines.Count > 0) summaries.Add(LineSync.Apply(db, lines, pickedLines));
@@ -943,6 +1016,6 @@ public partial class RosterSyncView : UserControl
     /// <summary>Shows one kind of change (scripted runs): move, join, update, left, missing, contracts, picks, lines.</summary>
     public void ShowKind(string kind)
     {
-        (kind switch { "move" => KindMove, "join" => KindJoin, "update" => KindUpdate, "left" => KindLeft, "missing" => KindMissing, "contracts" => KindContracts, "picks" => KindPicks, "lines" => KindLines, _ => KindAll }).IsChecked = true;
+        (kind switch { "move" => KindMove, "join" => KindJoin, "update" => KindUpdate, "left" => KindLeft, "missing" => KindMissing, "contracts" => KindContracts, "picks" => KindPicks, "positions" => KindPositions, "lines" => KindLines, _ => KindAll }).IsChecked = true;
     }
 }

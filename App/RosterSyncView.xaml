@@ -123,6 +123,7 @@
                                 <RadioButton x:Name="KindLeft" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Left NHL" Checked="OnFilter" />
                                 <RadioButton x:Name="KindMissing" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Not in game" Checked="OnFilter" />
                                 <RadioButton x:Name="KindContracts" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Contracts" Checked="OnFilter" />
+                                <RadioButton x:Name="KindPositions" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Positions" Checked="OnFilter" />
                                 <RadioButton x:Name="KindPicks" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Picks" Checked="OnFilter" />
                                 <RadioButton x:Name="KindLines" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Lines" Checked="OnFilter" />
                             </StackPanel>

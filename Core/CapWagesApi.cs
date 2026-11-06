@@ -17,13 +17,22 @@ public sealed record CapContract(string Type, string Expiry, string ClauseDetail
 public sealed record CapPlayer(string First, string Last, DateTime? Born, string Section, string TermsDetails, IReadOnlyList<CapContract> Contracts)
 {
     public string Name => $"{First} {Last}";
+    /// <summary>The positions CapWages lists him at ("C", "LW, RW", "LD, RD"), from where he has played; "" when none.</summary>
+    public string Pos { get; init; } = "";
+    /// <summary>Games he has played at each position ("LW" → 96, "RW" → 46, "C" → 3); empty when CapWages has none.</summary>
+    public IReadOnlyDictionary<string, int> PositionGames { get; init; } = new Dictionary<string, int>();
 }
 
 /// <summary>A draft pick a team's page lists: real draft year, round, the original team's full name, and whether the team traded it away.</summary>
 public sealed record CapPick(int Year, int Round, string OriginalTeam, bool TradedAway);
 
 /// <summary>One NHL team's CapWages page, parsed.</summary>
-public sealed record CapTeam(string Abbr, string Name, IReadOnlyList<CapPlayer> Players, IReadOnlyList<CapPick> Picks);
+public sealed record CapTeam(string Abbr, string Name, IReadOnlyList<CapPlayer> Players, IReadOnlyList<CapPick> Picks)
+{
+    /// <summary>The affiliate's players on AHL contracts (the page's "AHL Contracts" table: name, birth date, one position, no
+    /// NHL contract). Kept apart from Players so contracts and picks never see them; only their positions are used.</summary>
+    public IReadOnlyList<CapPlayer> AhlPlayers { get; init; } = Array.Empty<CapPlayer>();
+}
 
 /// <summary>
 /// NHL contracts and draft picks from CapWages (capwages.com), read from each team's public page at sync time on the
@@ -123,7 +132,19 @@ public static class CapWagesApi
                 bool away = p.TryGetProperty("isTradedAway", out var ta) && ta.ValueKind == JsonValueKind.True;
                 picks.Add(new CapPick(year, r.GetInt32(), Str(p, "team"), away));
             }
-        return new CapTeam(abbr, name, players, picks);
+        // the AHL affiliate's AHL-contract players (pageProps.ahlClub.players)
+        var ahl = new List<CapPlayer>();
+        if (pp.TryGetProperty("ahlClub", out var club) && club.ValueKind == JsonValueKind.Object
+            && club.TryGetProperty("players", out var ap) && ap.ValueKind == JsonValueKind.Array)
+            foreach (var p in ap.EnumerateArray())
+            {
+                string full = Str(p, "name");
+                if (full.Length == 0) continue;
+                int comma = full.IndexOf(',');
+                string last = comma > 0 ? full[..comma].Trim() : full, first = comma > 0 ? full[(comma + 1)..].Trim() : "";
+                ahl.Add(new CapPlayer(first, last, ParseDate(Str(p, "born")), "ahl", "", Array.Empty<CapContract>()) { Pos = Str(p, "pos") });
+            }
+        return new CapTeam(abbr, name, players, picks) { AhlPlayers = ahl };
     }
 
     private static CapPlayer ParsePlayer(JsonElement p, string section)
@@ -143,7 +164,11 @@ public static class CapWagesApi
                         if (ParseSeason(d) is { } s) seasons.Add(s);
                 contracts.Add(new CapContract(Str(c, "type").Trim(), Str(c, "expiryStatus"), Str(c, "clauseDetails"), seasons));
             }
-        return new CapPlayer(first, last, ParseDate(Str(p, "born")), section, Str(p, "termsDetails"), contracts);
+        var games = new Dictionary<string, int>();
+        if (p.TryGetProperty("positions", out var ps) && ps.ValueKind == JsonValueKind.Object)
+            foreach (var g in ps.EnumerateObject())
+                if (g.Value.ValueKind == JsonValueKind.Number) games[g.Name] = g.Value.GetInt32();
+        return new CapPlayer(first, last, ParseDate(Str(p, "born")), section, Str(p, "termsDetails"), contracts) { Pos = Str(p, "pos"), PositionGames = games };
     }
 
     private static CapSeason ParseSeason(JsonElement d)

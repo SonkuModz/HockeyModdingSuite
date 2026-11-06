@@ -36,7 +36,7 @@ public sealed class CreateResult
 /// - The face is a generic head: head, hair, eyebrows, eye/skin colour and beard copied from one of the game's own
 ///   no-scan players (chosen by a hash of the name, so the same player always gets the same face), hasportrait 0.
 ///   artid/audioid get a fresh value (a later portrait would be p{artid}); surnameid (the commentator's name call) is
-///   borrowed from a player with the same last name, else 0 (no name call).
+///   the game's recording of his last name (NameCalls), else the one players with his last name use, else 0 (no name call).
 /// - New game ids follow the highest real one (below <see cref="SpecialIdStart"/>, where the game's game-mode players,
 ///   archetypes and Create-a-Player slots live); new player indexes follow the highest real index.
 /// </summary>
@@ -113,9 +113,10 @@ public static class PlayerCreator
         var faces = roster.Players.Where(p => !p.HasPortrait && p.GameId < SpecialIdStart && BioInt(p.BioRow, "gender") == 0 &&
                                               BioInt(p.BioRow, "headid") >= 100000 && BioInt(p.BioRow, "headid") == BioInt(p.BioRow, "headtexture"))
                                   .OrderBy(p => p.GameId).ToList();
-        var surnames = roster.Players.Where(p => BioInt(p.BioRow, "surnameid") > 0)
-            .GroupBy(p => RosterSync.Norm(p.LastName))
-            .ToDictionary(g => g.Key, g => g.GroupBy(p => BioInt(p.BioRow, "surnameid")).OrderByDescending(x => x.Count()).ThenBy(x => x.Key).First().Key);
+        // name calls: the game's list of recorded names, then (for a name not in it) the call players with that last name use
+        var surnames = NameCalls.ByLastName(db).ToDictionary(x => x.Key, x => x.Value.Id);
+        foreach (var g in roster.Players.Where(p => BioInt(p.BioRow, "surnameid") > 0).GroupBy(p => RosterSync.Norm(p.LastName)))
+            surnames.TryAdd(g.Key, g.GroupBy(p => BioInt(p.BioRow, "surnameid")).OrderByDescending(x => x.Count()).ThenBy(x => x.Key).First().Key);
         // where a city is, from the players already born there (for a country the source doesn't give)
         var cities = roster.Players.Where(p => p.GameId < SpecialIdStart)
             .Select(p => (City: RosterSync.Norm((string)db.Get(bio, p.BioRow, bf["birthplace"])), C: BioInt(p.BioRow, "intlcountry"), S: BioInt(p.BioRow, "state")))
