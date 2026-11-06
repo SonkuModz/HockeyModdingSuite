@@ -326,17 +326,16 @@ public sealed record ClauseChoice(int Value, string Name)
 /// <summary>
 /// One year of trade protection: a clause type (contractclauseN) plus the size of the no-trade list for that year
 /// (contractclausemntcnumteamsN). The slots run from the current season through the contract, then the extension.
-/// Clause values, as read from the game's data: 0 = no protection, 1 = modified no-trade (with a team list),
-/// 2 = modified no-move (with a team list), 4 = full protection. The 1-vs-2 reading is best-effort — both appear
-/// with 15-team lists in the shipped data (Marcus Foligno: 1, Brock Faber: 2) and the game never says which is which;
-/// the labels here follow the usual reading (1 = no-trade, 2 = no-move) and may need correcting if the game proves
-/// otherwise. A team list only means anything with a clause: picking None clears the list to 0.
+/// Clause values (ContractSync.ClauseValue; decoded by matching the shipped data against CapWages): 0 = none,
+/// 1 = modified no-trade (M-NTC, with a team list), 2 = no-move with a modified no-trade list ("M-NTC, NMC"),
+/// 3 = full no-trade (NTC), 4 = full no-move (NMC). A team list only means anything with a clause: picking None
+/// clears the list to 0.
 /// </summary>
 public sealed class ClauseEdit : Observable
 {
     public static readonly List<ClauseChoice> Choices = new()
     {
-        new(0, "None"), new(1, "No-trade (modified list)"), new(2, "No-move (modified list)"), new(4, "Full protection"),
+        new(0, "None"), new(1, "No-trade (modified list)"), new(2, "No-move + no-trade list"), new(3, "No-trade (full)"), new(4, "No-move (full)"),
     };
 
     public ClauseEdit(int year, FieldEdit clause, FieldEdit teams)

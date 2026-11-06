@@ -46,8 +46,10 @@ public partial class RosterPage : UserControl
     }
 
     private bool TextMode => ModeText.IsChecked == true;
-    private bool SyncMode => ModeSync.IsChecked == true;
+    private bool _syncMode;
+    private bool SyncMode => _syncMode;
     private bool LinesMode => ModeLines.IsChecked == true;
+    private bool PicksMode => ModePicks.IsChecked == true;
 
     public void SetMods(ModService mods)
     {
@@ -55,8 +57,10 @@ public partial class RosterPage : UserControl
         _textures = new TextureService(mods.Index);
         SyncView.SetMods(mods);
         LinesView.SetMods(mods);
+        PicksView.SetMods(mods);
         LinesView.StatusChanged += text => StatusChanged?.Invoke(text);
         SyncView.StatusChanged += text => StatusChanged?.Invoke(text);
+        PicksView.StatusChanged += text => StatusChanged?.Invoke(text);
         Summary.Text = "Open the page to read the roster from the game.";
         if (IsVisible) _ = ReloadAsync();
     }
@@ -71,7 +75,12 @@ public partial class RosterPage : UserControl
     /// <summary>Opens the NHL sync and fetches (scripted runs), then shows one kind of change.</summary>
     public async Task SyncAsync(string kind)
     {
-        ModeSync.IsChecked = true;
+        _syncMode = true;
+        ModePlayers.IsChecked = false;
+        ModeText.IsChecked = false;
+        ModeLines.IsChecked = false;
+        ModePicks.IsChecked = false;
+        await ApplyModeAsync();
         await SyncView.FetchAsync();
         SyncView.ShowKind(kind);
     }
@@ -104,6 +113,7 @@ public partial class RosterPage : UserControl
         {
             if (SyncMode) return;
             if (LinesMode) { await LinesView.ShownAsync(); return; }
+            if (PicksMode) { await PicksView.ShownAsync(); return; }
             if (TextMode) await LoadLanguageAsync();
             else await LoadRosterAsync();
         }
@@ -480,13 +490,34 @@ public partial class RosterPage : UserControl
 
     private async void OnModeChanged(object sender, RoutedEventArgs e)
     {
+        // a tab in the bar was picked: that leaves sync mode
+        _syncMode = false;
+        await ApplyModeAsync();
+    }
+
+    /// <summary>Opens the NHL sync from the gold header button.</summary>
+    private async void OnSyncClick(object sender, RoutedEventArgs e)
+    {
+        _syncMode = true;
+        // no tab is active while the sync is open; picking a tab leaves it
+        ModePlayers.IsChecked = false;
+        ModeText.IsChecked = false;
+        ModeLines.IsChecked = false;
+        ModePicks.IsChecked = false;
+        await ApplyModeAsync();
+    }
+
+    private async Task ApplyModeAsync()
+    {
         if (PlayersView == null) return;
-        PlayersView.Visibility = TextMode || SyncMode || LinesMode ? Visibility.Collapsed : Visibility.Visible;
+        PlayersView.Visibility = TextMode || SyncMode || LinesMode || PicksMode ? Visibility.Collapsed : Visibility.Visible;
         LinesView.Visibility = LinesMode ? Visibility.Visible : Visibility.Collapsed;
         TextView.Visibility = TextMode ? Visibility.Visible : Visibility.Collapsed;
         SyncView.Visibility = SyncMode ? Visibility.Visible : Visibility.Collapsed;
-        SearchRow.Visibility = SyncMode || LinesMode ? Visibility.Collapsed : Visibility.Visible;
+        PicksView.Visibility = PicksMode ? Visibility.Visible : Visibility.Collapsed;
+        SearchRow.Visibility = SyncMode || LinesMode || PicksMode ? Visibility.Collapsed : Visibility.Visible;
         ReloadButton.Visibility = SyncMode ? Visibility.Collapsed : Visibility.Visible;
+        SyncButton.Visibility = SyncMode ? Visibility.Collapsed : Visibility.Visible;
         if (LinesMode)
         {
             PageTitle.Text = "Lines";
@@ -498,6 +529,13 @@ public partial class RosterPage : UserControl
         {
             PageTitle.Text = "NHL sync";
             Summary.Text = "Bring the game's rosters up to date with the NHL: trades, call-ups and numbers.";
+            return;
+        }
+        if (PicksMode)
+        {
+            PageTitle.Text = "Draft Picks";
+            Summary.Text = "Every team's future draft picks: who owns each one now, and where it came from.";
+            if (_mods != null) await PicksView.ShownAsync();
             return;
         }
         TeamFilter.Visibility = TextMode ? Visibility.Collapsed : Visibility.Visible;

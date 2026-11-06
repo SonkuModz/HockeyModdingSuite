@@ -36,6 +36,7 @@
     <SolidColorBrush x:Key="Patch" Color="#FF9F43" />
     <SolidColorBrush x:Key="PatchSoft" Color="#22FF9F43" />
     <SolidColorBrush x:Key="Good" Color="#3CCB7F" />
+    <SolidColorBrush x:Key="GoodSoft" Color="#263CCB7F" />
     <SolidColorBrush x:Key="Danger" Color="#FF6B6B" />
     <SolidColorBrush x:Key="Selection" Color="#26D6B76E" />
     <SolidColorBrush x:Key="Violet" Color="#9B8CFF" />

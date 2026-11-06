@@ -62,6 +62,72 @@ public static class NhlApi
         return all;
     }
 
+    /// <summary>
+    /// The player's full bio from /v1/player/{id}/landing: number, position, shoots/catches, height, weight, birth date,
+    /// birth city (all the game's birthplace field holds), and where he was drafted (draftDetails; none means undrafted). The API's wing
+    /// codes L/R become LW/RW, as the AHL writes them.
+    /// </summary>
+    public static async Task<PlayerBio> BioAsync(int playerId, CancellationToken ct = default)
+    {
+        using var doc = JsonDocument.Parse(await GetAsync($"{Base}player/{playerId}/landing", ct));
+        var p = doc.RootElement;
+        int Int(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+        var draft = DraftInfo.Undrafted;
+        if (p.TryGetProperty("draftDetails", out var d) && d.ValueKind == JsonValueKind.Object && Int(d, "year") > 0)
+            draft = new DraftInfo(Int(d, "year"), Str(d, "teamAbbrev"), Int(d, "round"), Int(d, "overallPick"));
+        return new PlayerBio(
+            Text(p, "firstName"), Text(p, "lastName"),
+            p.TryGetProperty("sweaterNumber", out var n) && n.ValueKind == JsonValueKind.Number ? n.GetInt32() : -1,
+            Str(p, "position") switch { "L" => "LW", "R" => "RW", var pos => pos },
+            Str(p, "shootsCatches"), Int(p, "heightInInches"), Int(p, "weightInPounds"),
+            DateTime.TryParse(Str(p, "birthDate"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var b) ? b : null,
+            Text(p, "birthCity"), draft, "NHL");
+    }
+
+    /// <summary>NHL player ids whose full name matches exactly (case-insensitive), from the NHL's player search
+    /// (search.d3.nhle.com, the search box on nhl.com). The search is fuzzy, so non-exact names are dropped.</summary>
+    public static async Task<List<int>> SearchAsync(string name, CancellationToken ct = default)
+    {
+        string url = $"https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=20&q={Uri.EscapeDataString(name)}";
+        using var doc = JsonDocument.Parse(await GetAsync(url, ct));
+        var ids = new List<int>();
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return ids;
+        foreach (var p in doc.RootElement.EnumerateArray())
+            if (string.Equals(Str(p, "name"), name, StringComparison.OrdinalIgnoreCase) && int.TryParse(Str(p, "playerId"), out int id))
+                ids.Add(id);
+        return ids;
+    }
+
+    /// <summary>Full NHL team names (as other sources write them) to abbreviations. Current teams come from CapWages'
+    /// page slugs; relocated and renamed franchises are listed here so older draft years still resolve.</summary>
+    private static readonly Dictionary<string, string> FormerTeams = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["arizona_coyotes"] = "ARI", ["phoenix_coyotes"] = "PHX", ["utah_hockey_club"] = "UTA", ["utah_hc"] = "UTA",
+        ["atlanta_thrashers"] = "ATL", ["mighty_ducks_of_anaheim"] = "ANA",
+    };
+
+    /// <summary>"Minnesota Wild" -> "MIN". The name as given when it isn't a known NHL team.</summary>
+    public static string TeamAbbr(string fullName)
+    {
+        string slug = Slug(fullName);
+        foreach (var (abbr, s) in CapWagesApi.Teams)
+            if (s == slug) return abbr;
+        return FormerTeams.TryGetValue(slug, out var former) ? former : fullName;
+    }
+
+    /// <summary>"Montréal Canadiens" -> "montreal_canadiens", matching CapWages' team slugs.</summary>
+    private static string Slug(string name)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in (name ?? "").Normalize(System.Text.NormalizationForm.FormD))
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+            if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+            else if (sb.Length > 0 && sb[^1] != '_') sb.Append('_');
+        }
+        return sb.ToString().Trim('_');
+    }
+
     /// <summary>A GET that waits and tries again when the API says too many requests (429), up to five times.</summary>
     private static async Task<string> GetAsync(string url, CancellationToken ct)
     {

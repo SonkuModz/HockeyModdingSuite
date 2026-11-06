@@ -58,6 +58,8 @@ public static class Program
                 "ebx-probe" => EbxProbeCmd(game, opts),
                 "roster-sync" => RosterSyncCmd(game, opts),
                 "ahl-sync" => AhlSyncCmd(game, opts),
+                "picks-sync" => PicksSyncCmd(game, opts),
+                "contracts-sync" => ContractsSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -2932,6 +2934,85 @@ public static class Program
             var (ok, total) = db.CheckCrcs();
             var again = RosterSync.Compare(db, api, opts.Has("sizes"));
             Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
+        }
+        return 0;
+    }
+
+    /// <summary>Every team's CapWages page (32 requests, a short pause between them), with progress on one line.</summary>
+    private static List<CapTeam> FetchCapWages()
+    {
+        int done = 0;
+        var teams = CapWagesApi.AllTeamsAsync(t => Console.Write($"\rCapWages {++done}/{CapWagesApi.Teams.Length} {t}   ")).GetAwaiter().GetResult();
+        Console.WriteLine();
+        return teams;
+    }
+
+    /// <summary>
+    /// picks-sync [--team CODE] [--all] [--dry 1]: compares the game's draft picks with their real-life owners, read live
+    /// from CapWages' team pages. Real years map onto the game's through the offset (game first draft year − real
+    /// completed draft), so it works for NHL 24 and NHL 27. --dry applies the ticked changes in memory only, then
+    /// compares again.
+    /// </summary>
+    private static int PicksSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var teams = FetchCapWages();
+        var owners = PickOwners.FromCapWages(teams, db);
+        var result = PickSync.Compare(db, owners.Picks);
+        var changes = result.Changes;
+        string team = opts.Get("team");
+        if (team != null)
+        {
+            string t = team.ToUpperInvariant();
+            changes = changes.Where(c => c.OriginalAbbr == t || c.ToAbbr == t).ToList();
+        }
+        string range = owners.Picks.Count == 0 ? "no picks" : $"{owners.Picks.Min(p => p.DraftYear - owners.Offset)}-{owners.Picks.Max(p => p.DraftYear - owners.Offset)}";
+        Console.WriteLine($"Draft picks from CapWages: {owners.Picks.Count} picks ({range}); real season {owners.RealSeason}, game first draft year {owners.GameFirstYear}, offset {owners.Offset}"
+            + (owners.Conflicts > 0 ? $"; {owners.Conflicts} picks listed by two teams" : "") + ".");
+        Console.WriteLine($"{result.Compared} draft picks compared; {changes.Count} owner differences");
+        foreach (var c in changes.Take(opts.Has("all") ? 10000 : 12))
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Year + 1900} {PickSync.Ordinal(c.Round)} round ({c.OriginalAbbr}) {c.FromAbbr} → {c.ToAbbr}");
+        var notes = new List<string>();
+        if (result.NoGameRow > 0) notes.Add($"{result.NoGameRow} CapWages picks with no game row");
+        if (result.NoSourcePick > 0) notes.Add($"{result.NoSourcePick} game picks CapWages doesn't list");
+        if (result.SkippedUnmapped > 0) notes.Add($"{result.SkippedUnmapped} unmapped");
+        if (notes.Count > 0) Console.WriteLine("skipped: " + string.Join(", ", notes));
+        if (opts.Has("dry"))
+        {
+            // applies the ticked changes to the database in memory only, then compares again
+            Console.WriteLine(PickSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, total) = db.CheckCrcs();
+            var again = PickSync.Compare(db, owners.Picks);
+            Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: {again.Changes.Count}");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// contracts-sync [--team CODE] [--player NAME] [--all] [--dry 1]: compares the game's contracts (status, dollars,
+    /// length, two-way, extension, clauses, retention) and the teams' retained-salary totals with CapWages. --dry applies
+    /// the ticked changes in memory only, then compares again: a correct apply leaves 0 ticked differences.
+    /// </summary>
+    private static int ContractsSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var teams = FetchCapWages();
+        var changes = ContractSync.Compare(db, teams);
+        Console.WriteLine($"Contracts from CapWages: real season {CapWagesApi.CurrentSeason(teams)}; {changes.Count(c => c.Kind == ContractChangeKind.Contract)} player differences, "
+            + $"{changes.Count(c => c.Kind == ContractChangeKind.TeamRetention)} teams' retained totals");
+        var shown = changes.AsEnumerable();
+        if (opts.Get("team") is { } team) shown = shown.Where(c => string.Equals(c.TeamAbbr, team, StringComparison.OrdinalIgnoreCase));
+        if (opts.Get("player") is { } player) shown = shown.Where(c => c.Name?.Contains(player, StringComparison.OrdinalIgnoreCase) == true);
+        foreach (var c in shown.Take(opts.Has("all") ? 10000 : 25))
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.TeamAbbr,-4}{c.Name,-26} {c.Description}{(c.NameOnly ? "  (name match only)" : "")}");
+        if (opts.Has("dry"))
+        {
+            Console.WriteLine(ContractSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, total) = db.CheckCrcs();
+            var again = ContractSync.Compare(db, teams);
+            Console.WriteLine($"in memory: CRCs {ok}/{total}; ticked differences left: {again.Count(c => c.Selected)} (unticked: {again.Count(c => !c.Selected)})");
         }
         return 0;
     }

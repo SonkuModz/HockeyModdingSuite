@@ -47,6 +47,9 @@ public sealed class SyncChange
     public int NewWeight { get; init; }
     /// <summary>True when the player was matched by name only (his birth date differs or is missing).</summary>
     public bool NameOnly { get; init; }
+    /// <summary>A Missing player's full bio (with where he was drafted), looked up after the compare (MissingPlayers.BioAsync)
+    /// for the create-player pipeline. Null until looked up, or when the lookup failed.</summary>
+    public PlayerBio Bio { get; set; }
     /// <summary>Ticked by default: moves, joins and number changes are; departures and unmatched players aren't.</summary>
     public bool Selected { get; set; }
 
@@ -161,23 +164,7 @@ public static class RosterSync
         var rf = rt.Fields.ToDictionary(x => x.Name);
         string TeamName(int i) => roster.Teams.TryGetValue(i, out var tm) && !string.IsNullOrEmpty(tm.Name) ? tm.Name : $"team {i}";
         var ahl = AhlAffiliates(db);
-
-        var byName = new Dictionary<string, List<RosterPlayer>>();
-        // the game's players by normalised name. Every bio player is a candidate, not only players
-        // with a roster row: a bio-only free agent (RosterRow -1) is a Join, not a Missing.
-        foreach (var p in roster.Players)
-        {
-            string k = Key(p.FirstName, p.LastName);
-            if (!byName.TryGetValue(k, out var l)) byName[k] = l = new List<RosterPlayer>();
-            l.Add(p);
-        }
-        DateTime? Born(RosterPlayer p)
-        {
-            int y = (int)db.Get(bio, p.BioRow, bf["year"]) + 1900, m = (int)db.Get(bio, p.BioRow, bf["month"]) + 1, d = (int)db.Get(bio, p.BioRow, bf["day"]) + 1;
-            return y > 1900 && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m) ? new DateTime(y, m, d) : null;
-        }
-        // last-name-only index for players the API spells differently (Teddy / Teodors)
-        var byLast = roster.Players.GroupBy(p => Norm(p.LastName)).ToDictionary(g => g.Key, g => g.ToList());
+        var matcher = new PlayerMatcher(db, roster);
 
         // what the game shows: the online roster copy's row, else the exhibition one
         var tables = RosterTables(db);
@@ -197,13 +184,7 @@ public static class RosterSync
         foreach (var a in api)
         {
             if (!teams.TryGetValue(a.Team, out int to)) continue;
-            RosterPlayer p = null;
-            bool nameOnly = false;
-            var cands = byName.GetValueOrDefault(Key(a.First, a.Last)) ?? new List<RosterPlayer>();
-            p = cands.FirstOrDefault(c => Born(c) == a.Born);
-            if (p == null && a.Born != null)
-                p = byLast.GetValueOrDefault(Norm(a.Last))?.FirstOrDefault(c => Born(c) == a.Born);
-            if (p == null && cands.Count == 1) { p = cands[0]; nameOnly = true; }
+            var (p, nameOnly) = matcher.Find(a.First, a.Last, a.Born);
             // Already matched by the AHL compare (CompareCombined runs it first): skip outright, don't
             // call him Missing and don't build an NHL change for him — his AHL change already covers him.
             if (p != null && alreadyMatched != null && alreadyMatched.Contains(p.GameId)) continue;
@@ -309,23 +290,7 @@ public static class RosterSync
         var bf = bio.Fields.ToDictionary(x => x.Name);
         var rf = rt.Fields.ToDictionary(x => x.Name);
         string TeamName(int i) => roster.Teams.TryGetValue(i, out var tm) && !string.IsNullOrEmpty(tm.Name) ? tm.Name : $"team {i}";
-
-        // the game's players by normalised name. Every bio player is a candidate, not only players
-        // with a roster row: a bio-only free agent (RosterRow -1) is a Join, not a Missing.
-        var byName = new Dictionary<string, List<RosterPlayer>>();
-        foreach (var p in roster.Players)
-        {
-            string k = Key(p.FirstName, p.LastName);
-            if (!byName.TryGetValue(k, out var l)) byName[k] = l = new List<RosterPlayer>();
-            l.Add(p);
-        }
-        DateTime? Born(RosterPlayer p)
-        {
-            int y = (int)db.Get(bio, p.BioRow, bf["year"]) + 1900, m = (int)db.Get(bio, p.BioRow, bf["month"]) + 1, d = (int)db.Get(bio, p.BioRow, bf["day"]) + 1;
-            return y > 1900 && m is >= 1 and <= 12 && d >= 1 && d <= DateTime.DaysInMonth(y, m) ? new DateTime(y, m, d) : null;
-        }
-        // last-name-only index for players the API spells differently (Teddy / Teodors)
-        var byLast = roster.Players.GroupBy(p => Norm(p.LastName)).ToDictionary(g => g.Key, g => g.ToList());
+        var matcher = new PlayerMatcher(db, roster);
 
         // what the game shows: the online roster copy's row, else the exhibition one
         var tables = RosterTables(db);
@@ -344,13 +309,7 @@ public static class RosterSync
         var matched = new HashSet<int>();
         foreach (var a in api)
         {
-            RosterPlayer p = null;
-            bool nameOnly = false;
-            var cands = byName.GetValueOrDefault(Key(a.First, a.Last)) ?? new List<RosterPlayer>();
-            p = cands.FirstOrDefault(c => Born(c) == a.Born);
-            if (p == null && a.Born != null)
-                p = byLast.GetValueOrDefault(Norm(a.Last))?.FirstOrDefault(c => Born(c) == a.Born);
-            if (p == null && cands.Count == 1) { p = cands[0]; nameOnly = true; }
+            var (p, nameOnly) = matcher.Find(a.First, a.Last, a.Born);
             // Already matched to another AHL team (shared set from CompareAllAhl): skip, don't call him Missing.
             if (p != null && alreadyMatched != null && alreadyMatched.Contains(p.GameId)) continue;
             if (p == null || matched.Contains(p.GameId))
@@ -799,8 +758,6 @@ public static class RosterSync
             if (!db.IsInvalid(t, r)) map[(int)db.Get(t, r, f["index"])] = (int)db.Get(t, r, f["ahlaffiliate"]);
         return map;
     }
-
-    private static string Key(string first, string last) => Norm(first) + " " + Norm(last);
 
     /// <summary>Lower case, accents and punctuation removed (Stützle = stutzle, O'Reilly = oreilly).</summary>
     public static string Norm(string s)

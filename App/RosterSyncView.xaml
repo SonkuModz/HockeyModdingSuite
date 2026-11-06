@@ -20,27 +20,83 @@
                     </Button>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="Sync with the NHL" Foreground="{StaticResource Text}" FontSize="15" FontWeight="SemiBold" />
+                        <!-- one chip per sync stream: gray = not run / not included, gold = running, green = done, red = failed -->
+                        <ItemsControl x:Name="StageList" Margin="0,8,0,2" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <!-- fixed-width chips from the left, wrapping when the window is narrow: a chip's size never follows
+                                     its text (long text is cut, full text in the tooltip), and there is room for more leagues -->
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:SyncStage}">
+                                    <Border x:Name="Chip" Width="185" CornerRadius="6" Padding="10,4" Margin="0,0,8,6" BorderThickness="1"
+                                            Background="{StaticResource Surface2}" BorderBrush="{StaticResource Line}" ToolTip="{Binding Detail}">
+                                        <DockPanel>
+                                            <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="8" Height="8" VerticalAlignment="Center" Fill="{StaticResource Faint}" />
+                                            <TextBlock x:Name="Label" DockPanel.Dock="Left" Text="{Binding Label}" Margin="7,0,0,0" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Muted}" />
+                                            <TextBlock x:Name="Detail" Text="{Binding Detail}" Margin="6,0,0,0" FontSize="12" Foreground="{StaticResource Muted}"
+                                                       TextTrimming="CharacterEllipsis" Visibility="{Binding Detail, Converter={StaticResource NonEmptyVisible}}" />
+                                        </DockPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding State}" Value="Running">
+                                            <Setter TargetName="Chip" Property="Background" Value="{StaticResource AccentSoft}" />
+                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource AccentLine}" />
+                                            <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Accent}" />
+                                            <Setter TargetName="Label" Property="Foreground" Value="{StaticResource Accent}" />
+                                            <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource Accent}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Done">
+                                            <Setter TargetName="Chip" Property="Background" Value="{StaticResource GoodSoft}" />
+                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource Good}" />
+                                            <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Good}" />
+                                            <Setter TargetName="Label" Property="Foreground" Value="{StaticResource Good}" />
+                                            <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource Good}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding State}" Value="Failed">
+                                            <Setter TargetName="Chip" Property="Background" Value="{StaticResource DangerSoft}" />
+                                            <Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource Danger}" />
+                                            <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Danger}" />
+                                            <Setter TargetName="Label" Property="Foreground" Value="{StaticResource Danger}" />
+                                            <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource Danger}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <TextBlock x:Name="FetchStatus" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
-                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and, when ticked, all 32 teams' rosters from the AHL (theahl.com). Nothing changes until you press Apply." />
+                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and, when ticked, all 32 teams' rosters from the AHL (theahl.com) and every team's contracts and draft picks from CapWages (capwages.com). Nothing changes until you press Apply." />
                     </StackPanel>
                 </DockPanel>
-                <DockPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="True">
-                    <CheckBox x:Name="SizesBox" DockPanel.Dock="Right" Content="Include heights &amp; weights" VerticalAlignment="Center" Margin="12,0,0,0"
-                              Checked="OnSizes" Unchecked="OnSizes" Foreground="{StaticResource TextDim}" />
-                    <CheckBox x:Name="AhlBox" DockPanel.Dock="Right" Content="Include AHL" VerticalAlignment="Center" Margin="12,0,0,0"
-                              Checked="OnAhl" Unchecked="OnAhl" Foreground="{StaticResource TextDim}" />
-                    <TextBox x:Name="SyncSearch" DockPanel.Dock="Right" Width="220" Style="{StaticResource SearchBox}" Tag="Name or team" TextChanged="OnFilter" />
-                    <Border CornerRadius="9" Padding="3" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <RadioButton x:Name="KindAll" Style="{StaticResource Segment}" GroupName="SyncKind" Content="All" IsChecked="True" Checked="OnFilter" />
-                            <RadioButton x:Name="KindMove" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Trades" Checked="OnFilter" />
-                            <RadioButton x:Name="KindJoin" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Call-ups" Checked="OnFilter" />
-                            <RadioButton x:Name="KindUpdate" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Numbers" Checked="OnFilter" />
-                            <RadioButton x:Name="KindLeft" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Left NHL" Checked="OnFilter" />
-                            <RadioButton x:Name="KindMissing" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Not in game" Checked="OnFilter" />
-                        </StackPanel>
-                    </Border>
-                </DockPanel>
+                <StackPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="True">
+                    <DockPanel>
+                        <TextBox x:Name="SyncSearch" DockPanel.Dock="Right" Width="220" Style="{StaticResource SearchBox}" Tag="Name or team" TextChanged="OnFilter" />
+                        <Border CornerRadius="9" Padding="3" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="KindAll" Style="{StaticResource Segment}" GroupName="SyncKind" Content="All" IsChecked="True" Checked="OnFilter" />
+                                <RadioButton x:Name="KindMove" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Trades" Checked="OnFilter" />
+                                <RadioButton x:Name="KindJoin" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Call-ups" Checked="OnFilter" />
+                                <RadioButton x:Name="KindUpdate" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Info" Checked="OnFilter" />
+                                <RadioButton x:Name="KindLeft" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Left NHL" Checked="OnFilter" />
+                                <RadioButton x:Name="KindMissing" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Not in game" Checked="OnFilter" />
+                                <RadioButton x:Name="KindContracts" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Contracts" Checked="OnFilter" />
+                                <RadioButton x:Name="KindPicks" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Picks" Checked="OnFilter" />
+                            </StackPanel>
+                        </Border>
+                    </DockPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <CheckBox x:Name="ContractsBox" Content="Include contracts" VerticalAlignment="Center" Margin="0,0,16,0"
+                                  IsChecked="True" Checked="OnContracts" Unchecked="OnContracts" Foreground="{StaticResource TextDim}" />
+                        <CheckBox x:Name="PicksBox" Content="Include draft picks" VerticalAlignment="Center" Margin="0,0,16,0"
+                                  IsChecked="True" Checked="OnPicks" Unchecked="OnPicks" Foreground="{StaticResource TextDim}" />
+                        <CheckBox x:Name="AhlBox" Content="Include AHL" VerticalAlignment="Center" Margin="0,0,16,0"
+                                  IsChecked="True" Checked="OnAhl" Unchecked="OnAhl" Foreground="{StaticResource TextDim}" />
+                        <CheckBox x:Name="SizesBox" Content="Include heights &amp; weights" VerticalAlignment="Center"
+                                  IsChecked="True" Checked="OnSizes" Unchecked="OnSizes" Foreground="{StaticResource TextDim}" />
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </Border>
 
