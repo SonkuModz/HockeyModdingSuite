@@ -8,39 +8,128 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- fetch, filters -->
+        <!-- sources, fetch, filters -->
         <Border Style="{StaticResource Card}" Padding="16,14" Margin="0,0,0,14">
             <StackPanel>
                 <DockPanel>
-                    <Button x:Name="FetchButton" DockPanel.Dock="Right" Style="{StaticResource Primary}" Padding="14,7" Click="OnFetch">
+                    <Button x:Name="FetchButton" DockPanel.Dock="Right" Style="{StaticResource Primary}" Padding="14,7" VerticalAlignment="Top" Click="OnFetch">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE895;" Style="{StaticResource Icon}" FontSize="13" />
-                            <TextBlock x:Name="FetchLabel" Text="Fetch NHL rosters" Margin="8,0,0,0" />
+                            <TextBlock x:Name="FetchLabel" Text="Fetch &amp; compare" Margin="8,0,0,0" />
                         </StackPanel>
                     </Button>
-                    <StackPanel VerticalAlignment="Center">
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="Sync with the NHL" Foreground="{StaticResource Text}" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock x:Name="FetchStatus" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,2,0,0"
-                                   Text="Reads all 32 teams' current rosters from the NHL's public API (api-web.nhle.com) and, when ticked, all 32 teams' rosters from the AHL (theahl.com). Nothing changes until you press Apply." />
+                        <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Text="The ticked sources are read at the same time. Rosters are compared first and the new players' bios looked up; contracts, picks and lines are checked last, against the rosters as Apply will leave them. Nothing in the game changes until you press Apply." />
                     </StackPanel>
                 </DockPanel>
-                <DockPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="True">
-                    <CheckBox x:Name="SizesBox" DockPanel.Dock="Right" Content="Include heights &amp; weights" VerticalAlignment="Center" Margin="12,0,0,0"
-                              Checked="OnSizes" Unchecked="OnSizes" Foreground="{StaticResource TextDim}" />
-                    <CheckBox x:Name="AhlBox" DockPanel.Dock="Right" Content="Include AHL" VerticalAlignment="Center" Margin="12,0,0,0"
-                              Checked="OnAhl" Unchecked="OnAhl" Foreground="{StaticResource TextDim}" />
-                    <TextBox x:Name="SyncSearch" DockPanel.Dock="Right" Width="220" Style="{StaticResource SearchBox}" Tag="Name or team" TextChanged="OnFilter" />
-                    <Border CornerRadius="9" Padding="3" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <RadioButton x:Name="KindAll" Style="{StaticResource Segment}" GroupName="SyncKind" Content="All" IsChecked="True" Checked="OnFilter" />
-                            <RadioButton x:Name="KindMove" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Trades" Checked="OnFilter" />
-                            <RadioButton x:Name="KindJoin" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Call-ups" Checked="OnFilter" />
-                            <RadioButton x:Name="KindUpdate" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Numbers" Checked="OnFilter" />
-                            <RadioButton x:Name="KindLeft" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Left NHL" Checked="OnFilter" />
-                            <RadioButton x:Name="KindMissing" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Not in game" Checked="OnFilter" />
-                        </StackPanel>
-                    </Border>
-                </DockPanel>
+
+                <!-- one card per source: where the data comes from, what it gives the game, and each step's progress -->
+                <ItemsControl x:Name="SourceList" Margin="0,12,-10,0" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="4" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:SyncSource}">
+                            <Border x:Name="Card" CornerRadius="8" Padding="12,10,12,9" Margin="0,0,10,0" BorderThickness="1"
+                                    Background="{StaticResource Surface2}" BorderBrush="{StaticResource Line}" ToolTip="{Binding Tip}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <CheckBox x:Name="Box" DockPanel.Dock="Left" IsChecked="{Binding IsOn}" IsEnabled="{Binding CanToggle}"
+                                                  VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="Read this source" />
+                                        <Border x:Name="Badge" DockPanel.Dock="Right" CornerRadius="999" Padding="7,1" VerticalAlignment="Center"
+                                                Background="{StaticResource Surface3}" Visibility="{Binding StateText, Converter={StaticResource NonEmptyVisible}}">
+                                            <TextBlock x:Name="BadgeText" Text="{Binding StateText}" FontSize="9.5" FontWeight="Bold" Foreground="{StaticResource Muted}" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource Text}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding Host}" FontFamily="Consolas" FontSize="11" Foreground="{StaticResource Faint}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Provides}" FontSize="11.5" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,5,0,8" MinHeight="30" />
+                                    <Border Height="1" Background="{StaticResource Line}" Margin="0,0,0,6" />
+                                    <ItemsControl x:Name="Steps" ItemsSource="{Binding Steps}" Focusable="False">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type local:SyncStage}">
+                                                <DockPanel Margin="0,2" ToolTip="{Binding Detail}">
+                                                    <Ellipse x:Name="Dot" DockPanel.Dock="Left" Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource Faint}" StrokeThickness="1.5" />
+                                                    <TextBlock x:Name="Label" DockPanel.Dock="Left" Text="{Binding Label}" Margin="7,0,10,0" FontSize="12" Foreground="{StaticResource TextDim}" />
+                                                    <TextBlock x:Name="Detail" Text="{Binding Detail}" FontSize="12" Foreground="{StaticResource Muted}" TextAlignment="Right" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="Waiting">
+                                                        <Setter TargetName="Dot" Property="Fill" Value="Transparent" />
+                                                        <Setter TargetName="Dot" Property="Stroke" Value="{StaticResource Accent}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="Running">
+                                                        <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Accent}" />
+                                                        <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource Accent}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="Done">
+                                                        <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Good}" />
+                                                        <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource Good}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                                        <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Danger}" />
+                                                        <Setter TargetName="Detail" Property="Foreground" Value="{StaticResource Danger}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Optional}" Value="False">
+                                    <Setter TargetName="Box" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsOn}" Value="False">
+                                    <Setter TargetName="Steps" Property="Opacity" Value="0.45" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Running">
+                                    <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource AccentLine}" />
+                                    <Setter TargetName="Badge" Property="Background" Value="{StaticResource AccentSoft}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground" Value="{StaticResource Accent}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Done">
+                                    <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Good}" />
+                                    <Setter TargetName="Badge" Property="Background" Value="{StaticResource GoodSoft}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground" Value="{StaticResource Good}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Failed">
+                                    <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Danger}" />
+                                    <Setter TargetName="Badge" Property="Background" Value="{StaticResource DangerSoft}" />
+                                    <Setter TargetName="BadgeText" Property="Foreground" Value="{StaticResource Danger}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="FetchStatus" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,10,0,0"
+                           Text="Press Fetch &amp; compare to read the ticked sources." />
+
+                <StackPanel x:Name="FilterBar" Margin="0,12,0,0" IsEnabled="True">
+                    <DockPanel>
+                        <TextBox x:Name="SyncSearch" DockPanel.Dock="Right" Width="220" Style="{StaticResource SearchBox}" Tag="Name or team" TextChanged="OnFilter" />
+                        <CheckBox x:Name="SizesBox" DockPanel.Dock="Right" Content="Sync heights &amp; weights" VerticalAlignment="Center" Margin="0,0,16,0"
+                                  IsChecked="True" Checked="OnSizes" Unchecked="OnSizes" Foreground="{StaticResource TextDim}" />
+                        <Border CornerRadius="9" Padding="3" Background="{StaticResource Surface2}" HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="KindAll" Style="{StaticResource Segment}" GroupName="SyncKind" Content="All" IsChecked="True" Checked="OnFilter" />
+                                <RadioButton x:Name="KindMove" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Trades" Checked="OnFilter" />
+                                <RadioButton x:Name="KindJoin" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Call-ups" Checked="OnFilter" />
+                                <RadioButton x:Name="KindUpdate" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Info" Checked="OnFilter" />
+                                <RadioButton x:Name="KindLeft" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Left NHL" Checked="OnFilter" />
+                                <RadioButton x:Name="KindMissing" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Not in game" Checked="OnFilter" />
+                                <RadioButton x:Name="KindContracts" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Contracts" Checked="OnFilter" />
+                                <RadioButton x:Name="KindPositions" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Positions" Checked="OnFilter" />
+                                <RadioButton x:Name="KindPicks" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Picks" Checked="OnFilter" />
+                                <RadioButton x:Name="KindLines" Style="{StaticResource Segment}" GroupName="SyncKind" Content="Lines" Checked="OnFilter" />
+                            </StackPanel>
+                        </Border>
+                    </DockPanel>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -89,7 +178,7 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                    <TextBlock x:Name="EmptyText" Text="Press Fetch NHL rosters to compare the game with today's NHL." Style="{StaticResource Caption}"
+                    <TextBlock x:Name="EmptyText" Text="Press Fetch &amp; compare to compare the game with today's NHL and AHL." Style="{StaticResource Caption}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Grid>
             </DockPanel>

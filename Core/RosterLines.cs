@@ -92,6 +92,74 @@ public static class RosterLines
         return dressed.Count;
     }
 
+    /// <summary>
+    /// A team's lines as Build would make them, with some slots fixed in advance (slot → playerindex, e.g. from real
+    /// line combinations), read from the roster copy the game plays with and returned (slot → playerindex, -1 for
+    /// nobody) for WriteTeam instead of written. The fixed players are dressed first, then the team is topped up to
+    /// 2 goalies and 18 skaters (D to 6 first) by overall; the slots left open are filled as Build fills them, never
+    /// with a player twice in one category; a skater slot no player of its position can take goes to any dressed skater
+    /// left (a 7th D on the 4th line when a team dresses 11 forwards). <paramref name="dress"/> are more players to
+    /// dress before the top-up (a lineup's extra D). Entries for players not on the team, or slots the table lacks,
+    /// are ignored.
+    /// </summary>
+    public static Dictionary<string, int> Plan(T3Db db, int team, IReadOnlyDictionary<string, int> fixedSlots, IEnumerable<int> dress = null)
+    {
+        var t = db.Table(RosterSync.OnlineRosterTable) ?? db.Table(Roster.RosterTable);
+        var f = t.Fields.ToDictionary(x => x.Name);
+        var slots = t.Fields.Where(x => x.Type == T3FieldType.Integer && x.Depth == 1 && Category(x.Name) != null).Select(x => x.Name).ToList();
+        var info = PlayerInfo(db);
+        var players = new Dictionary<int, Player>();
+        for (int r = 0; r < t.WrittenRecords; r++)
+        {
+            if (db.IsInvalid(t, r) || (int)db.Get(t, r, f["team"]) != team) continue;
+            int pi = (int)db.Get(t, r, f["playerindex"]);
+            var (pos, ovr, left) = info.GetValueOrDefault(pi, (-1, 0, true));
+            if (pos >= 0) players.TryAdd(pi, new Player(pi, pos, ovr, left));
+        }
+        var map = slots.ToDictionary(s => s, _ => -1);
+        if (players.Count == 0) return map;
+        var fixedOk = fixedSlots.Where(kv => map.ContainsKey(kv.Key) && players.ContainsKey(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        var dressed = fixedOk.Values.Concat((dress ?? Enumerable.Empty<int>()).Where(players.ContainsKey)).Distinct().Select(pi => players[pi]).ToList();
+        var rest = players.Values.Where(p => !dressed.Contains(p)).OrderByDescending(p => p.Overall).ToList();
+        void Add(Func<Player, bool> fits, Func<bool> more)
+        {
+            foreach (var p in rest.Where(fits).ToList())
+            {
+                if (!more()) break;
+                dressed.Add(p);
+                rest.Remove(p);
+            }
+        }
+        Add(p => p.Goalie, () => dressed.Count(x => x.Goalie) < 2);
+        Add(p => p.Defense, () => dressed.Count(x => x.Defense) < 6 && dressed.Count(x => !x.Goalie) < 18);
+        Add(p => p.Forward, () => dressed.Count(x => !x.Goalie) < 18);
+        Add(p => !p.Goalie, () => dressed.Count(x => !x.Goalie) < 18);
+
+        var usedIn = new Dictionary<string, HashSet<Player>>();
+        HashSet<Player> Used(string slot)
+        {
+            string cat = Category(slot);
+            if (!usedIn.TryGetValue(cat, out var u)) usedIn[cat] = u = new HashSet<Player>();
+            return u;
+        }
+        foreach (var (slot, pi) in fixedOk) Used(slot).Add(players[pi]);
+        var units = slots.GroupBy(Unit).OrderBy(g => Array.IndexOf(CategoryOrder, Category(g.First()))).ThenBy(g => g.Key, StringComparer.Ordinal);
+        foreach (var unit in units)
+            foreach (var slot in unit.OrderBy(SlotRank))
+            {
+                if (fixedOk.TryGetValue(slot, out int pi)) { map[slot] = pi; continue; }
+                var used = Used(slot);
+                var pick = Best(dressed, used, slot);
+                bool goalieSlot = Regex.IsMatch(slot, @"^g\d$") || slot.StartsWith("three_g");
+                pick ??= goalieSlot ? null : dressed.Where(p => !used.Contains(p) && !p.Goalie).OrderByDescending(p => p.Overall).FirstOrDefault();
+                if (pick == null) continue;
+                map[slot] = pick.Row;
+                used.Add(pick);
+            }
+        return map;
+    }
+
     public static int SlotRank(string slot)
     {
         string end = Regex.Match(slot, @"(lw|rw|c|ld|rd|w|d|s\d|g\d|\d)$").Value;

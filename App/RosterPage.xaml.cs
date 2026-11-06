@@ -46,8 +46,10 @@ public partial class RosterPage : UserControl
     }
 
     private bool TextMode => ModeText.IsChecked == true;
-    private bool SyncMode => ModeSync.IsChecked == true;
+    private bool _syncMode;
+    private bool SyncMode => _syncMode;
     private bool LinesMode => ModeLines.IsChecked == true;
+    private bool PicksMode => ModePicks.IsChecked == true;
 
     public void SetMods(ModService mods)
     {
@@ -55,8 +57,10 @@ public partial class RosterPage : UserControl
         _textures = new TextureService(mods.Index);
         SyncView.SetMods(mods);
         LinesView.SetMods(mods);
+        PicksView.SetMods(mods);
         LinesView.StatusChanged += text => StatusChanged?.Invoke(text);
         SyncView.StatusChanged += text => StatusChanged?.Invoke(text);
+        PicksView.StatusChanged += text => StatusChanged?.Invoke(text);
         Summary.Text = "Open the page to read the roster from the game.";
         if (IsVisible) _ = ReloadAsync();
     }
@@ -71,7 +75,12 @@ public partial class RosterPage : UserControl
     /// <summary>Opens the NHL sync and fetches (scripted runs), then shows one kind of change.</summary>
     public async Task SyncAsync(string kind)
     {
-        ModeSync.IsChecked = true;
+        _syncMode = true;
+        ModePlayers.IsChecked = false;
+        ModeText.IsChecked = false;
+        ModeLines.IsChecked = false;
+        ModePicks.IsChecked = false;
+        await ApplyModeAsync();
         await SyncView.FetchAsync();
         SyncView.ShowKind(kind);
     }
@@ -91,6 +100,15 @@ public partial class RosterPage : UserControl
     /// <summary>Applies the ticked sync changes (scripted runs).</summary>
     public Task SyncApplyAsync() => SyncView.ApplyAsync();
 
+    /// <summary>Flips the tick of the first sync row whose name contains <paramref name="name"/> (scripted runs).</summary>
+    public bool SyncTick(string name) => SyncView.TickByName(name);
+
+    /// <summary>Shows one kind of sync row (scripted runs).</summary>
+    public void SyncShow(string kind) => SyncView.ShowKind(kind);
+
+    /// <summary>Scrolls the profile to the retained salary section (scripted runs).</summary>
+    public void ShowRetained() => RetainedSection.BringIntoView();
+
     public void SelectIndex(int n)
     {
         var list = TextMode ? TextList : PlayerList;
@@ -104,6 +122,7 @@ public partial class RosterPage : UserControl
         {
             if (SyncMode) return;
             if (LinesMode) { await LinesView.ShownAsync(); return; }
+            if (PicksMode) { await PicksView.ShownAsync(); return; }
             if (TextMode) await LoadLanguageAsync();
             else await LoadRosterAsync();
         }
@@ -313,7 +332,42 @@ public partial class RosterPage : UserControl
             int status = (int)db.Get(bio, p.BioRow, statusField);
             ContractStatusText.Text = status == 0 ? "Under contract" : status == -1 ? "No NHL contract" : $"Contract status {status}";
         }
-        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0
+
+        // Retained salary: shown, never edited. The game only says how many former teams retain part of his salary
+        // and what his team pays; who retains it and how much comes from CapWages, as the NHL sync saved it, when that
+        // still fits the game's retained totals, else from what those totals prove on their own (RetainedSalary) —
+        // "—" where they could fit more than one team, never a guess. Plain display values, not FieldEdits: they
+        // never count as changes and never get written.
+        int BioInt(string name) => Roster.Field(bio, name) is { } f ? (int)db.Get(bio, p.BioRow, f) : 0;
+        int retainedTrades = BioInt("retainedsalarytrades");
+        var notes = retainedTrades >= 1 ? RetainedSalary.LoadNotes(_mods.Store.Dir) : null;
+        var retained = retainedTrades >= 1 ? RetainedSalary.For(db, p.GameId, notes) : null;
+        RetainedSection.Visibility = retained != null ? Visibility.Visible : Visibility.Collapsed;
+        if (retained != null)
+        {
+            var a = retained.Attribution;
+            var shown = new List<ReadOnlyField>
+            {
+                new("Full cap hit", a.FullDollars is { } full ? RetainedMoney(full) : "—"),
+                new($"{p.TeamAbbr} pays", RetainedMoney(a.CurrentDollars)),
+            };
+            for (int i = 0; i < a.Shares.Count; i++)
+            {
+                var s = a.Shares[i];
+                string which = a.Shares.Count > 1 ? $" ({i + 1} of {a.Shares.Count})" : "";
+                shown.Add(new($"Retained by{which}", s.Team is { } rt && roster.Teams.TryGetValue(rt, out var tm) ? tm.Name : "—"));
+                shown.Add(new($"Retained{which}", s.Dollars is { } d ? (a.Percent(s) is { } pct ? $"{RetainedPercent(pct)} — " : "") + RetainedMoney(d) : "—"));
+            }
+            RetainedFields.ItemsSource = shown;
+            RetainedNote.Text = retained.FromCapWages
+                ? $"Read-only. From CapWages as the NHL sync read it on {notes.Saved:MMM d}, checked against the game's retained totals."
+                : (notes == null
+                    ? "Read-only. Worked out from the game's retained totals alone, which often fit more than one team (—). Fetch in the NHL sync to fill these in from CapWages."
+                    : $"Read-only. CapWages' figures from {notes.Saved:MMM d} no longer match the game's, so this is worked out from the game's retained totals alone (— where they fit more than one team). Fetch again in the NHL sync.");
+        }
+        else RetainedFields.ItemsSource = null;
+
+        ContractSection.Visibility = contractFields.Count == 0 && toggleFields.Count == 0 && _clauses.Count == 0 && retained == null
             ? Visibility.Collapsed : Visibility.Visible;
 
         foreach (var f in _fields) f.PropertyChanged -= OnFieldChanged;
@@ -412,6 +466,14 @@ public partial class RosterPage : UserControl
         return null;
     }
 
+    /// <summary>"$4.9M" for millions, "$615,000" below that — the retained display's money format.</summary>
+    private static string RetainedMoney(long dollars) => dollars >= 1_000_000
+        ? "$" + (dollars / 1_000_000.0).ToString("0.##", CultureInfo.InvariantCulture) + "M"
+        : "$" + dollars.ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>"50%", "26.32%" — the retained display's percent format.</summary>
+    private static string RetainedPercent(double pct) => pct.ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
     private async void OnDiscard(object sender, RoutedEventArgs e)
     {
         if (_current != null) await LoadPlayerAsync(_current.GameId);
@@ -480,13 +542,34 @@ public partial class RosterPage : UserControl
 
     private async void OnModeChanged(object sender, RoutedEventArgs e)
     {
+        // a tab in the bar was picked: that leaves sync mode
+        _syncMode = false;
+        await ApplyModeAsync();
+    }
+
+    /// <summary>Opens the NHL sync from the gold header button.</summary>
+    private async void OnSyncClick(object sender, RoutedEventArgs e)
+    {
+        _syncMode = true;
+        // no tab is active while the sync is open; picking a tab leaves it
+        ModePlayers.IsChecked = false;
+        ModeText.IsChecked = false;
+        ModeLines.IsChecked = false;
+        ModePicks.IsChecked = false;
+        await ApplyModeAsync();
+    }
+
+    private async Task ApplyModeAsync()
+    {
         if (PlayersView == null) return;
-        PlayersView.Visibility = TextMode || SyncMode || LinesMode ? Visibility.Collapsed : Visibility.Visible;
+        PlayersView.Visibility = TextMode || SyncMode || LinesMode || PicksMode ? Visibility.Collapsed : Visibility.Visible;
         LinesView.Visibility = LinesMode ? Visibility.Visible : Visibility.Collapsed;
         TextView.Visibility = TextMode ? Visibility.Visible : Visibility.Collapsed;
         SyncView.Visibility = SyncMode ? Visibility.Visible : Visibility.Collapsed;
-        SearchRow.Visibility = SyncMode || LinesMode ? Visibility.Collapsed : Visibility.Visible;
+        PicksView.Visibility = PicksMode ? Visibility.Visible : Visibility.Collapsed;
+        SearchRow.Visibility = SyncMode || LinesMode || PicksMode ? Visibility.Collapsed : Visibility.Visible;
         ReloadButton.Visibility = SyncMode ? Visibility.Collapsed : Visibility.Visible;
+        SyncButton.Visibility = SyncMode ? Visibility.Collapsed : Visibility.Visible;
         if (LinesMode)
         {
             PageTitle.Text = "Lines";
@@ -498,6 +581,13 @@ public partial class RosterPage : UserControl
         {
             PageTitle.Text = "NHL sync";
             Summary.Text = "Bring the game's rosters up to date with the NHL: trades, call-ups and numbers.";
+            return;
+        }
+        if (PicksMode)
+        {
+            PageTitle.Text = "Draft Picks";
+            Summary.Text = "Every team's future draft picks: who owns each one now, and where it came from.";
+            if (_mods != null) await PicksView.ShownAsync();
             return;
         }
         TeamFilter.Visibility = TextMode ? Visibility.Collapsed : Visibility.Visible;

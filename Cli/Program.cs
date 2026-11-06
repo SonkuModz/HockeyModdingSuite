@@ -58,6 +58,11 @@ public static class Program
                 "ebx-probe" => EbxProbeCmd(game, opts),
                 "roster-sync" => RosterSyncCmd(game, opts),
                 "ahl-sync" => AhlSyncCmd(game, opts),
+                "picks-sync" => PicksSyncCmd(game, opts),
+                "contracts-sync" => ContractsSyncCmd(game, opts),
+                "retained-check" => RetainedCheckCmd(game, opts),
+                "create-players" => CreatePlayersCmd(game, opts),
+                "lines-sync" => LinesSyncCmd(game, opts),
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
@@ -2933,6 +2938,286 @@ public static class Program
             var again = RosterSync.Compare(db, api, opts.Has("sizes"));
             Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: " + string.Join(", ", again.GroupBy(c => c.Kind).Select(g => $"{g.Key} {g.Count()}")));
         }
+        return 0;
+    }
+
+    /// <summary>Every team's CapWages page (32 requests, a short pause between them), with progress on one line.</summary>
+    private static List<CapTeam> FetchCapWages()
+    {
+        int done = 0;
+        var teams = CapWagesApi.AllTeamsAsync(t => Console.Write($"\rCapWages {++done}/{CapWagesApi.Teams.Length} {t}   ")).GetAwaiter().GetResult();
+        Console.WriteLine();
+        return teams;
+    }
+
+    /// <summary>
+    /// picks-sync [--team CODE] [--all] [--dry 1]: compares the game's draft picks with their real-life owners, read live
+    /// from CapWages' team pages. Real years map onto the game's through the offset (game first draft year − real
+    /// completed draft), so it works for NHL 24 and NHL 27. --dry applies the ticked changes in memory only, then
+    /// compares again.
+    /// </summary>
+    private static int PicksSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var teams = FetchCapWages();
+        var owners = PickOwners.FromCapWages(teams, db);
+        var result = PickSync.Compare(db, owners.Picks);
+        var changes = result.Changes;
+        string team = opts.Get("team");
+        if (team != null)
+        {
+            string t = team.ToUpperInvariant();
+            changes = changes.Where(c => c.OriginalAbbr == t || c.ToAbbr == t).ToList();
+        }
+        string range = owners.Picks.Count == 0 ? "no picks" : $"{owners.Picks.Min(p => p.DraftYear - owners.Offset)}-{owners.Picks.Max(p => p.DraftYear - owners.Offset)}";
+        Console.WriteLine($"Draft picks from CapWages: {owners.Picks.Count} picks ({range}); real season {owners.RealSeason}, game first draft year {owners.GameFirstYear}, offset {owners.Offset}"
+            + (owners.Conflicts > 0 ? $"; {owners.Conflicts} picks listed by two teams" : "") + ".");
+        Console.WriteLine($"{result.Compared} draft picks compared; {changes.Count} owner differences");
+        foreach (var c in changes.Take(opts.Has("all") ? 10000 : 12))
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.Year + 1900} {PickSync.Ordinal(c.Round)} round ({c.OriginalAbbr}) {c.FromAbbr} → {c.ToAbbr}");
+        var notes = new List<string>();
+        if (result.NoGameRow > 0) notes.Add($"{result.NoGameRow} CapWages picks with no game row");
+        if (result.NoSourcePick > 0) notes.Add($"{result.NoSourcePick} game picks CapWages doesn't list");
+        if (result.SkippedUnmapped > 0) notes.Add($"{result.SkippedUnmapped} unmapped");
+        if (notes.Count > 0) Console.WriteLine("skipped: " + string.Join(", ", notes));
+        if (opts.Has("dry"))
+        {
+            // applies the ticked changes to the database in memory only, then compares again
+            Console.WriteLine(PickSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, total) = db.CheckCrcs();
+            var again = PickSync.Compare(db, owners.Picks);
+            Console.WriteLine($"in memory: CRCs {ok}/{total}; differences left: {again.Changes.Count}");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// contracts-sync [--team CODE] [--player NAME] [--all] [--dry 1]: compares the game's contracts (status, dollars,
+    /// length, two-way, extension, clauses, retention) and the teams' retained-salary totals with CapWages. --dry applies
+    /// the ticked changes in memory only, then compares again: a correct apply leaves 0 ticked differences.
+    /// </summary>
+    private static int ContractsSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var teams = FetchCapWages();
+        var changes = ContractSync.Compare(db, teams);
+        Console.WriteLine($"Contracts from CapWages: real season {CapWagesApi.CurrentSeason(teams)}; {changes.Count(c => c.Kind == ContractChangeKind.Contract)} player differences, "
+            + $"{changes.Count(c => c.Kind == ContractChangeKind.TeamRetention)} teams' retained totals, "
+            + $"{changes.Count(c => c.Kind == ContractChangeKind.TeamBuyouts)} teams' buyouts");
+        var shown = changes.AsEnumerable();
+        if (opts.Get("team") is { } team) shown = shown.Where(c => string.Equals(c.TeamAbbr, team, StringComparison.OrdinalIgnoreCase));
+        if (opts.Get("player") is { } player) shown = shown.Where(c => c.Name?.Contains(player, StringComparison.OrdinalIgnoreCase) == true);
+        foreach (var c in shown.Take(opts.Has("all") ? 10000 : 25))
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.TeamAbbr,-4}{c.Name,-26} {c.Description}{(c.NameOnly ? "  (name match only)" : "")}");
+        if (opts.Has("dry"))
+        {
+            Console.WriteLine(ContractSync.Apply(db, changes.Where(c => c.Selected)));
+            var (ok, total) = db.CheckCrcs();
+            var again = ContractSync.Compare(db, teams);
+            Console.WriteLine($"in memory: CRCs {ok}/{total}; ticked differences left: {again.Count(c => c.Selected)} (unticked: {again.Count(c => !c.Selected)})");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// retained-check [--player NAME]: what the player profile shows for every retained player (RetainedSalary.Solve,
+    /// worked out from the game's data alone), scored against CapWages: the retaining team(s) and this season's retained
+    /// dollars. Right, wrong (should never happen) or undetermined (shown as —).
+    /// </summary>
+    private static int RetainedCheckCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var solved = RetainedSalary.Solve(db);
+        Console.WriteLine($"{solved.Count} retained players in the game, solved in {sw.ElapsedMilliseconds} ms");
+        var teams = FetchCapWages();
+        int now = CapWagesApi.CurrentSeason(teams);
+        var roster = new Roster(db);
+        var matcher = new PlayerMatcher(db, roster);
+        var abbrOf = RosterSync.TeamIndex(db).ToDictionary(x => x.Value, x => x.Key);
+        // --saved: the notes the app saved (mods folder) instead of this run's CapWages read
+        var notes = opts.Has("saved") ? RetainedSalary.LoadNotes(KitPaths.ModsFor(null)) ?? throw new InvalidOperationException("no saved notes could be read") : RetainedSalary.FromCapWages(db, teams);
+        bool withNotes = !opts.Has("game-only");
+        // --stale: every note's amount off by $100,000, as if the game changed since CapWages was read (must fall back)
+        if (opts.Has("stale")) notes = notes with { Players = notes.Players.Select(n => n with { Current = n.Current + 100_000 }).ToList() };
+        Console.WriteLine(withNotes ? $"with the sync's CapWages notes ({notes.Players.Count} retained players)" : "from the game's data alone");
+        int right = 0, wrong = 0, partial = 0, unknown = 0, notRetained = 0;
+        var seen = new HashSet<int>();
+        foreach (var team in teams)
+            foreach (var cp in team.Players)
+            {
+                var s0 = cp.Contracts.SelectMany(c => c.Seasons).FirstOrDefault(x => x.StartYear == now);
+                var truth = s0?.Retention.Where(r => r.Team != "*").Select(r => (Abbr: NhlApi.TeamAbbr(r.Team), r.CapHit)).Where(r => r.Abbr != team.Abbr).ToList();
+                if (truth == null || truth.Count == 0) continue;
+                var (p, _) = matcher.Find(cp.First, cp.Last, cp.Born);
+                if (p == null || !seen.Add(p.GameId)) continue;
+                if (opts.Get("player") is { } name && !p.Name.Contains(name, StringComparison.OrdinalIgnoreCase)) continue;
+                string want = string.Join(" + ", truth.OrderBy(x => x.Abbr).Select(x => $"{x.Abbr} {x.CapHit / 1000}k"));
+                if (!solved.ContainsKey(p.GameId)) { notRetained++; Console.WriteLine($"  NOT FLAGGED {p.Name,-24} {team.Abbr}  CapWages: {want}"); continue; }
+                var shown = RetainedSalary.For(db, p.GameId, withNotes ? notes : null);
+                var a = shown.Attribution;
+                string got = (shown.FromCapWages ? "[CW] " : "") + string.Join(" + ", a.Shares.Select(x => $"{(x.Team is { } t ? abbrOf.GetValueOrDefault(t, $"#{t}") : "—")} {(x.Dollars is { } d ? $"{d / 1000}k" : "—")}"));
+                bool anyWrong = a.Shares.Any(x => x.Team is { } t && !truth.Any(tr => tr.Abbr == abbrOf.GetValueOrDefault(t)))
+                    || a.Shares.Any(x => x.Team is { } t && x.Dollars is { } d && truth.FirstOrDefault(tr => tr.Abbr == abbrOf.GetValueOrDefault(t)) is var tr2 && tr2.Abbr != null && Math.Abs(tr2.CapHit - d) > 1000);
+                bool full = a.Shares.All(x => x.Team != null && x.Dollars != null);
+                bool none = a.Shares.All(x => x.Team == null);
+                string verdict = anyWrong ? "WRONG" : full ? "right" : none ? "unknown" : "partial";
+                if (anyWrong) wrong++; else if (full) right++; else if (none) unknown++; else partial++;
+                Console.WriteLine($"  {verdict,-7} {p.Name,-24} {team.Abbr} {a.CurrentDollars / 1000}k, {(Roster.Field(db.Table(Roster.BioTable), "contractlength") is { } lf ? (int)db.Get(db.Table(Roster.BioTable), p.BioRow, lf) : 0)}y  shows: {got,-26} CapWages: {want}");
+            }
+        Console.WriteLine($"right {right}, partial {partial}, undetermined {unknown}, WRONG {wrong}; retained on CapWages but not flagged in the game {notRetained}");
+        return 0;
+    }
+
+    /// <summary>
+    /// create-players [--team CODE|NAME] [--ahl] [--player NAME] [--limit N] [--no-contracts] [--dry 1]: creates the players
+    /// the roster sync finds missing from the game (NHL rosters, and AHL rosters too with --ahl), from their bios on their
+    /// own player pages, with their CapWages contracts unless --no-contracts. --dry creates them in memory only and checks
+    /// that a second compare matches every one; without it, the result is saved as a mod (the Mods page can restore it).
+    /// </summary>
+    private static int CreatePlayersCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        Console.WriteLine("NHL rosters...");
+        var api = NhlApi.AllRostersAsync().GetAwaiter().GetResult();
+        List<(AhlTeam Team, List<AhlPlayer> Players)> ahl = null;
+        if (opts.Has("ahl")) { Console.WriteLine("AHL rosters..."); ahl = AhlApi.AllRostersAsync().GetAwaiter().GetResult(); }
+        var cap = opts.Has("no-contracts") ? null : FetchCapWages();
+        List<SyncChange> Missing(T3Db d) => (ahl != null ? RosterSync.CompareCombined(d, api, ahl).Changes : RosterSync.Compare(d, api))
+            .Where(c => c.Kind == SyncKind.Missing).ToList();
+        static string Key(SyncChange c) => c.Api != null ? $"NHL:{c.Api.Id}" : $"AHL:{c.Ahl?.Id}";
+
+        string team = opts.Get("team"), player = opts.Get("player");
+        var missing = Missing(db).Where(c => team == null || string.Equals(c.Api?.Team, team, StringComparison.OrdinalIgnoreCase)
+                                             || c.Ahl?.TeamName?.Contains(team, StringComparison.OrdinalIgnoreCase) == true || c.ToTeamName?.Contains(team, StringComparison.OrdinalIgnoreCase) == true)
+                                 .Where(c => player == null || c.Name.Contains(player, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (int.TryParse(opts.Get("limit"), out int limit)) missing = missing.Take(limit).ToList();
+        Console.WriteLine($"{missing.Count} players not in the game; reading their bios...");
+        foreach (var c in missing)
+        {
+            try { c.Bio = MissingPlayers.BioAsync(c).GetAwaiter().GetResult(); }
+            catch (Exception e) { Console.WriteLine($"  ! {c.Name}: bio failed ({e.Message})"); }
+            string problem = PlayerCreator.Problem(c);
+            Console.WriteLine($"  {(problem == null ? "[x]" : "[ ]")} {c.Name,-26} {c.ToTeamName,-24} {c.Bio?.Text}{(problem == null ? "" : $"  -- {problem}")}"
+                + (c.Bio == null ? "" : $"  · from {c.Bio.BirthCountry}{(c.Bio.BirthRegion.Length > 0 ? "/" + c.Bio.BirthRegion : "")}"));
+            Thread.Sleep(150);
+        }
+        var bios = missing.Where(c => c.CanCreate).ToDictionary(Key, c => c.Bio);
+
+        CreateResult last = null;
+        string Run(T3Db d)
+        {
+            // a fresh compare of the database being written, given the bios read above
+            var fresh = Missing(d).Where(c => bios.ContainsKey(Key(c))).ToList();
+            foreach (var c in fresh) c.Bio = bios[Key(c)];
+            var made = PlayerCreator.Create(d, fresh, cap);
+            last = made;
+            foreach (var m in made.Created)
+                Console.WriteLine($"  + {m.Name,-26} {Roster.PositionDisplay(m.Bio.Primary, m.Bio.Secondary),-5} {m.TeamName,-24} game id {m.GameId}, index {m.PlayerIndex}, art {m.ArtId}, surname id {m.SurnameId}, country/state {m.Country}/{m.State}, {m.Bio.BirthCity}; ratings and gear from {m.Template} ({m.TemplateOverall})");
+            foreach (var (name, reason) in made.Skipped) Console.WriteLine($"  - {name}: {reason}");
+            if (made.Created.Count == 0) return null;
+            var contracts = PlayerCreator.Contracts(d, cap, made.CreatedIds);
+            foreach (var c in contracts) Console.WriteLine($"    contract {c.Name,-26} {c.Description}");
+            return made.Summary + "; " + (contracts.Count > 0 ? ContractSync.Apply(d, contracts) : "no CapWages contracts for them");
+        }
+
+        if (!opts.Has("dry"))
+        {
+            RefuseWhileRunning();
+            var entry = DbEditor.Save(index, Mods(), game, Roster.Database, Run, Console.WriteLine, "Roster sync");
+            Console.WriteLine(entry == null ? "nothing created" : $"{entry.Summary}\nstate: {Mods().State(entry, game)}");
+            return 0;
+        }
+        Console.WriteLine(Run(db) ?? "nothing created");
+        var (ok, total) = db.CheckCrcs();
+        // every created player must now be found by the matcher the syncs use, on his team, with nothing left to create
+        var roster = new Roster(db);
+        var matcher = new PlayerMatcher(db, roster);
+        int found = 0, placed = 0;
+        foreach (var m in last?.Created ?? new List<CreatedPlayer>())
+        {
+            var (p, nameOnly) = matcher.Find(m.Bio.First, m.Bio.Last, m.Bio.Born);
+            if (p?.GameId == m.GameId && !nameOnly) found++;
+            if (p?.RosterRow >= 0) placed++;
+        }
+        var again = Missing(db).Where(c => bios.ContainsKey(Key(c))).ToList();
+        int contractsLeft = last == null ? 0 : PlayerCreator.Contracts(db, cap, last.CreatedIds).Count;
+        Console.WriteLine($"in memory: CRCs {ok}/{total}; created {last?.Created.Count ?? 0}, matched again {found}, on a roster {placed}; "
+            + $"still missing {again.Count}{(again.Count > 0 ? " (" + string.Join(", ", again.Select(c => $"{c.Name} {Key(c)}")) + ")" : "")}; contract differences left for them {contractsLeft}");
+        return 0;
+    }
+
+    /// <summary>
+    /// lines-sync [--team CODE] [--all] [--roster] [--dry 1]: (--roster first applies the roster changes and creates the missing players, in memory, as the app does) compares every NHL team's lines with DailyFaceoff's line combinations.
+    /// --dry writes the ticked teams' lines in memory only, then checks them: every slot held by exactly one player, every
+    /// dressed player in a slot, and a second compare finding nothing left. Without --dry, nothing is written (the app's
+    /// roster sync applies lines).
+    /// </summary>
+    private static int LinesSyncCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        var db = new Legacy(index).OpenDb(Roster.Database);
+        int done = 0;
+        var teams = DailyFaceoffApi.AllTeamsAsync(t => Console.Write($"\rDailyFaceoff {++done}/32 {t}   ")).GetAwaiter().GetResult();
+        Console.WriteLine();
+        if (opts.Get("team") is { } only) teams = teams.Where(t => string.Equals(t.Abbr, only, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (opts.Has("roster"))
+        {
+            // the app's Apply order, in memory: NHL + AHL roster changes, then the missing players created, then lines
+            var api = NhlApi.AllRostersAsync().GetAwaiter().GetResult();
+            var ahl = AhlApi.AllRostersAsync().GetAwaiter().GetResult();
+            var moves = RosterSync.CompareCombined(db, api, ahl, true).Changes;
+            Console.WriteLine(RosterSync.Apply(db, moves.Where(c => c.Selected && c.Kind != SyncKind.Missing)));
+            var missing = moves.Where(c => c.Kind == SyncKind.Missing).ToList();
+            foreach (var c in missing)
+            {
+                try { c.Bio = MissingPlayers.BioAsync(c).GetAwaiter().GetResult(); } catch (Exception e) { Console.WriteLine($"  ! {c.Name}: {e.Message}"); }
+                Thread.Sleep(150);
+            }
+            Console.WriteLine(PlayerCreator.Create(db, RosterSync.CompareCombined(db, api, ahl, true).Changes
+                .Where(c => c.Kind == SyncKind.Missing && missing.FirstOrDefault(m => m.Api?.Id == c.Api?.Id && m.Ahl?.Id == c.Ahl?.Id)?.Bio is { } bio && (c.Bio = bio) != null)
+                .ToList()).Summary);
+        }
+        var changes = LineSync.Compare(db, teams);
+        Console.WriteLine($"{teams.Count} teams read ({teams.Count(t => t.Error != null)} failed); {changes.Count} teams' lines differ");
+        foreach (var c in changes)
+        {
+            Console.WriteLine($"  {(c.Selected ? "[x]" : "[ ]")} {c.TeamAbbr,-4} {c.Description}");
+            Console.WriteLine($"         {c.Source}");
+            if (opts.Has("all") && c.CanApply)
+            {
+                var nameOf = new Roster(db).Players.Where(p => p.PlayerIndex >= 0).GroupBy(p => p.PlayerIndex).ToDictionary(g => g.Key, g => g.First().Name);
+                foreach (var unit in c.New.Where(kv => kv.Key.StartsWith("l") || kv.Key.StartsWith("pp_") || kv.Key.StartsWith("pk4_") || kv.Key is "g1" or "g2")
+                                          .GroupBy(kv => RosterLines.Unit(kv.Key)))
+                    Console.WriteLine($"         {unit.Key,-6} " + string.Join("  ", unit.OrderBy(kv => RosterLines.SlotRank(kv.Key)).Select(kv => $"{kv.Key}={nameOf.GetValueOrDefault(kv.Value, kv.Value.ToString())}")));
+            }
+        }
+        if (!opts.Has("dry")) return 0;
+        var picked = changes.Where(c => c.Selected).Select(c => c.TeamAbbr).ToHashSet();
+        Console.WriteLine(LineSync.Apply(db, teams, picked));
+        var (ok, total) = db.CheckCrcs();
+        var codes = RosterSync.TeamIndex(db);
+        var ids = picked.Where(codes.ContainsKey).Select(a => codes[a]).ToList();
+        var bad = new[] { Roster.RosterTable, RosterSync.OnlineRosterTable }.Select(db.Table).Where(t => t != null)
+            .SelectMany(t => RosterLines.TeamsNeedingLines(db, t, ids).Select(i => $"{t.Name}:{i}")).ToList();
+        foreach (var t in new[] { db.Table(RosterSync.OnlineRosterTable) }.Where(t => t != null))
+            foreach (int team in RosterLines.TeamsNeedingLines(db, t, ids))
+            {
+                // what is wrong: slots held by nobody or by two, dressed players without a slot
+                var f = t.Fields.ToDictionary(x => x.Name);
+                var rows = Enumerable.Range(0, t.WrittenRecords).Where(r => !db.IsInvalid(t, r) && (int)db.Get(t, r, f["team"]) == team).ToList();
+                var slotFields = t.Fields.Where(x => x.Type == T3FieldType.Integer && x.Depth == 1 && RosterLines.Category(x.Name) != null).ToList();
+                var wrong = slotFields.Select(sf => (sf.Name, N: rows.Count(r => (int)db.Get(t, r, sf) == 1))).Where(x => x.N != 1).Select(x => $"{x.Name}x{x.N}");
+                int idle = rows.Count(r => (int)db.Get(t, r, f["rosterstatus"]) == 1 && !slotFields.Any(sf => (int)db.Get(t, r, sf) == 1));
+                Console.WriteLine($"  team {team} ({codes.FirstOrDefault(kv => kv.Value == team).Key}): {rows.Count} players; slots {string.Join(" ", wrong)}; dressed without a slot {idle}");
+            }
+        var again = LineSync.Compare(db, teams.Where(t => picked.Contains(t.Abbr)).ToList());
+        Console.WriteLine($"in memory: CRCs {ok}/{total}; teams with broken lines {bad.Count}{(bad.Count > 0 ? " (" + string.Join(", ", bad) + ")" : "")}; "
+            + $"differences left {again.Count(c => c.NotOnTeam.Count == 0 && c.CanApply)} (skipped for players not on the team: {again.Count(c => c.NotOnTeam.Count > 0)})");
         return 0;
     }
 
