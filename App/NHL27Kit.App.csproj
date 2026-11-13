@@ -17,6 +17,10 @@
     <ProjectReference Include="..\Core\NHL27Kit.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- the GC compacts sooner rather than growing the heap: the kit keeps a large index and sits idle a lot -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Oodle from the user's FMT install (not redistributed: release builds pass -p:NoThirdParty=true). -->
     <None Include="..\ThirdParty\oo2core_9_win64.dll" Condition="Exists('..\ThirdParty\oo2core_9_win64.dll') And '$(NoThirdParty)' != 'true'" CopyToOutputDirectory="PreserveNewest" />
     <!-- Opus (speech) from the user's FMT install. -->

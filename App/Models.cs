@@ -58,12 +58,21 @@ public sealed class FolderNode : Observable
     public bool IsExpanded { get => _expanded; set => Set(ref _expanded, value); }
     public bool IsSelected { get => _selected; set => Set(ref _selected, value); }
 
-    public FolderNode Child(string name)
+    public FolderNode Child(string name) => Child(name.AsSpan());
+
+    /// <summary>The subfolder of that name, made on first use (a folder name string only for a new folder).</summary>
+    public FolderNode Child(ReadOnlySpan<char> name)
     {
-        if (!_children.TryGetValue(name, out var c))
-            _children[name] = c = new FolderNode(name, Path.Length == 0 ? name : Path + "/" + name, Depth + 1);
-        return c;
+        // assets come sorted by path, so the folder asked for is nearly always the one asked for last
+        if (_last != null && name.Equals(_last.Name, StringComparison.OrdinalIgnoreCase))
+            return _last;
+        string n = name.ToString();
+        if (!_children.TryGetValue(n, out var c))
+            _children[n] = c = new FolderNode(n, Path.Length == 0 ? n : Path + "/" + n, Depth + 1);
+        return _last = c;
     }
+
+    private FolderNode _last;
 
     public int Count()
     {
@@ -91,22 +100,22 @@ public sealed class AssetRow
         Kind = kind;
         Entry = entry;
         Name = name;
-        int slash = name.LastIndexOf('/');
-        Leaf = slash < 0 ? name : name[(slash + 1)..];
-        Folder = slash < 0 ? "" : name[..slash];
         Type = type;
-        (Glyph, Tint) = Visuals.For(kind, type);
     }
 
     public AssetKind Kind { get; }
     public AssetEntry Entry { get; }
+    /// <summary>The asset's path (the index's own string, not a copy).</summary>
     public string Name { get; }
-    public string Leaf { get; }
-    public string Folder { get; }
+    // Leaf and Folder are cut from Name when asked for: there's a row for every asset (over a million), and only the
+    // rows on screen need them
+    public string Leaf => Name.LastIndexOf('/') is int slash and >= 0 ? Name[(slash + 1)..] : Name;
+    public string Folder => Name.LastIndexOf('/') is int slash and >= 0 ? Name[..slash] : "";
     public string Type { get; }
     public string TypeText => string.IsNullOrEmpty(Type) ? "—" : Type;
-    public string Glyph { get; }
-    public Brush Tint { get; }
+    // worked out when shown, not stored on every row
+    public string Glyph => Visuals.For(Kind, Type).Item1;
+    public Brush Tint => Visuals.For(Kind, Type).Item2;
     public bool IsPatched => Entry.Ref.Patch;
     public string SizeText => Visuals.Size(Entry.OriginalSize);
 }

@@ -7,7 +7,23 @@ using System.Text.Json;
 namespace NHL27Kit.Core;
 
 /// <summary>A bundle in the index: its superbundle TOC and its position there.</summary>
-public sealed record BundleInfo(int Id, string Name, string Toc, int TocIndex, int BundleIndex, TocRef Record);
+public sealed class BundleInfo
+{
+    // kept as UTF-8 (one byte a character): there are hundreds of thousands of bundles and the name is rarely read
+    private readonly byte[] _name;
+
+    public BundleInfo(int id, string name, string toc, int tocIndex, int bundleIndex, TocRef record)
+    {
+        Id = id; _name = Encoding.UTF8.GetBytes(name ?? ""); Toc = toc; TocIndex = tocIndex; BundleIndex = bundleIndex; Record = record;
+    }
+
+    public int Id { get; }
+    public string Name => Encoding.UTF8.GetString(_name);
+    public string Toc { get; }
+    public int TocIndex { get; }
+    public int BundleIndex { get; }
+    public TocRef Record { get; }
+}
 
 public abstract class AssetEntry
 {
@@ -19,11 +35,63 @@ public abstract class AssetEntry
     public string Toc { get; init; }
     /// <summary>Absolute position of the asset's SHA1 in its bundle record (in the CAS file of the record).</summary>
     public long Sha1Pos { get; init; }
-    public byte[] Sha1 { get; init; }
+
+    // the SHA1 is kept inline (20 bytes) rather than as its own array: there are over a million entries
+    private ulong _sha0, _sha1;
+    private uint _sha2;
+    private bool _hasSha;
+
+    /// <summary>The asset's SHA1 in its bundle record (a new array on every read), or null.</summary>
+    public byte[] Sha1
+    {
+        get
+        {
+            if (!_hasSha) return null;
+            var b = new byte[20];
+            BinaryPrimitives.WriteUInt64LittleEndian(b, _sha0);
+            BinaryPrimitives.WriteUInt64LittleEndian(b.AsSpan(8), _sha1);
+            BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(16), _sha2);
+            return b;
+        }
+        init
+        {
+            if (value is not { Length: 20 }) { _hasSha = false; return; }
+            _sha0 = BinaryPrimitives.ReadUInt64LittleEndian(value);
+            _sha1 = BinaryPrimitives.ReadUInt64LittleEndian(value.AsSpan(8));
+            _sha2 = BinaryPrimitives.ReadUInt32LittleEndian(value.AsSpan(16));
+            _hasSha = true;
+        }
+    }
+
     public long OriginalSizePos { get; init; }
     public uint OriginalSize { get; init; }
+
+    // Most entries are in one bundle, their own (Bundle): those keep no list at all. Others keep an exact-size array,
+    // grown through a list only while the index is being built.
+    private int[] _bundles;
+    private List<int> _growing;
+
     /// <summary>Every bundle that lists the asset (by bundle id).</summary>
-    public List<int> Bundles { get; } = new();
+    public IReadOnlyList<int> Bundles => _growing ?? (IReadOnlyList<int>)_bundles ?? (Bundle >= 0 ? new[] { Bundle } : Array.Empty<int>());
+
+    internal void AddBundle(int id) => (_growing ??= new List<int>(_bundles ?? Array.Empty<int>())).Add(id);
+
+    internal void AddBundles(IEnumerable<int> ids) { foreach (int id in ids) AddBundle(id); }
+
+    /// <summary>Takes a finished bundle list as it is (loading the cache: no copies).</summary>
+    internal void SetBundles(int[] ids)
+    {
+        _growing = null;
+        _bundles = ids.Length == 1 && ids[0] == Bundle ? null : ids;
+    }
+
+    /// <summary>Stores the bundle list compactly once it is complete.</summary>
+    internal void Seal()
+    {
+        if (_growing == null) return;
+        _bundles = _growing.Count == 1 && _growing[0] == Bundle ? null : _growing.ToArray();
+        _growing = null;
+    }
 }
 
 public sealed class EbxEntry : AssetEntry
@@ -36,7 +104,30 @@ public sealed class EbxEntry : AssetEntry
 public sealed class ResEntry : AssetEntry
 {
     public uint ResType { get; init; }
-    public byte[] ResMeta { get; init; }
+
+    private ulong _meta0, _meta1;
+    private bool _hasMeta;
+
+    /// <summary>The RES's 16 meta bytes (a new array on every read), or null.</summary>
+    public byte[] ResMeta
+    {
+        get
+        {
+            if (!_hasMeta) return null;
+            var b = new byte[16];
+            BinaryPrimitives.WriteUInt64LittleEndian(b, _meta0);
+            BinaryPrimitives.WriteUInt64LittleEndian(b.AsSpan(8), _meta1);
+            return b;
+        }
+        init
+        {
+            if (value is not { Length: 16 }) { _hasMeta = false; return; }
+            _meta0 = BinaryPrimitives.ReadUInt64LittleEndian(value);
+            _meta1 = BinaryPrimitives.ReadUInt64LittleEndian(value.AsSpan(8));
+            _hasMeta = true;
+        }
+    }
+
     public ulong ResRid { get; init; }
 }
 
@@ -110,12 +201,13 @@ public sealed class AssetIndex
     {
         var layout = new GameLayout(gameDir);
         var tocs = layout.AllTocPaths();
-        var bytes = tocs.ToDictionary(t => t, tocBytes, StringComparer.OrdinalIgnoreCase);
-        string key = CacheKey(layout, bytes);
+        // the key hashes one TOC at a time, so a cache hit never holds every TOC (over 100 MB) at once
+        string key = CacheKey(layout, tocs, tocBytes);
         var index = new AssetIndex(layout);
         if (cacheFile != null && File.Exists(cacheFile) && index.LoadCache(cacheFile, key))
             return index;
         var sw = System.Diagnostics.Stopwatch.StartNew();
+        var bytes = tocs.ToDictionary(t => t, tocBytes, StringComparer.OrdinalIgnoreCase);
         index.Build(tocs, bytes, log);
         log?.Invoke($"asset index built in {sw.Elapsed.TotalSeconds:0}s: {index.Ebx.Count} ebx, {index.Res.Count} res, {index.Chunks.Count} chunks");
         if (cacheFile != null)
@@ -123,13 +215,13 @@ public sealed class AssetIndex
         return index;
     }
 
-    private static string CacheKey(GameLayout layout, Dictionary<string, byte[]> tocs)
+    private static string CacheKey(GameLayout layout, List<string> tocs, Func<string, byte[]> tocBytes)
     {
         using var sha = System.Security.Cryptography.SHA1.Create();
         var h = new StringBuilder("v2|");
         h.Append(new FileInfo(Path.Combine(layout.DataDir, "layout.toc")).Length);
-        foreach (var (path, b) in tocs.OrderBy(t => t.Key, StringComparer.OrdinalIgnoreCase))
-            h.Append('|').Append(Path.GetRelativePath(layout.GameDir, path)).Append(':').Append(Convert.ToHexString(sha.ComputeHash(b)));
+        foreach (var path in tocs.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.OrdinalIgnoreCase))
+            h.Append('|').Append(Path.GetRelativePath(layout.GameDir, path)).Append(':').Append(Convert.ToHexString(sha.ComputeHash(tocBytes(path))));
         return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(h.ToString())));
     }
 
@@ -178,26 +270,28 @@ public sealed class AssetIndex
                 {
                     if (k >= b.Entries.Count) break;
                     var e = new EbxEntry { Name = a.Name, Bundle = id, Ref = b.Entries[k++], Toc = tocs[t], Sha1Pos = a.Sha1Pos, Sha1 = a.Sha1, OriginalSizePos = a.SizePos, OriginalSize = a.Size };
-                    if (Ebx.TryGetValue(a.Name, out var had) && !overlay) had.Bundles.Add(id);
-                    else { if (had != null) e.Bundles.AddRange(had.Bundles); e.Bundles.Add(id); Ebx[a.Name] = e; ebxToType.Add(e); }
+                    if (Ebx.TryGetValue(a.Name, out var had) && !overlay) had.AddBundle(id);
+                    else { if (had != null) e.AddBundles(had.Bundles); e.AddBundle(id); Ebx[a.Name] = e; ebxToType.Add(e); }
                 }
                 foreach (var a in rec.Res)
                 {
                     if (k >= b.Entries.Count) break;
-                    var e = new ResEntry { Name = a.Name, Bundle = id, Ref = b.Entries[k++], Toc = tocs[t], Sha1Pos = a.Sha1Pos, Sha1 = a.Sha1, OriginalSizePos = a.SizePos, OriginalSize = a.Size, ResType = a.ResType, ResMeta = a.ResMeta, ResRid = a.ResRid };
-                    if (Res.TryGetValue(a.Name, out var had) && !overlay) had.Bundles.Add(id);
-                    else { if (had != null) e.Bundles.AddRange(had.Bundles); e.Bundles.Add(id); Res[a.Name] = e; }
+                    var e = new ResEntry { Name = Ebx.TryGetValue(a.Name, out var same) ? same.Name : a.Name, Bundle = id, Ref = b.Entries[k++], Toc = tocs[t], Sha1Pos = a.Sha1Pos, Sha1 = a.Sha1, OriginalSizePos = a.SizePos, OriginalSize = a.Size, ResType = a.ResType, ResMeta = a.ResMeta, ResRid = a.ResRid };
+                    if (Res.TryGetValue(a.Name, out var had) && !overlay) had.AddBundle(id);
+                    else { if (had != null) e.AddBundles(had.Bundles); e.AddBundle(id); Res[a.Name] = e; }
                 }
                 foreach (var a in rec.Chunks)
                 {
                     if (k >= b.Entries.Count) break;
                     var e = new ChunkEntry { Id = a.Id, Bundle = id, Ref = b.Entries[k++], Toc = tocs[t], Sha1Pos = a.Sha1Pos, Sha1 = a.Sha1, OriginalSizePos = a.SizePos, OriginalSize = a.Size, LogicalOffset = a.LogicalOffset, LogicalSize = a.Size };
-                    if (Chunks.TryGetValue(a.Id, out var had) && !had.InChunkTable && !overlay) had.Bundles.Add(id);
-                    else { if (had != null && !had.InChunkTable) e.Bundles.AddRange(had.Bundles); e.Bundles.Add(id); Chunks[a.Id] = e; }
+                    if (Chunks.TryGetValue(a.Id, out var had) && !had.InChunkTable && !overlay) had.AddBundle(id);
+                    else { if (had != null && !had.InChunkTable) e.AddBundles(had.Bundles); e.AddBundle(id); Chunks[a.Id] = e; }
                 }
             }
             log?.Invoke($"  {Path.GetRelativePath(Layout.GameDir, tocs[t])}: {toc.Bundles.Count} bundles, {toc.Chunks.Count} table chunks");
         }
+
+        SealAll();
 
         // EBX type and guid come from the EBX data itself (EFIX): read per CAS file
         ebxToType = ebxToType.Where(e => ReferenceEquals(Ebx.GetValueOrDefault(e.Name), e)).ToList();
@@ -221,6 +315,14 @@ public sealed class AssetIndex
                 }
             }
         });
+    }
+
+    private void SealAll()
+    {
+        foreach (var e in Ebx.Values) e.Seal();
+        foreach (var e in Res.Values) e.Seal();
+        foreach (var e in Chunks.Values) e.Seal();
+        foreach (var e in TableChunks.Values.SelectMany(l => l)) e.Seal();
     }
 
     // ---------------------------------------------------------------- cache
@@ -254,39 +356,44 @@ public sealed class AssetIndex
     {
         try
         {
-            using var r = new BinaryReader(File.OpenRead(file));
+            using var r = new BinaryReader(new BufferedStream(File.OpenRead(file), 1 << 20));
             if (r.ReadString() != "NHL27Kit-index-1" || r.ReadString() != key)
                 return false;
             int n = r.ReadInt32();
-            for (int i = 0; i < n; i++) BundleList.Add(new BundleInfo(i, r.ReadString(), r.ReadString(), r.ReadInt32(), r.ReadInt32(), ReadRef(r)));
-            (string Name, int Bundle, TocRef Ref, string Toc, long Sha1Pos, byte[] Sha1, long SizePos, uint Size, List<int> Bundles) Base()
+            BundleList.Capacity = n;
+            // the TOC path repeats for every bundle: one string per TOC
+            for (int i = 0; i < n; i++) BundleList.Add(new BundleInfo(i, r.ReadString(), string.Intern(r.ReadString()), r.ReadInt32(), r.ReadInt32(), ReadRef(r)));
+            (string Name, int Bundle, TocRef Ref, string Toc, long Sha1Pos, byte[] Sha1, long SizePos, uint Size, int[] Bundles) Base()
             {
                 string name = r.ReadString(); int bundle = r.ReadInt32(); var rf = ReadRef(r); string toc = r.ReadString(); long sp = r.ReadInt64();
                 int sl = r.ReadInt32(); var sha = sl > 0 ? r.ReadBytes(sl) : null; long zp = r.ReadInt64(); uint z = r.ReadUInt32();
-                int bc = r.ReadInt32(); var bl = new List<int>(bc); for (int i = 0; i < bc; i++) bl.Add(r.ReadInt32());
+                int bc = r.ReadInt32(); var bl = new int[bc]; for (int i = 0; i < bc; i++) bl[i] = r.ReadInt32();
                 return (name, bundle, rf, string.Intern(toc), sp, sha, zp, z, bl);
             }
             n = r.ReadInt32();
+            Ebx.EnsureCapacity(n);
             for (int i = 0; i < n; i++)
             {
                 var b = Base();
-                var e = new EbxEntry { Name = b.Name, Bundle = b.Bundle, Ref = b.Ref, Toc = b.Toc, Sha1Pos = b.Sha1Pos, Sha1 = b.Sha1, OriginalSizePos = b.SizePos, OriginalSize = b.Size, Id = new Guid(r.ReadBytes(16)), Type = string.Intern(r.ReadString()) };
-                e.Bundles.AddRange(b.Bundles); Ebx[e.Name] = e;
+                var e = new EbxEntry { Name = b.Name, Bundle = b.Bundle, Ref = b.Ref, Toc = b.Toc, Sha1Pos = b.Sha1Pos, Sha1 = b.Sha1, OriginalSizePos = b.SizePos, OriginalSize = b.Size, Id = ReadGuid(r), Type = string.Intern(r.ReadString()) };
+                e.SetBundles(b.Bundles); Ebx[e.Name] = e;
+            }
+            n = r.ReadInt32();
+            Res.EnsureCapacity(n);
+            for (int i = 0; i < n; i++)
+            {
+                var b = Base();
+                // a RES usually has its EBX's name: share the string
+                var e = new ResEntry { Name = Ebx.TryGetValue(b.Name, out var same) ? same.Name : b.Name, Bundle = b.Bundle, Ref = b.Ref, Toc = b.Toc, Sha1Pos = b.Sha1Pos, Sha1 = b.Sha1, OriginalSizePos = b.SizePos, OriginalSize = b.Size, ResType = r.ReadUInt32(), ResMeta = r.ReadBytes(16), ResRid = r.ReadUInt64() };
+                e.SetBundles(b.Bundles); Res[e.Name] = e;
             }
             n = r.ReadInt32();
             for (int i = 0; i < n; i++)
             {
                 var b = Base();
-                var e = new ResEntry { Name = b.Name, Bundle = b.Bundle, Ref = b.Ref, Toc = b.Toc, Sha1Pos = b.Sha1Pos, Sha1 = b.Sha1, OriginalSizePos = b.SizePos, OriginalSize = b.Size, ResType = r.ReadUInt32(), ResMeta = r.ReadBytes(16), ResRid = r.ReadUInt64() };
-                e.Bundles.AddRange(b.Bundles); Res[e.Name] = e;
-            }
-            n = r.ReadInt32();
-            for (int i = 0; i < n; i++)
-            {
-                var b = Base();
-                var e = new ChunkEntry { Name = b.Name, Bundle = b.Bundle, Ref = b.Ref, Toc = b.Toc, Sha1Pos = b.Sha1Pos, Sha1 = b.Sha1, OriginalSizePos = b.SizePos, OriginalSize = b.Size, Id = new Guid(r.ReadBytes(16)), LogicalOffset = r.ReadUInt32(), LogicalSize = r.ReadUInt32(), InChunkTable = r.ReadBoolean() };
+                var e = new ChunkEntry { Name = b.Name, Bundle = b.Bundle, Ref = b.Ref, Toc = b.Toc, Sha1Pos = b.Sha1Pos, Sha1 = b.Sha1, OriginalSizePos = b.SizePos, OriginalSize = b.Size, Id = ReadGuid(r), LogicalOffset = r.ReadUInt32(), LogicalSize = r.ReadUInt32(), InChunkTable = r.ReadBoolean() };
                 bool main = r.ReadBoolean();
-                e.Bundles.AddRange(b.Bundles);
+                e.SetBundles(b.Bundles);
                 if (e.InChunkTable)
                 {
                     if (!TableChunks.TryGetValue(e.Id, out var list)) TableChunks[e.Id] = list = new List<ChunkEntry>();
@@ -306,6 +413,13 @@ public sealed class AssetIndex
     private static void WriteRef(BinaryWriter w, TocRef r)
     {
         w.Write((byte)r.Catalog); w.Write((byte)r.Cas); w.Write(r.Patch); w.Write(r.Offset); w.Write(r.Size); w.Write(r.OffsetPos); w.Write(r.SizePos);
+    }
+
+    private static Guid ReadGuid(BinaryReader r)
+    {
+        Span<byte> b = stackalloc byte[16];
+        r.BaseStream.ReadExactly(b);
+        return new Guid(b);
     }
 
     private static TocRef ReadRef(BinaryReader r) =>
