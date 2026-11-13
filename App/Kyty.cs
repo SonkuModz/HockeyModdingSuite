@@ -21,7 +21,7 @@ public sealed class KytySetup
 
     public string TitleId { get; }
     public string Emulator { get; }
-    public string BuildName => Emulator == null ? null : new DirectoryInfo(Path.GetDirectoryName(Emulator)).Name;
+    public string BuildName => NHL27Kit.Core.KytyReleases.BuildName(Emulator);
     public string RunDir { get; }
     public string ProfileFile => Path.Combine(ConfigsDir, "games", TitleId + ".json");
 
@@ -63,8 +63,7 @@ public sealed class KytySetup
             return chosen;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            var builds = dir.GetDirectories("KytyPS5-*").Select(d => Path.Combine(d.FullName, "kyty_emulator.exe")).Where(File.Exists)
-                .OrderByDescending(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+            var builds = NHL27Kit.Core.KytyReleases.BuildFolders(dir.FullName).Select(NHL27Kit.Core.KytyReleases.FindEmulator).Where(p => p != null).ToList();
             if (builds.Count > 0)
                 return builds[0];
         }

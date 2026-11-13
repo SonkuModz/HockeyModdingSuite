@@ -401,7 +401,7 @@ public partial class PlayPage : UserControl
             _sourceErrors = errors;
             _builds = releases.Select(r => new KytyBuildRow { Release = r }).ToList();
             UpdateBuildRows();
-            var fresh = _builds.Where(b => b.Status == "New").Select(b => $"{b.Release.Owner} {b.Release.Commit}").ToList();
+            var fresh = _builds.Where(b => b.Status == "New").Select(b => $"{b.Release.Maker} {b.Release.Commit}").ToList();
             if (fresh.Count > 0)
                 StatusChanged?.Invoke($"New KytyPS5 build{(fresh.Count > 1 ? "s" : "")} out ({string.Join(", ", fresh)}): download under Builds on the Play page");
         }
@@ -437,13 +437,13 @@ public partial class PlayPage : UserControl
             row.Installed = used ? _setup.Emulator : KytyReleases.Installed(r);
             row.Status = used ? "In use" : row.Installed != null ? "Installed" : newestOfFork.Contains(row) ? "New" : null;
             row.Action = used ? null : row.Installed != null ? "Use" : "Download";
-            row.Detail = $"{r.Owner}  ·  {r.Commit}  ·  {r.Size / 1048576.0:0.0} MB" + (r.Prerelease ? "  ·  pre-release" : "");
+            row.Detail = $"{r.Maker}  ·  {r.Commit}  ·  {r.Size / 1048576.0:0.0} MB" + (r.Prerelease ? "  ·  pre-release" : "");
             row.CanAct = true;
         }
         var current = _builds.FirstOrDefault(b => b.Status == "In use");
         string caption = current == null ? "Downloads go next to the kit, beside your other builds."
-            : current == _builds[0] ? $"You're on the newest build ({current.Release.Owner})."
-            : $"You're on {current.Release.Owner}'s build from {current.Release.Published:MMM d}; newer ones are above it.";
+            : current == _builds[0] ? $"You're on the newest build ({current.Release.Maker})."
+            : $"You're on {current.Release.Maker}'s build from {current.Release.Published:MMM d}; newer ones are above it.";
         ReleasesCaption.Text = string.Join("\n", _sourceErrors.Select(e => "Couldn't read " + e).Prepend(caption));
         ShowBuildRows();
     }
@@ -528,8 +528,7 @@ public partial class PlayPage : UserControl
         if (_setup.Emulator != null) dirs.Add(Path.GetDirectoryName(_setup.Emulator));
         if (KytySetup.ReadJson(Path.Combine(KytySetup.ConfigsDir, "kyty.json"))?["app"]?["emulator"]?.GetValue<string>() is { } chosen)
             dirs.Add(Path.GetDirectoryName(chosen));
-        if (Directory.Exists(KytyReleases.BuildsDir))
-            dirs.AddRange(Directory.GetDirectories(KytyReleases.BuildsDir, "KytyPS5-*").OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase));
+        dirs.AddRange(KytyReleases.BuildFolders());
         return dirs.Select(d => Path.Combine(d, "kyty_launcher.exe")).FirstOrDefault(File.Exists);
     }
 
@@ -540,7 +539,7 @@ public partial class PlayPage : UserControl
         string launcher = FindLauncher();
         if (launcher == null)
         {
-            StatusChanged?.Invoke("No kyty_launcher.exe in any KytyPS5 build.");
+            StatusChanged?.Invoke("No kyty_launcher.exe in any KytyPS5 or Faceoff build.");
             return;
         }
         Process.Start(new ProcessStartInfo(launcher) { WorkingDirectory = Path.GetDirectoryName(launcher), UseShellExecute = true });
