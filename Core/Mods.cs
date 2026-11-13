@@ -149,16 +149,6 @@ public sealed class ModStore
 
     private static string Hex(byte[] b) => Convert.ToHexString(b);
 
-    private static byte[] ReadRange(string file, long offset, int length)
-    {
-        using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        if (offset + length > fs.Length) return null;
-        fs.Position = offset;
-        var b = new byte[length];
-        fs.ReadExactly(b);
-        return b;
-    }
-
     private static string Path_(string game, RangePatch p) => Path.Combine(game, p.File.Replace('/', Path.DirectorySeparatorChar));
 
     /// <summary>
@@ -169,8 +159,32 @@ public sealed class ModStore
     {
         // an earlier range of the same mod may be added before it, so a file that ends at or before it hasn't got it
         if (p.Append && new FileInfo(file).Length <= p.Offset) return Hex(SHA1.HashData(Array.Empty<byte>()));
-        var cur = ReadRange(file, p.Offset, p.Length);
-        return cur == null ? null : Hex(SHA1.HashData(cur));
+        return HashRange(file, p.Offset, p.Length);
+    }
+
+    /// <summary>
+    /// The SHA1 of a file range, or null when the file is too short. Read through one pooled buffer: checking every
+    /// mod's state reads well over 100 MB, which as one array per range would leave the large-object heap in holes.
+    /// </summary>
+    private static string HashRange(string file, long offset, int length)
+    {
+        using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1, FileOptions.SequentialScan);
+        if (offset + length > fs.Length) return null;
+        fs.Position = offset;
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        var buf = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            for (int left = length; left > 0;)
+            {
+                int n = fs.Read(buf, 0, Math.Min(buf.Length, left));
+                if (n <= 0) return null;
+                sha.AppendData(buf, 0, n);
+                left -= n;
+            }
+        }
+        finally { System.Buffers.ArrayPool<byte>.Shared.Return(buf); }
+        return Hex(sha.GetHashAndReset());
     }
 
     /// <summary>What the game folder holds for this mod: all old, all new, a mix, or something else.</summary>

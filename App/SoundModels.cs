@@ -11,17 +11,15 @@ public sealed class SoundRow
     {
         Entry = entry;
         Name = entry.Name;
-        int slash = Name.LastIndexOf('/');
-        Leaf = slash < 0 ? Name : Name[(slash + 1)..];
-        Folder = slash < 0 ? "" : Name[..slash];
         Category = SoundService.Category(Name);
         (Glyph, Tint) = SoundService.Look(Category);
     }
 
     public EbxEntry Entry { get; }
     public string Name { get; }
-    public string Leaf { get; }
-    public string Folder { get; }
+    // cut from Name when shown, not stored on every row
+    public string Leaf => Name.LastIndexOf('/') is int slash and >= 0 ? Name[(slash + 1)..] : Name;
+    public string Folder => Name.LastIndexOf('/') is int slash and >= 0 ? Name[..slash] : "";
     public string Category { get; }
     public string Glyph { get; }
     public Brush Tint { get; }

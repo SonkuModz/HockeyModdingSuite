@@ -111,6 +111,17 @@ public partial class MainWindow : Window
         await Shot();
     }
 
+    /// <summary>
+    /// Hands back what loading the index used and no longer needs (the previous game's index too, after a switch), so
+    /// the kit doesn't sit on it while idle: one aggressive collection, which compacts everything (the large-object heap
+    /// too) and gives the freed memory back to Windows instead of keeping it reserved.
+    /// </summary>
+    private static void ReleaseLoadingMemory()
+    {
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+    }
+
     private readonly System.Diagnostics.Stopwatch _sinceStart = System.Diagnostics.Stopwatch.StartNew();
 
     /// <summary>Fades the startup screen away, after it's been up at least a moment so it doesn't just flash.</summary>
@@ -192,6 +203,9 @@ public partial class MainWindow : Window
             });
             _index = index;
             (_ebx, _res, _chunks) = (ebx, res, chunks);
+            ReleaseLoadingMemory();
+            // the pages' own first reads (mod states, sounds, videos) finish over the next seconds: tidy up after them too
+            _ = Task.Delay(TimeSpan.FromSeconds(20)).ContinueWith(_ => ReleaseLoadingMemory(), TaskScheduler.Default);
             KindEbx.Tag = Short(ebx.Count);
             KindRes.Tag = Short(res.Count);
             KindChunk.Tag = Short(chunks.Count);
@@ -1264,8 +1278,18 @@ public sealed class Catalog
         {
             var node = cat.Root;
             if (kind != AssetKind.Chunk)
-                foreach (string part in r.Folder.Split('/', StringSplitOptions.RemoveEmptyEntries))
-                    node = node.Child(part);
+            {
+                // walk the path's folders without making a string per row
+                var name = r.Name.AsSpan();
+                int end = name.LastIndexOf('/');
+                for (int start = 0; end > 0 && start < end;)
+                {
+                    int next = name[start..end].IndexOf('/');
+                    var part = next < 0 ? name[start..end] : name.Slice(start, next);
+                    if (part.Length > 0) node = node.Child(part);
+                    start += (next < 0 ? end - start : next) + 1;
+                }
+            }
             node.Items.Add(r);
             types[r.TypeText] = types.GetValueOrDefault(r.TypeText) + 1;
             if (r.IsPatched) cat.Patched++;
