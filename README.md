@@ -23,7 +23,7 @@ back. NHL 24 can be viewed and exported for now; changing its files comes next.
 
 ### Play
 Start NHL 27 on KytyPS5 from the kit, change the emulator's settings for the game (resolution, display mode, extra
-options), and get new emulator builds.
+options), and get new emulator builds: the KytyPS5 NHL forks and Iksperial's Faceoff.
 
 ![Play](docs/images/play.png)
 
@@ -126,6 +126,15 @@ Where the kit finds your game, and where it keeps its own files.
 *Made by Sonku. A fan project, not affiliated with EA Sports or the NHL. Centre-ice graphics from TheFaceoff.net are
 for personal use only; all credit to them.*
 
+### Credits
+
+- **Iksperial**, creator of [Faceoff](https://github.com/MatusRiedl/nhl27-pc-faceoff) (formerly nhl27-enhanced), the
+  NHL 27 PC build the Play page can download and run.
+- **duy64** ([KytyPS5-nhl](https://github.com/duy64/KytyPS5-nhl)) and **pengui07**
+  ([KytyPS5-nhl](https://github.com/pengui07/KytyPS5-nhl)) for their KytyPS5 NHL builds, built on
+  [KytyPS5](https://github.com/KytyPS5/KytyPS5) and the original [Kyty](https://github.com/InoriRus/Kyty).
+- [TheFaceoff.net](https://thefaceoff.net) for the centre-ice graphics.
+
 ---
 
 # Technical notes
@@ -169,7 +178,14 @@ from the layers below; keys the kit doesn't know are kept. The first save keeps 
 The emulator runs in Kyty's run folder (`%LOCALAPPDATA%\KytyPS5\run`, where saves and the pipeline cache live).
 Its output is logged to `logs\kyty-last-run.log`, and playtime is added to Kyty's `playtime.json`.
 
-The emulator defaults to the launcher's choice if that file exists, else the newest `KytyPS5-*` build next to the kit.
+The emulator defaults to the launcher's choice if that file exists, else the newest `KytyPS5-*` or `Faceoff-*` build
+next to the kit.
+
+**Builds** lists the Windows releases of pengui07's and duy64's KytyPS5-nhl and of Iksperial's Faceoff
+(`MatusRiedl/nhl27-pc-faceoff`) on GitHub, newest first. Download unpacks a release into its own folder next to the kit
+(the zip's name, e.g. `Faceoff-v0.10.0`) and switches Play to it. A Faceoff zip is kept whole, since its launcher
+expects its `builds\` folder: the emulator is found in `builds\<name>\kyty_emulator.exe` (the newest one if its
+updater added more) and reads that folder's `cfgGlobal.json`.
 
 ## Textures
 

@@ -1341,7 +1341,7 @@ public static class Program
         foreach (string e in errors)
             Console.WriteLine("could not list " + e);
         foreach (var r in releases)
-            Console.WriteLine($"{r.Owner,-10} {r.Tag,-30} {r.Published:yyyy-MM-dd HH:mm}  {r.Size / 1048576.0,6:0.0} MB  {(KytyReleases.Installed(r, dir) != null ? "installed" : "")}");
+            Console.WriteLine($"{r.Maker,-20} {r.Tag,-30} {r.Published:yyyy-MM-dd HH:mm}  {r.Size / 1048576.0,6:0.0} MB  {r.AssetName,-36} {(KytyReleases.Installed(r, dir) != null ? "installed" : "")}");
         if (opts.Get("install") is { } tag)
         {
             // latest, latest:OWNER, or a tag

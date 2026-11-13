@@ -15,6 +15,9 @@ public sealed record KytyRelease(string Repo, string Tag, DateTime Published, bo
 
     /// <summary>The fork's owner, "pengui07" in "pengui07/KytyPS5-nhl".</summary>
     public string Owner => Repo.Split('/')[0];
+
+    /// <summary>Who to name for the build: its creator where that isn't the repo owner, else the owner.</summary>
+    public string Maker => KytyReleases.Makers.TryGetValue(Repo, out var m) ? m : Owner;
 }
 
 /// <summary>
@@ -24,7 +27,17 @@ public sealed record KytyRelease(string Repo, string Tag, DateTime Published, bo
 public static class KytyReleases
 {
     /// <summary>The forks whose releases are offered, as owner/name.</summary>
-    public static readonly string[] Sources = { "pengui07/KytyPS5-nhl", "duy64/KytyPS5-nhl" };
+    public static readonly string[] Sources = { "pengui07/KytyPS5-nhl", "duy64/KytyPS5-nhl", "MatusRiedl/nhl27-pc-faceoff" };
+
+    /// <summary>How a fork's builds are credited when that isn't the repo owner's name.</summary>
+    public static readonly IReadOnlyDictionary<string, string> Makers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        // Faceoff (formerly nhl27-enhanced) is made by Iksperial
+        ["MatusRiedl/nhl27-pc-faceoff"] = "Iksperial (Faceoff)",
+    };
+
+    /// <summary>The folder name patterns of builds next to the kit: KytyPS5-... and Faceoff-....</summary>
+    public static readonly string[] FolderPatterns = { "KytyPS5-*", "Faceoff-*" };
 
     public static string ReleasesPage(string repo) => $"https://github.com/{repo}/releases";
 
@@ -42,6 +55,62 @@ public static class KytyReleases
     public static string BuildsDir => Directory.GetParent(KitPaths.Root)?.FullName ?? KitPaths.Root;
 
     public static string EmulatorIn(string folder) => Path.Combine(folder, "kyty_emulator.exe");
+
+    /// <summary>
+    /// kyty_emulator.exe of a build folder, or null: at its top, or for Faceoff under builds\&lt;name&gt;\ (the newest
+    /// one when its updater has added more than one).
+    /// </summary>
+    public static string FindEmulator(string folder)
+    {
+        if (folder == null || !Directory.Exists(folder)) return null;
+        string top = EmulatorIn(folder);
+        if (File.Exists(top)) return top;
+        string builds = Path.Combine(folder, "builds");
+        if (!Directory.Exists(builds)) return null;
+        return Directory.GetDirectories(builds).Select(EmulatorIn).Where(File.Exists)
+            .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+    }
+
+    /// <summary>The build folders next to the kit (or in <paramref name="dir"/>), newest name first.</summary>
+    public static List<string> BuildFolders(string dir = null)
+    {
+        dir ??= BuildsDir;
+        if (!Directory.Exists(dir)) return new();
+        return FolderPatterns.SelectMany(p => Directory.GetDirectories(dir, p))
+            .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// The name of the build an emulator belongs to: its folder, or for builds\&lt;name&gt;\kyty_emulator.exe the folder
+    /// holding builds (so a Faceoff install reads "Faceoff-v0.10.0", not "rc6").
+    /// </summary>
+    public static string BuildName(string emulator)
+    {
+        if (emulator == null) return null;
+        var dir = new DirectoryInfo(Path.GetDirectoryName(emulator));
+        if (dir.Parent is { } p && p.Name.Equals("builds", StringComparison.OrdinalIgnoreCase) && p.Parent != null)
+            return p.Parent.Name;
+        return dir.Name;
+    }
+
+    /// <summary>
+    /// The release's Windows build: a "-Windows-x64.zip", else (Faceoff and the nhl27-enhanced releases) the zip that
+    /// isn't the source or another platform.
+    /// </summary>
+    private static JsonElement? PickAsset(JsonElement assets)
+    {
+        var zips = assets.EnumerateArray().Where(a => a.GetProperty("name").GetString() is { } n
+            && n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var a in zips)
+            if (a.GetProperty("name").GetString().EndsWith("-Windows-x64.zip", StringComparison.OrdinalIgnoreCase)) return a;
+        foreach (var a in zips)
+        {
+            string n = a.GetProperty("name").GetString().ToLowerInvariant();
+            if (n.EndsWith("-src.zip") || n.Contains("source") || n.Contains("macos") || n.Contains("linux")) continue;
+            return a;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Every source's releases with a Windows build, newest first, and a message per source that could not be read.
@@ -74,10 +143,9 @@ public static class KytyReleases
         foreach (var r in doc.RootElement.EnumerateArray())
         {
             if (r.TryGetProperty("draft", out var d) && d.GetBoolean()) continue;
-            foreach (var a in r.GetProperty("assets").EnumerateArray())
+            if (PickAsset(r.GetProperty("assets")) is { } a)
             {
                 string name = a.GetProperty("name").GetString();
-                if (!name.EndsWith("-Windows-x64.zip", StringComparison.OrdinalIgnoreCase)) continue;
                 list.Add(new KytyRelease(
                     repo,
                     r.GetProperty("tag_name").GetString(),
@@ -87,7 +155,6 @@ public static class KytyReleases
                     name,
                     a.GetProperty("browser_download_url").GetString(),
                     a.GetProperty("size").GetInt64()));
-                break;
             }
         }
         return list.OrderByDescending(r => r.Published).ToList();
@@ -96,8 +163,7 @@ public static class KytyReleases
     /// <summary>kyty_emulator.exe of an installed release, or null.</summary>
     public static string Installed(KytyRelease r, string buildsDir = null)
     {
-        string exe = EmulatorIn(Path.Combine(buildsDir ?? BuildsDir, r.FolderName));
-        return File.Exists(exe) ? exe : null;
+        return FindEmulator(Path.Combine(buildsDir ?? BuildsDir, r.FolderName));
     }
 
     /// <summary>
@@ -109,8 +175,8 @@ public static class KytyReleases
     {
         buildsDir ??= BuildsDir;
         string final = Path.Combine(buildsDir, r.FolderName);
-        if (File.Exists(EmulatorIn(final)))
-            return EmulatorIn(final);
+        if (FindEmulator(final) is { } there)
+            return there;
         if (Directory.Exists(final))
             throw new IOException($"{final} exists but has no kyty_emulator.exe; move it aside first");
 
@@ -142,12 +208,13 @@ public static class KytyReleases
             await Task.Run(() => ZipFile.ExtractToDirectory(zip, staging), ct);
             string root = staging;
             // a zip with everything under one top folder unpacks that folder's contents
-            if (!File.Exists(EmulatorIn(root)) && Directory.GetFiles(root).Length == 0 && Directory.GetDirectories(root) is [var only])
+            if (FindEmulator(root) == null && Directory.GetFiles(root).Length == 0 && Directory.GetDirectories(root) is [var only])
                 root = only;
-            if (!File.Exists(EmulatorIn(root)))
-                throw new InvalidDataException($"{r.AssetName} has no kyty_emulator.exe");
+            // the whole zip is kept: Faceoff's launcher expects its builds folder next to it
+            if (FindEmulator(root) == null)
+                throw new InvalidDataException($"{r.AssetName} has no kyty_emulator.exe (looked at its top and in builds)");
             Directory.Move(root, final);
-            return EmulatorIn(final);
+            return FindEmulator(final);
         }
         finally
         {
