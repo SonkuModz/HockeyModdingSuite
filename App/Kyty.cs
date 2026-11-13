@@ -63,7 +63,8 @@ public sealed class KytySetup
             return chosen;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
         {
-            var builds = NHL27Kit.Core.KytyReleases.BuildFolders(dir.FullName).Select(NHL27Kit.Core.KytyReleases.FindEmulator).Where(p => p != null).ToList();
+            var builds = NHL27Kit.Core.KytyReleases.BuildFolders(dir.FullName).Select(NHL27Kit.Core.KytyReleases.FindEmulator).Where(p => p != null)
+                .OrderByDescending(File.GetLastWriteTimeUtc).ToList(); // newest emulator, whatever its folder is called
             if (builds.Count > 0)
                 return builds[0];
         }
