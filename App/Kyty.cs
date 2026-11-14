@@ -13,6 +13,9 @@ namespace NHL27Kit.App;
 ///   global:  %LOCALAPPDATA%\KytyPS5\configs\kyty.json
 ///   profile: %LOCALAPPDATA%\KytyPS5\configs\games\&lt;TITLE&gt;.json   (the only layer the kit writes)
 /// A profile value equal to the layers below is dropped, so the profile holds only what differs, like the launcher's.
+/// A Faceoff build is tuned as a whole by its cfgGlobal.json, so it keeps to its own folder: the build layer is just
+/// that file, the global settings and the shared game profile don't apply, and the profile the kit edits is the build's
+/// own cfg&lt;TITLE&gt;.json next to it. Edits to one Faceoff build stay with that build.
 /// </summary>
 public sealed class KytySetup
 {
@@ -23,7 +26,11 @@ public sealed class KytySetup
     public string Emulator { get; }
     public string BuildName => NHL27Kit.Core.KytyReleases.BuildName(Emulator);
     public string RunDir { get; }
-    public string ProfileFile => Path.Combine(ConfigsDir, "games", TitleId + ".json");
+    /// <summary>A Faceoff build: its own cfgGlobal.json and cfg&lt;TITLE&gt;.json only (see the class notes).</summary>
+    public bool OwnConfig { get; }
+    /// <summary>The build's cfgGlobal.json (null without an emulator).</summary>
+    public string BuildConfig => Emulator == null ? null : Path.Combine(Path.GetDirectoryName(Emulator), "cfgGlobal.json");
+    public string ProfileFile { get; }
 
     private readonly JsonObject _build = new(), _global = new();
     private JsonObject _profileDoc, _profile;
@@ -35,13 +42,19 @@ public sealed class KytySetup
         var kyty = ReadJson(Path.Combine(ConfigsDir, "kyty.json"));
         string runDir = kyty?["app"]?["run_dir"]?.GetValue<string>();
         RunDir = string.IsNullOrWhiteSpace(runDir) ? Path.Combine(DataDir, "run") : runDir;
+        OwnConfig = BuildName?.StartsWith("Faceoff", StringComparison.OrdinalIgnoreCase) == true;
+        ProfileFile = OwnConfig
+            ? Path.Combine(Path.GetDirectoryName(emulator), $"cfg{titleId}.json")
+            : Path.Combine(ConfigsDir, "games", titleId + ".json");
         if (emulator != null)
         {
             string dir = Path.GetDirectoryName(emulator);
             Merge(_build, ReadJson(Path.Combine(dir, "cfgGlobal.json"))?["emu"] as JsonObject);
-            Merge(_build, ReadJson(Path.Combine(dir, $"cfg{titleId}.json"))?["emu"] as JsonObject);
+            if (!OwnConfig) // a Faceoff build's cfg<TITLE>.json is its profile, read below
+                Merge(_build, ReadJson(Path.Combine(dir, $"cfg{titleId}.json"))?["emu"] as JsonObject);
         }
-        Merge(_global, kyty?["emu"] as JsonObject);
+        if (!OwnConfig)
+            Merge(_global, kyty?["emu"] as JsonObject);
         LoadProfile();
     }
 

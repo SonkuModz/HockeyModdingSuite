@@ -92,7 +92,9 @@ public partial class PlayPage : UserControl
         EmulatorPath.Text = _setup.Emulator ?? "kyty_emulator.exe not found";
         BuildInfo.Text = _setup.Emulator == null
             ? "Choose kyty_emulator.exe from a KytyPS5 build."
-            : $"Build {_setup.BuildName}. Settings layer: build cfg files → Kyty global → this game's profile.";
+            : _setup.OwnConfig
+                ? $"Build {_setup.BuildName}. Uses only its own config: {_setup.BuildConfig}, with your changes saved next to it in {Path.GetFileName(_setup.ProfileFile)} (this build only)."
+                : $"Build {_setup.BuildName}. Settings layer: build cfg files → Kyty global → this game's profile.";
         BuildSections();
         Reload();
         UpdateBuildRows();
