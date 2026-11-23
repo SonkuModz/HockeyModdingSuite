@@ -171,7 +171,7 @@ public partial class Scorebug24Page : UserControl
             }).Select(b => { b?.Freeze(); return b; }).ToArray());
             _loaded = true;
             BuildGroups();
-            Summary.Text = $"{Scorebug24.File}  ·  {(_sb.Style != null ? _sb.Style + " score clock made with NHL24Kit" : "made with NHL24Kit")}  ·  {_sb.Settings.Count} settings, read from the game";
+            Summary.Text = $"{Scorebug24.File}  ·  {(_sb.Style == "Sportsnet" ? "Sportsnet score clock made with HMS" : _sb.Style != null ? _sb.Style + " score clock made with NHL24Kit" : "made with NHL24Kit")}  ·  {_sb.Settings.Count} settings, read from the game";
             AboutText.Text = "This score clock reads its settings each time a match starts, so a change needs no rebuild of the movie. Saving writes scoreclock.gfx and score_clock.gfx as one entry on the Mods page.";
             PreviewBusy.Visibility = Visibility.Collapsed;
             Draw();
@@ -242,12 +242,16 @@ public partial class Scorebug24Page : UserControl
         Status(n == 0 ? "No unsaved changes." : $"{n} setting(s) changed, not saved yet.");
     }
 
+    /// <summary>True while the page reads or writes the score clock.</summary>
+    public bool IsReading => _busy;
+
     private void SetButtons()
     {
         bool changed = AllFields.Any(f => f.IsChanged), errors = AllFields.Any(f => f.HasError);
         SaveButton.IsEnabled = !_busy && _sb != null && changed && !errors;
         DiscardButton.IsEnabled = !_busy && changed;
         ReloadButton.IsEnabled = !_busy;
+        SportsnetButton.IsEnabled = !_busy && _mods != null && _sb?.Style != "Sportsnet";
         OriginalButton.IsEnabled = !_busy && _mods?.Find(LegacyEditor.Kind, Scorebug24.File) is { } e && _mods.State(e) is ModState.Applied or ModState.Partial;
     }
 
@@ -290,6 +294,35 @@ public partial class Scorebug24Page : UserControl
         {
             _busy = false;
             SetButtons();
+        }
+    }
+
+    private async void OnSportsnet(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _mods == null) return;
+        if (!App.Args.ContainsKey("shot") &&
+            MessageBox.Show(Window.GetWindow(this),
+                "Put the Sportsnet score clock in the game? It replaces the score clock you have now (scoreclock.gfx and score_clock.gfx).\n\n" +
+                "Undo HMS changes, or Restore on the Mods page, brings the old one back.",
+                "Scorebug", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            return;
+        _busy = true;
+        SetButtons();
+        Status("Writing the Sportsnet score clock…");
+        try
+        {
+            byte[] swf;
+            using (var s = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/scoreclock-sportsnet.swf")).Stream)
+            using (var ms = new System.IO.MemoryStream()) { s.CopyTo(ms); swf = ms.ToArray(); }
+            await _mods.InstallScorebug24Async(swf, "Sportsnet");
+            _busy = false;
+            await ReloadAsync("The Sportsnet score clock is in the game. Restore the entry on the Mods page to undo.");
+        }
+        catch (Exception ex)
+        {
+            _busy = false;
+            SetButtons();
+            Status("Couldn't write it: " + ex.Message);
         }
     }
 
@@ -349,6 +382,16 @@ public partial class Scorebug24Page : UserControl
     {
         Bug.Children.Clear();
         if (_sb == null) return;
+        if (_sb.Style == "Sportsnet")
+        {
+            // its layout isn't the ESPN+ one this preview draws: show the movie itself, rendered (settings aren't reflected)
+            var pic = new BitmapImage(new Uri("pack://application:,,,/Assets/scoreclock-sportsnet.png"));
+            Bug.Width = pic.PixelWidth / 2.0;
+            Bug.Height = pic.PixelHeight / 2.0;
+            Bug.Children.Add(new Image { Source = pic, Width = Bug.Width, Height = Bug.Height });
+            return;
+        }
+        Bug.Width = Bug.Height = double.NaN;
         double rowH = N("rowH", 50), leagueW = N("leagueW", 76), clockW = N("clockW", 100), teamW = N("teamW", 232), shotsW = N("shotsW", 78);
         double barH = N("barH", 40), logoSize = N("logoSize", 96), scoreCx = teamW - N("scoreInset", 36), scale = Math.Clamp(N("scale", 1), 0.3, 3);
         double h = rowH * 2, teamX = leagueW + clockW, teamEnd = teamX + teamW;

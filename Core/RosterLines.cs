@@ -264,13 +264,17 @@ public static class RosterLines
     {
         var f = t.Fields.ToDictionary(x => x.Name);
         var slots = t.Fields.Where(x => x.Type == T3FieldType.Integer && x.Depth == 1 && Category(x.Name) != null).ToList();
+        var lineOrGoal = slots.Where(x => Category(x.Name) is "l" or "g").ToList();
         var need = new HashSet<int>();
         foreach (int team in teams)
         {
             var rows = Enumerable.Range(0, t.WrittenRecords).Where(r => !db.IsInvalid(t, r) && (int)db.Get(t, r, f["team"]) == team).ToList();
             if (rows.Count == 0) continue;
+            // every slot held once, and every dressed player on a line or in goal: a 21st player dressed only for special
+            // teams (Columbus had a 7th D on PP1/PP 4-on-3/3-on-3 and no line) makes the game loop goalie changes at
+            // puck drop and crash
             bool bad = slots.Any(s => rows.Count(r => (int)db.Get(t, r, s) == 1) != 1) ||
-                       rows.Any(r => (int)db.Get(t, r, f["rosterstatus"]) == 1 && !slots.Any(s => (int)db.Get(t, r, s) == 1));
+                       rows.Any(r => (int)db.Get(t, r, f["rosterstatus"]) == 1 && !lineOrGoal.Any(s => (int)db.Get(t, r, s) == 1));
             if (bad) need.Add(team);
         }
         return need;

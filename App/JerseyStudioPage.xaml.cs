@@ -1290,11 +1290,130 @@ public partial class JerseyStudioPage : UserControl
         if (w.Result != null) await ApplyPhoto(w.Result);
     }
 
+    private async void OnStudioFlat(object sender, RoutedEventArgs e)
+    {
+        if (_studioSrc == null) return;
+        var w = new FlatShotsWindow(_studioSrc) { Owner = Window.GetWindow(this) };
+        if (w.ShowDialog() == true && w.Result != null) await ApplyFlat(w.Result);
+    }
+
+    /// <summary>
+    /// Makes the jersey what the shop shots gave: the art as the whole design, nothing painted over it, and every branding
+    /// logo of the stamp switched off.
+    /// </summary>
+    public async Task ApplyFlat(FlatResult r)
+    {
+        await StudioUseTemplate("kit");
+        foreach (var z in StudioZoneRows) z.Text = "";
+        foreach (var z in CollarRows) z.Text = "";
+        var lines = (System.Collections.ObjectModel.ObservableCollection<LineRow>)LineList.ItemsSource;
+        lines.Clear();
+        LinesEmpty.Visibility = Visibility.Visible;
+        _design.Lines = new();
+        foreach (var row in Spots.Where(s => s.IsBrand).ToList()) row.Spot = row.Spot with { Enabled = false };
+        DrawSpots();
+        _design.Image = r.Art;
+        _studioImageFile = null;
+        // the lettering in the jersey's colours (only this kit's, shown and written with it)
+        _flatLetters = JerseyFlat.LetterColors(r.Palette);
+        _flatLettersFor = _studioSrc;
+        _flatFontWas = _studioSrc.Font ?? _flatFontWas;
+        if (_flatFontWas != null) _studioSrc.Font = JerseyFlat.RecolorFont(_flatFontWas, _flatLetters.Fill, _flatLetters.Outline);
+        // its own relief and shine in place of the old kit's
+        _flatMaps = null;
+        StudioStatus.Text = "Making the normal and shine maps…";
+        try
+        {
+            var (index, shape, art, mask) = (_mods.Index, _studioSrc.Shape, r.Art, r.PrintMask);
+            _flatMaps = await Task.Run(() => JerseyMaps.Generate(JerseyMaps.LoadNeutral(index, _studioSrc.Size), shape, art, mask));
+            SetJerseyNormal(_flatMaps.BaseNormal, _flatMaps.Size);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        {
+            StudioStatus.Text = "The normal and shine maps couldn't be made, so the kit's own stay: " + ex.Message;
+        }
+        StudioClearImage.Visibility = Visibility.Visible;
+        _artDirty = true;
+        ScheduleStudio();
+        StudioStatus.Text = "From the shop shots: the whole design, collar, lettering colours, normal and shine maps; branding logos and shoulder patches off.";
+    }
+
+    private (int Fill, int Outline) _flatLetters;
+    private StudioSource _flatLettersFor;
+    private byte[] _flatFontWas;
+    private JerseyMapSet _flatMaps;
+
+    /// <summary>The relief the 3D view draws on the jersey.</summary>
+    private void SetJerseyNormal(byte[] rgba, int size)
+    {
+        if (_shown == null) return;
+        foreach (var p in _shown.Where(p => p.Garment == "jersey")) KitViewer.SetNormalMap(p.Part, rgba, size, size);
+    }
+
+    /// <summary>What the shop shots add to a kit's textures: the lettering in the jersey's colours and the maps (nothing for another design).</summary>
+    private async Task<List<(KitTexture Slot, string File)>> FlatItems(Kit target, string stem)
+    {
+        var items = new List<(KitTexture, string)>();
+        if (_flatLettersFor != _studioSrc) return items;
+        var (letters, maps, index) = (_flatLetters, _flatMaps, _mods.Index);
+        var from = _studioSrc.Kit;
+        await Task.Run(() =>
+        {
+            if (from.Slot("font_color") is { } fs && target.Slot("font_color") is { } tf && Texture.Load(index, fs.Name) is { Rgba: not null } t)
+            {
+                string file = stem + "_flat_font_color.png";
+                File.WriteAllBytes(file, ImageFiles.Png(JerseyFlat.RecolorFont(t.Rgba, letters.Fill, letters.Outline), t.Width, t.Height));
+                items.Add((tf, file));
+            }
+            if (maps == null) return;
+            foreach (var (slot, rgba) in new[] { ("jersey_base_normal", maps.BaseNormal), ("jersey_normal", maps.Normal), ("jersey_base_coeff", maps.BaseCoeff), ("jersey_coeff", maps.Coeff) })
+                if (target.Slot(slot) is { } ts)
+                {
+                    string file = $"{stem}_flat_{slot}.png";
+                    File.WriteAllBytes(file, ImageFiles.Png(rgba, maps.Size, maps.Size));
+                    items.Add((ts, file));
+                }
+        });
+        return items;
+    }
+
+    /// <summary>Scripted runs: "FRONT|BACK".</summary>
+    public async Task StudioFlat(string spec)
+    {
+        await WaitStudio();
+        if (_studioSrc == null) return;
+        var parts = spec.Split('|');
+        var w = new FlatShotsWindow(_studioSrc);
+        w.OpenFront(parts[0]);
+        w.OpenBack(parts[1]);
+        if (await w.Run()) await ApplyFlat(w.Result);
+    }
+
+    private async Task RestoreJerseyNormal()
+    {
+        if (_kit?.Slot("jersey_base_normal") is not { } slot) return;
+        try
+        {
+            var t = await _textures.LoadSizedAsync(slot.Name, TextureSize);
+            if (t.Rgba != null) SetJerseyNormal(t.Rgba, t.Width);
+            _artDirty = true;
+            ScheduleStudio();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { }
+    }
+
     private void OnStudioClearImage(object sender, RoutedEventArgs e)
     {
         if (_design == null) return;
         _design.Image = null;
         _studioImageFile = null;
+        if (_flatLettersFor == _studioSrc)
+        {
+            if (_flatFontWas != null) _studioSrc.Font = _flatFontWas;
+            _flatMaps = null;
+            _flatLettersFor = null;
+            _ = RestoreJerseyNormal();
+        }
         StudioClearImage.Visibility = Visibility.Collapsed;
         _artDirty = true;
         ScheduleStudio();
@@ -2065,6 +2184,7 @@ public partial class JerseyStudioPage : UserControl
         }
         if (art && kit.Slot("jersey_base_color") is { } b) items.Add((b, baseFile));
         if (kit.Slot("jersey_color") is { } c) items.Add((c, bakedFile));
+        items.AddRange((await FlatItems(kit, Path.Combine(folder, kit.Name))).Select(i => (i.Slot, i.File)));
         foreach (var (texture, file) in items)
         {
             StatusChanged?.Invoke(await KitWriter.WriteTextureAsync(_mods, kit, texture, file, t => StudioStatus.Text = t));
@@ -2194,6 +2314,10 @@ public partial class JerseyStudioPage : UserControl
             foreach (var slot in new[] { "sock_base_color", "sock_color" })
                 if (Copy(slot) is { } f) items.Add((target.Slot(slot), f));
         });
+        // from shop shots: their lettering and maps instead of the start kit's
+        var flat = await FlatItems(target, stem);
+        items.RemoveAll(i => flat.Any(f => f.Slot == i.Slot));
+        items.AddRange(flat);
         string label = src.Own ? $"Jersey studio: your own uniform into {target}" : $"Jersey studio: {from.Team} {from.Name} design into {target}";
         if (stampNew != null && !stampNew.AsSpan().SequenceEqual(stampEbx))
         {

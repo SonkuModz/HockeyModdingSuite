@@ -130,7 +130,8 @@ public sealed class Scorebug24
                 if (kind == Scorebug24Kind.Colour && double.TryParse(d, NumberStyles.Float, CultureInfo.InvariantCulture, out double c)) d = "#" + ((uint)c).ToString("X6");
                 Settings.Add(new Scorebug24Setting(key, kind, d));
             }
-            if (src.Contains("ESPN_PLUS", StringComparison.Ordinal)) Style = "ESPN+";
+            if (src.Contains("SN_ART", StringComparison.Ordinal)) Style = "Sportsnet";
+            else if (src.Contains("ESPN_PLUS", StringComparison.Ordinal)) Style = "ESPN+";
             else if (src.Contains("PRIME", StringComparison.OrdinalIgnoreCase)) Style = "Prime Video";
         }
         finally
@@ -205,6 +206,44 @@ public sealed class Scorebug24
                 int eq = part.IndexOf('=');
                 if (eq > 0) Values[part[..eq].Trim()] = part[(eq + 1)..].Trim();
             }
+            return entry;
+        }
+        catch
+        {
+            if (existing != null && store.Entries.Contains(existing)) store.Apply(existing, game, log);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Writes a whole new score clock movie (an uncompressed FWS SWF, e.g. one rebuilt with FFDec) into scoreclock.gfx and
+    /// its twin, compressed like the originals, as one restorable entry. The movie must keep a settings block, so the
+    /// settings editor still works on it.
+    /// </summary>
+    public static ModEntry SaveMovie(AssetIndex index, ModStore store, string game, byte[] swf, string name, Action<string> log = null)
+    {
+        if (swf.Length < 8 || swf[0] != (byte)'F' || swf[1] != (byte)'W' || swf[2] != (byte)'S') throw new InvalidDataException("Not an uncompressed SWF (FWS).");
+        if (FindBlock(swf) == null) throw new InvalidDataException("The movie has no settings block (#NHL24KIT_CFG#, 4096 characters).");
+        string collector = LegacyEditor.CollectorOf(index, File) ?? throw new FileNotFoundException($"The game has no {File}.");
+        var existing = store.Find(LegacyEditor.Kind, File);
+        if (existing != null && store.State(existing, game) is ModState.Applied or ModState.Partial) store.Restore(existing, game, log);
+        try
+        {
+            var legacy = new Legacy(index, collector);
+            var files = new List<(LegacyFile, byte[])>();
+            foreach (var path in new[] { File, Twin })
+            {
+                var f = legacy.Find(path);
+                if (f == null) continue;
+                var gfx = legacy.Read(f);
+                var body = (byte[])swf.Clone();
+                BitConverter.GetBytes((uint)body.Length).CopyTo(body, 4);
+                files.Add((f, Deflate(gfx, body)));
+            }
+            var notes = new List<string>();
+            var patches = LegacyEditor.PlanPs4(index, legacy, files, notes, log);
+            var entry = store.Add(LegacyEditor.Kind, File, "Scorebug page", $"Score clock: {name}", patches, notes);
+            store.Apply(entry, game, log);
             return entry;
         }
         catch

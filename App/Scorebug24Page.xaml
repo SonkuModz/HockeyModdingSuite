@@ -53,6 +53,12 @@
                         <TextBlock Text="Reload" Margin="8,0,0,0" />
                     </StackPanel>
                 </Button>
+                <Button x:Name="SportsnetButton" Click="OnSportsnet" Padding="12,6" Margin="8,0,0,0" ToolTip="Put the Sportsnet score clock (made with HMS) in the game. Undo HMS changes or Restore on the Mods page brings the old one back.">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE896;" Style="{StaticResource Icon}" FontSize="13" />
+                        <TextBlock Text="Install Sportsnet clock" Margin="8,0,0,0" />
+                    </StackPanel>
+                </Button>
                 <Button x:Name="OriginalButton" Click="OnOriginal" Padding="12,6" Margin="8,0,0,0" ToolTip="Put the score clock back as it was before HMS changed it (undoes every saved change)">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE7A7;" Style="{StaticResource Icon}" FontSize="13" />

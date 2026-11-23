@@ -33,6 +33,8 @@ public sealed record GameProfile(GameKind Kind, string Title, string TitleId, st
     public static GameProfile Detect(string dir)
     {
         if (!KitPaths.IsGame(dir)) return None;
+        // a base game with its update next to it is the updated game (the update's param.sfo has its version)
+        dir = KitPaths.Canonical(dir);
         string sys = Path.Combine(dir, "sce_sys");
         try
         {
@@ -57,8 +59,9 @@ public sealed record GameProfile(GameKind Kind, string Title, string TitleId, st
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or ArgumentException) { }
         // a game folder without sce_sys: the data's platform folder tells PS5 (Ps5) from PS4 (Gen4b)
-        bool ps5 = Directory.Exists(Path.Combine(dir, "Data", "Ps5"));
-        return new GameProfile(ps5 ? GameKind.Nhl27 : Directory.Exists(Path.Combine(dir, "Data", "Gen4b")) ? GameKind.Nhl24 : GameKind.Unknown,
+        string data = KitPaths.DataDirOf(dir);
+        bool ps5 = Directory.Exists(Path.Combine(data, "Ps5"));
+        return new GameProfile(ps5 ? GameKind.Nhl27 : Directory.Exists(Path.Combine(data, "Gen4b")) ? GameKind.Nhl24 : GameKind.Unknown,
             null, null, null, null, ps5 ? "PS5" : "PS4");
     }
 

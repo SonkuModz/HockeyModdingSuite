@@ -390,6 +390,8 @@
                                         ToolTip="A whole jersey texture (PNG or DDS) in the NHL 27 layout as the art under the design (hold Shift for a legacy one: it's converted)" />
                                 <Button Style="{StaticResource Ghost}" Content="From a photo…" Padding="8,4" Margin="6,0,0,0" Click="OnStudioPhoto"
                                         ToolTip="Mark the stripes and crest on a photo of a real jersey: its colours and stripes become this jersey's color map, with the crest painted in and the maker's, NHL and sponsor logos left off" />
+                                <Button Style="{StaticResource Ghost}" Content="From shop shots…" Padding="8,4" Margin="6,0,0,0" Click="OnStudioFlat"
+                                        ToolTip="A flat front and back shot of a jersey from the NHL shop (transparent background): the whole design and the collar come across with nothing to mark, and the kit's logos are switched off" />
                                 <Button x:Name="StudioClearImage" Style="{StaticResource Ghost}" Content="Clear image" Padding="8,4" Click="OnStudioClearImage" Visibility="Collapsed" />
                             </WrapPanel>
 

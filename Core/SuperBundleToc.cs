@@ -45,12 +45,18 @@ public sealed class SuperBundleToc
         var b = bytes;
         int Base = DbObject.DataStart(b);
         int I(int p) => BinaryPrimitives.ReadInt32BigEndian(b.AsSpan(p));
-        if (b.Length < Base + 60 || I(Base) != 0x3C)
+        // the header is 15 ints (0x3C) when the bundle names are Huffman-coded (flag 4); a TOC rebuilt with plain names
+        // (third-party installers, e.g. the Center Ice Mod's contentsb) has the first 12 (0x30) and flags 0
+        if (b.Length < Base + 48 || I(Base) is not (0x3C or 0x30))
+            return;
+        int header = I(Base);
+        if (b.Length < Base + header)
             return;
         int bundleRefOffset = I(Base), bundleOffset = I(Base + 4), bundleCount = I(Base + 8);
         int chunkGuidOffset = I(Base + 16), chunkCount = I(Base + 20), chunkEntryOffset = I(Base + 24);
         int nameOffset = I(Base + 32);
-        int flags = I(Base + 44), stringCount = I(Base + 48), stringSize = I(Base + 52), stringOffset = I(Base + 56);
+        int flags = I(Base + 44);
+        int stringCount = header >= 0x3C ? I(Base + 48) : 0, stringSize = header >= 0x3C ? I(Base + 52) : 0, stringOffset = header >= 0x3C ? I(Base + 56) : 0;
         if (bundleCount == 0 && chunkCount == 0)
             return;
 
@@ -81,6 +87,19 @@ public sealed class SuperBundleToc
             var table = new int[stringSize];
             for (int i = 0; i < stringSize; i++) table[i] = I(Base + stringOffset + 4 * i);
             for (int i = 0; i < bundleCount; i++) names[i] = Huffman(table, data, nameOffsets[i]);
+        }
+        else if ((flags & 4) == 0)
+        {
+            // plain names: each bundle's name offset is a byte offset into a block of NUL-terminated strings
+            int strings = Base + nameOffset;
+            for (int i = 0; i < bundleCount; i++)
+            {
+                int s = strings + nameOffsets[i];
+                if (nameOffsets[i] < 0 || s >= b.Length) continue;
+                int end = Array.IndexOf(b, (byte)0, s);
+                if (end < 0) end = b.Length;
+                names[i] = System.Text.Encoding.UTF8.GetString(b, s, end - s);
+            }
         }
 
         // chunk table: guid i carries (entry index * ints per entry) in its low 24 bits

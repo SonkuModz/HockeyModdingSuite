@@ -18,7 +18,18 @@ public sealed class RangePatch
     /// is at the end; otherwise it stays, unused, until what was added after it is restored too (<see cref="ModStore"/>).
     /// </summary>
     public bool Append { get; set; }
+
+    // A range too big to keep a copy of (a mod package's data, gigabytes) reads its new bytes from the package instead:
+    // Source is the package file, the range's bytes are the deflate stream at SourceOffset (SourceLength compressed
+    // bytes) once SourceSkip decompressed bytes are passed. Only added ranges use it; their old bytes are empty.
+    public string Source { get; set; }
+    public long SourceOffset { get; set; }
+    public long SourceLength { get; set; }
+    public long SourceSkip { get; set; }
 }
+
+/// <summary>An added range whose new bytes stay in a package (<see cref="RangePatch.Source"/>), with their SHA1.</summary>
+public sealed record SourcedPatch(string File, long Offset, int Length, string NewSha1, string Note, string Source, long SourceOffset, long SourceLength, long SourceSkip);
 
 /// <summary>A replacement of one asset: what it replaces, and the ranges it writes.</summary>
 public sealed class ModEntry
@@ -130,6 +141,18 @@ public sealed class ModStore
         }
     }
 
+    /// <summary>Keeps added ranges of a begun mod whose new bytes stay in their package (nothing is copied).</summary>
+    public void AddSourcedPatches(ModEntry e, IEnumerable<SourcedPatch> patches)
+    {
+        string empty = Hex(SHA1.HashData(Array.Empty<byte>()));
+        foreach (var p in patches)
+            e.Patches.Add(new RangePatch
+            {
+                File = p.File, Offset = p.Offset, Length = p.Length, OldSha1 = empty, NewSha1 = p.NewSha1, Note = p.Note, Append = true,
+                Source = p.Source, SourceOffset = p.SourceOffset, SourceLength = p.SourceLength, SourceSkip = p.SourceSkip,
+            });
+    }
+
     /// <summary>Puts a begun mod in the list, replacing any entry for the same asset (the caller restores that one first).</summary>
     public void Commit(ModEntry e)
     {
@@ -220,6 +243,7 @@ public sealed class ModStore
     private void Write(ModEntry e, string game, bool toNew, Action<string> log)
     {
         string verb = toNew ? "apply" : "restore";
+        if (toNew) ResumeSourced(e, game, log);
         if (toNew) MoveAppended(e, game, log);
         // check everything before writing anything
         for (int i = 0; i < e.Patches.Count; i++)
@@ -234,10 +258,13 @@ public sealed class ModStore
                 throw new InvalidDataException($"Can't {verb} {e.Name}: {p.File} at 0x{p.Offset:X} holds neither the original nor the replacement. The game files changed since this mod was made; nothing was written.");
         }
         int written = 0;
+        // data read from a package goes in first, so the TOC ranges that point at it come after it
+        if (toNew) written += WriteSourced(e, game, log);
         // restoring goes backwards, so appended ranges are cut off last-added first
         foreach (int i in toNew ? Enumerable.Range(0, e.Patches.Count) : Enumerable.Range(0, e.Patches.Count).Reverse())
         {
             var p = e.Patches[i];
+            if (p.Source != null) continue;
             string file = Path_(game, p);
             string want = toNew ? p.NewSha1 : p.OldSha1;
             if (Current(file, p) == want) continue;
@@ -263,6 +290,112 @@ public sealed class ModStore
     }
 
     /// <summary>
+    /// An apply of package data that stopped partway (a crash, power loss) leaves a file ending inside one of its added
+    /// ranges: the file is cut back to where that range starts, so the apply carries on from there. Only when every range
+    /// before it in that file already holds its new bytes and the partial bytes are the start of that range's own bytes
+    /// (read from the package), so the data cut can only be this mod's. Anything else is left for the checks to refuse.
+    /// </summary>
+    private void ResumeSourced(ModEntry e, string game, Action<string> log)
+    {
+        foreach (var group in e.Patches.Where(p => p.Source != null).GroupBy(p => p.File, StringComparer.OrdinalIgnoreCase))
+        {
+            string file = Path_(game, group.First());
+            if (!File.Exists(file)) continue;
+            long length = new FileInfo(file).Length;
+            var ranges = group.OrderBy(p => p.Offset).ToList();
+            var cut = ranges.FirstOrDefault(p => length > p.Offset && length < p.Offset + p.Length);
+            if (cut == null || !File.Exists(cut.Source)) continue;
+            if (ranges.TakeWhile(p => p != cut).Any(p => Current(file, p) != p.NewSha1)) continue;
+            int partial = (int)(length - cut.Offset);
+            var have = new byte[partial];
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { fs.Position = cut.Offset; ReadFull(fs, have, partial); }
+            var ours = new byte[partial];
+            using (var pkg = new FileStream(cut.Source, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var inflate = new System.IO.Compression.DeflateStream(new SubStream(pkg, cut.SourceOffset, cut.SourceLength), System.IO.Compression.CompressionMode.Decompress))
+            {
+                Skip(inflate, cut.SourceSkip);
+                ReadFull(inflate, ours, partial);
+            }
+            if (!have.AsSpan().SequenceEqual(ours)) continue;
+            using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)) { fs.SetLength(cut.Offset); fs.Flush(true); }
+            log?.Invoke($"{cut.File}: an earlier apply stopped partway; cut back to 0x{cut.Offset:X} to carry on");
+        }
+    }
+
+    /// <summary>
+    /// Writes the ranges whose new bytes stay in a package: each package stream is read once from its start, and the
+    /// ranges along it are written in order (those already in place are passed over, so a stopped apply carries on).
+    /// </summary>
+    private int WriteSourced(ModEntry e, string game, Action<string> log)
+    {
+        int written = 0;
+        foreach (var stream in e.Patches.Where(p => p.Source != null).GroupBy(p => (p.Source, p.SourceOffset, p.SourceLength)))
+        {
+            var ranges = stream.OrderBy(p => p.SourceSkip).ToList();
+            var todo = ranges.Where(p => Current(Path_(game, p), p) != p.NewSha1).ToList();
+            if (todo.Count == 0) continue;
+            if (!File.Exists(stream.Key.Source))
+                throw new FileNotFoundException($"Can't apply {e.Name}: its package {stream.Key.Source} isn't there any more. Put it back, or remove the mod and import the package again.");
+            using var pkg = new FileStream(stream.Key.Source, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan);
+            using var inflate = new System.IO.Compression.DeflateStream(new SubStream(pkg, stream.Key.SourceOffset, stream.Key.SourceLength), System.IO.Compression.CompressionMode.Decompress);
+            long at = 0, last = todo.Max(p => p.SourceSkip);
+            byte[] buf = null;
+            foreach (var p in ranges)
+            {
+                if (p.SourceSkip > last) break;
+                if (p.SourceSkip < at) throw new InvalidDataException($"The package ranges of {e.Name} overlap.");
+                Skip(inflate, p.SourceSkip - at);
+                at = p.SourceSkip;
+                bool needed = todo.Contains(p);
+                if (buf == null || buf.Length < p.Length) buf = new byte[p.Length];
+                ReadFull(inflate, buf, p.Length);
+                at += p.Length;
+                if (!needed) continue;
+                if (Hex(SHA1.HashData(buf.AsSpan(0, p.Length))) != p.NewSha1)
+                    throw new InvalidDataException($"The package {stream.Key.Source} doesn't hold what {e.Name} expects at {p.File} 0x{p.Offset:X} (it changed since it was imported).");
+                string file = Path_(game, p);
+                using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+                {
+                    if (fs.Length != p.Offset) throw new IOException($"{p.File} is 0x{fs.Length:X} bytes long; {e.Name}'s data has to go at 0x{p.Offset:X}. Nothing more was written.");
+                    fs.Position = p.Offset;
+                    fs.Write(buf, 0, p.Length);
+                    fs.Flush(true);
+                }
+                if (Current(file, p) != p.NewSha1) throw new IOException($"{p.File} did not hold what was written at 0x{p.Offset:X}.");
+                written++;
+                log?.Invoke($"{p.Note ?? "range"}: {p.Length:N0} bytes at 0x{p.Offset:X} in {p.File}");
+            }
+        }
+        return written;
+    }
+
+    private static void Skip(Stream s, long count)
+    {
+        if (count <= 0) return;
+        var buf = System.Buffers.ArrayPool<byte>.Shared.Rent(1 << 20);
+        try
+        {
+            while (count > 0)
+            {
+                int n = s.Read(buf, 0, (int)Math.Min(buf.Length, count));
+                if (n <= 0) throw new EndOfStreamException("The package stream ended early.");
+                count -= n;
+            }
+        }
+        finally { System.Buffers.ArrayPool<byte>.Shared.Return(buf); }
+    }
+
+    private static void ReadFull(Stream s, byte[] buf, int count)
+    {
+        for (int got = 0; got < count;)
+        {
+            int n = s.Read(buf, got, count - got);
+            if (n <= 0) throw new EndOfStreamException("The package stream ended early.");
+            got += n;
+        }
+    }
+
+    /// <summary>
     /// A mod not in the game whose added data's place now holds something else (restoring it cut the file, then another
     /// mod added data there): its data goes at the file's end instead, and the TOC offsets it writes follow. Nothing
     /// changes unless every offset can follow.
@@ -278,6 +411,9 @@ public sealed class ModStore
             long end = new FileInfo(file).Length;
             var pending = group.Where(x => Current(file, x.P) != x.P.NewSha1).ToList();
             if (pending.All(x => end <= x.P.Offset)) continue;
+            // a package's data can't move: its TOCs come whole from the package, with the offsets it was made for
+            if (e.Kind == CimsInstaller.Kind || pending.Any(x => x.P.Source != null))
+                throw new InvalidDataException($"Can't apply {e.Name}: {group.First().P.File} has had data added where this package's data has to go. Restore the mods applied after it was removed first; nothing was written.");
             foreach (var (p, i) in pending)
             {
                 var data = File.ReadAllBytes(New(e, i));

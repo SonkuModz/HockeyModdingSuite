@@ -69,7 +69,7 @@ public sealed class ModService
             _tocs = new TocCache(Index);
             _locations = null;
             foreach (var toc in e.Patches.Select(p => p.File).Where(f => f.EndsWith(".toc", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase))
-                Index.Refresh(_tocs.Get(Path.Combine(Game, toc.Replace('/', Path.DirectorySeparatorChar))));
+                Index.Refresh(_tocs.Get(Path.GetFullPath(Path.Combine(Game, toc.Replace('/', Path.DirectorySeparatorChar)))));
         }
     }
 
@@ -256,6 +256,14 @@ public sealed class ModService
         finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
+    /// <summary>NHL 24: replaces the score clock movie (scoreclock.gfx and its twin) with <paramref name="swf"/>, as one entry.</summary>
+    public async Task InstallScorebug24Async(byte[] swf, string name)
+    {
+        RefuseWrite();
+        try { await Run(() => Scorebug24.SaveMovie(Index, Store, Game, swf, name)); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
+    }
+
     /// <summary>
     /// NHL 24: sets its gameplay tuning to NHL 27's (<see cref="TuningMatch"/>), read from <paramref name="nhl27"/>'s
     /// eboot.bin. An earlier match is restored first, so the plan starts from the eboot as it ships. Nothing is
@@ -297,6 +305,24 @@ public sealed class ModService
     {
         RefuseWrite();
         try { return await Run(() => DbEditor.Save(Index, Store, Game, name, edit, source: source)); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
+    }
+
+    /// <summary>
+    /// The dry run of a CIMS package (the NHL 24 Center Ice Mod): checks every file it changes is stock and that the
+    /// package's data gives each modded file exactly. Reads the package and the stock files (a few minutes); writes nothing.
+    /// </summary>
+    public Task<CimsInstaller.Plan> PlanPackageAsync(string file, Action<string> progress) => Run(() =>
+    {
+        if (Profile.Kind != GameKind.Nhl24) throw new NotSupportedException("CIMS packages are for NHL 24 (NHL24 PC). Open the NHL 24 game first.");
+        return CimsInstaller.MakePlan(CimsPackage.Open(file), Game, progress);
+    });
+
+    /// <summary>Installs a planned package through the mod list (two entries: the game data, and the emulator's patch file).</summary>
+    public async Task<List<ModEntry>> InstallPackageAsync(CimsInstaller.Plan plan, Action<string> progress)
+    {
+        RefuseWrite();
+        try { return await Run(() => CimsInstaller.Install(plan, Store, progress)); }
         finally { ForgetPs4(); Changed?.Invoke(); }
     }
 
