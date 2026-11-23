@@ -19,3 +19,6 @@ release/
 ThirdParty/*.dll
 *.dll
 *.exe
+
+# FFDec (score clock decompiler): downloaded into ThirdParty\ffdec by the user, not ours to redistribute
+ThirdParty/ffdec/

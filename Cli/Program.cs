@@ -21,7 +21,8 @@ public static class Program
         }
         var opts = Options.Parse(args.Skip(1).ToArray());
         string game = opts.Get("game") ?? KitPaths.FindGame();
-        if (game == null || !File.Exists(Path.Combine(game, "Data", "layout.toc")))
+        if (game != null) game = KitPaths.Canonical(game);
+        if (game == null || !KitPaths.IsGame(game))
         {
             Console.Error.WriteLine($"No game folder (with Data/layout.toc) found{(game != null ? " at " + game : "")}. Pass --game DIR.");
             return 2;
@@ -51,6 +52,7 @@ public static class Program
                 "own-kit" => OwnKitCmd(game, opts),
                 "jersey-template" => JerseyTemplateCmd(game, opts),
                 "collar" => CollarCmd(game, opts),
+                "jersey-flat" => JerseyFlatCmd(game, opts),
                 "tunables" => TunablesCmd(game, opts),
                 "tunables-match" => TunablesMatchCmd(game, opts),
                 "bap" => BeAProCmd(opts),
@@ -79,7 +81,9 @@ public static class Program
                 "db-set" => DbSetCmd(game, opts),
                 "kyty-releases" => KytyReleasesCmd(opts),
                 "mods" => ModsCmd(game, opts),
+                "cims" => CimsCmd(game, opts),
                 "apply-sound" => ApplySoundCmd(game, opts),
+                "apply-sounds" => ApplySoundsCmd(game, opts),
                 "restore" => RestoreCmd(game, opts),
                 "apply" => ApplyCmd(game, opts),
                 "sharers" => SharersCmd(game, opts),
@@ -115,6 +119,7 @@ public static class Program
           nhl27kit list   [ebx|res|chunk] [--filter TEXT] [--type TYPE] [--id GUID] [--limit N]
           nhl27kit export [ebx|res|chunk] NAME|GUID [--out DIR]
           nhl27kit texture NAME|--filter TEXT [--limit N] [--out DIR]   decode textures to PNG + DDS
+          nhl27kit cims PACKAGE.cimspkg [--plan] [--install]          NHL 24: check / dry-run / install a Center Ice Mod package
 
         The game folder defaults to "NHL 27 dump/NHL" next to the kit. The game folder is only read.
         """);
@@ -706,6 +711,17 @@ public static class Program
     private static int Scorebug24Cmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);
+        if (opts.Get("movie") is { } movie)
+        {
+            RefuseWhileRunning();
+            var swf = File.ReadAllBytes(movie);
+            var e = Scorebug24.SaveMovie(index, Mods(), game, swf, opts.Get("name") ?? Path.GetFileNameWithoutExtension(movie), Console.WriteLine);
+            Console.WriteLine(e.Summary);
+            Console.WriteLine($"state: {Mods().State(e, game)}");
+            var gfx = new Legacy(index, LegacyEditor.CollectorOf(index, Scorebug24.File)).Read(Scorebug24.File);
+            Console.WriteLine("read back: " + (Scorebug24.Inflate(gfx).AsSpan(8).SequenceEqual(swf.AsSpan(8)) ? "same movie" : "DIFFERENT"));
+            return 0;
+        }
         var sb = Scorebug24.Load(index);
         Console.WriteLine($"{Scorebug24.File} ({sb.Style ?? "custom"}), {sb.Settings.Count} settings");
         foreach (var g in sb.Settings.GroupBy(s => s.Group))
@@ -789,6 +805,37 @@ public static class Program
         return 0;
     }
 
+    /// <summary>
+    /// cims PACKAGE.cimspkg [--plan] [--install]: a CIMS mod package (the NHL 24 Center Ice Mod). Without a flag, each
+    /// file's state (stock / modded / other); --plan checks the package against the game without writing anything;
+    /// --install puts it in through the mod list (Restore takes it out again). The package stays where it is: the
+    /// added data is read from it when applied.
+    /// </summary>
+    private static int CimsCmd(string game, Options opts)
+    {
+        string file = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("cims needs a .cimspkg file");
+        var pkg = CimsPackage.Open(Path.GetFullPath(file));
+        Console.WriteLine($"{pkg.Title}: {pkg.Files.Count} files, adds {pkg.Growth / 1073741824.0:0.00} GB");
+        if (!string.IsNullOrEmpty(pkg.Requires)) Console.WriteLine("  needs: " + pkg.Requires);
+        if (!opts.Has("plan") && !opts.Has("install"))
+        {
+            var states = CimsInstaller.Check(pkg, game);
+            foreach (var g in states.GroupBy(s => s.State)) Console.WriteLine($"  {g.Key}: {g.Count()}");
+            foreach (var s in states.Where(s => s.State is CimsInstaller.FileState.Other or CimsInstaller.FileState.Missing)) Console.WriteLine($"    {s.State,-7} {s.T.Rel}");
+            return 0;
+        }
+        if (opts.Has("install")) RefuseWhileRunning();
+        var plan = CimsInstaller.MakePlan(pkg, game, Console.WriteLine);
+        foreach (var l in plan.Lines) Console.WriteLine("  " + l);
+        if (plan.EmulatorNote != null) Console.WriteLine("  emulator: " + plan.EmulatorNote);
+        long need = CimsInstaller.SpaceNeeded(plan), free = new DriveInfo(Path.GetPathRoot(plan.GameDir)).AvailableFreeSpace;
+        Console.WriteLine($"  space: needs {need / 1073741824.0:0.0} GB free, {free / 1073741824.0:0.0} GB free now");
+        if (!opts.Has("install")) return 0;
+        var entries = CimsInstaller.Install(plan, Mods(), Console.WriteLine);
+        foreach (var e in entries) Console.WriteLine($"{Mods().State(e, plan.GameDir),-11} {e.Name}");
+        return 0;
+    }
+
     /// <summary>apply-sound NAME --file AUDIO [--variation N]: replaces one variation of a sound in the game files (through the mod list).</summary>
     private static int ApplySoundCmd(string game, Options opts)
     {
@@ -816,6 +863,70 @@ public static class Program
         // read it back from the game files
         var back = Audio.Decode(index, stream);
         Console.WriteLine($"read back from the game: {back.Header.CodecName} {back.Channels} ch {back.Seconds:0.00} s");
+        return 0;
+    }
+
+    /// <summary>
+    /// apply-sounds --list FILE [--label TEXT]: replaces many variations at once. Each line of FILE is
+    /// SOUND|VARIATION|AUDIO (blank lines and # comments are skipped). The takes of one sound are written as one mod entry
+    /// ("SOUND [batch]", or "SOUND [batch LABEL]"), so a whole wave restores in one step. A variation that already has its
+    /// own applied entry is left out, so batches never overlap single swaps.
+    /// </summary>
+    private static int ApplySoundsCmd(string game, Options opts)
+    {
+        RefuseWhileRunning();
+        string list = opts.Get("list") ?? throw new ArgumentException("apply-sounds needs --list FILE");
+        string label = opts.Get("label");
+        var lines = File.ReadAllLines(list).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).Select(l => l.Split('|')).ToList();
+        if (lines.Any(p => p.Length < 3 || !int.TryParse(p[1], out _))) throw new ArgumentException("each line must be SOUND|VARIATION|AUDIO");
+        string baseDir = Path.GetDirectoryName(Path.GetFullPath(list));
+        var index = OpenIndex(game, false);
+        var tocs = new TocCache(index);
+        var locations = LocationIndex.Build(index, tocs);
+        var store = Mods();
+        int waves = 0, takes = 0, skipped = 0;
+        foreach (var g in lines.GroupBy(p => p[0]))
+        {
+            RefuseWhileRunning();
+            string name = g.Key;
+            var wave = index.GetEbx(name) ?? throw new ArgumentException($"no sound named {name}");
+            var vs = Audio.Variations(index, wave);
+            string key = label == null ? $"{name} [batch]" : $"{name} [batch {label}]";
+            if (store.Find("sound", key) is { } old && store.State(old, game) is ModState.Applied or ModState.Partial) store.Restore(old, game, _ => { });
+            var batch = new List<Replacements.BatchTake>();
+            foreach (var p in g)
+            {
+                int v = int.Parse(p[1]);
+                if (v < 1 || v > vs.Count) { Console.WriteLine($"  {name}#{v}: no such variation"); skipped++; continue; }
+                if (store.Find("sound", $"{name}#{v}") is { } single && store.State(single, game) is ModState.Applied or ModState.Partial) { Console.WriteLine($"  {name}#{v}: has its own swap, left out"); skipped++; continue; }
+                string file = Path.IsPathRooted(p[2]) ? p[2] : Path.Combine(baseDir, p[2]);
+                var (pcm, ch, rate) = ReadAudio(file);
+                batch.Add(new Replacements.BatchTake(vs[v - 1], pcm, ch, rate, $"#{v} <- {Path.GetFileName(file)}"));
+            }
+            if (batch.Count == 0) continue;
+            var patches = new List<PatchData>(); var notes = new List<string>(); int done = 0;
+            foreach (var c in batch.GroupBy(b => b.Stream.ChunkId))
+            {
+                ChunkPlan plan; List<Replacements.BatchResult> results;
+                try { (plan, results) = Replacements.PlanSoundBatch(index, c.Key, c.ToList(), locations, tocs); }
+                catch (InvalidDataException e) { Console.WriteLine($"skipped    {name}: {c.Count()} take(s) left alone ({e.Message})"); skipped += c.Count(); continue; }
+                patches.AddRange(plan.Patches);
+                foreach (var r in results)
+                {
+                    if (r.Skipped != null) { notes.Add($"{r.Take.Label}: left alone ({r.Skipped})"); skipped++; continue; }
+                    done++;
+                    if (r.Bitrate < 40000 || r.NewSeconds > r.OldSeconds + 0.05) notes.Add($"{r.Take.Label}: {r.Bitrate / 1000} kbps/ch, {r.NewSeconds:0.00} s in a {r.OldSeconds:0.00} s slot");
+                }
+            }
+            if (done == 0) continue;
+            var entry = store.Add("sound", key, Path.GetFullPath(list), $"{done} take(s) replaced in one batch", patches, notes);
+            store.Apply(entry, game, _ => { });
+            var state = store.State(entry, game);
+            Console.WriteLine($"{state,-10} {name}: {done} take(s), {patches.Count} range(s){(notes.Count > 0 ? $", {notes.Count} note(s)" : "")}");
+            if (state != ModState.Applied) return 1;
+            waves++; takes += done;
+        }
+        Console.WriteLine($"done: {takes} take(s) in {waves} sound(s), {skipped} left out");
         return 0;
     }
 
@@ -1677,6 +1788,122 @@ public static class Program
     /// kit's helmet logo stamped through it over the team-coloured helmet. Writes nothing into the game.
     /// </summary>
     /// <summary>collar [KIT]: the collar's pieces in the jersey texture, each texture island of them with its size and where it is on the model.</summary>
+    /// <summary>
+    /// jersey-flat KIT --front PNG --back PNG --out DIR: puts flat product shots of a jersey on the kit's model and saves
+    /// the art and straight-on looks at it. Writes nothing into the game.
+    /// </summary>
+    private static int JerseyFlatCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        string filter = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("jersey-flat needs a kit");
+        var kit = Kits.Find(index).First(k => k.ToString().Contains(filter, StringComparison.OrdinalIgnoreCase) && k.IsStamped("jersey"));
+        var src = JerseyStudio.LoadSource(index, kit, 2048);
+        string dir = opts.Get("out") ?? throw new ArgumentException("jersey-flat needs --out DIR");
+        Directory.CreateDirectory(dir);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (fr, fw, fh) = ReadPng(opts.Get("front"));
+        var (br, bw, bh) = ReadPng(opts.Get("back"));
+        var front = FlatShot.From(fr, fw, fh) ?? throw new InvalidDataException("the front shot has no transparent surround");
+        var back = FlatShot.From(br, bw, bh) ?? throw new InvalidDataException("the back shot has no transparent surround");
+        Console.WriteLine($"{kit}: shots read in {sw.ElapsedMilliseconds} ms; front at {front.Left},{front.Top}, back at {back.Left},{back.Top}");
+        sw.Restart();
+        var res = JerseyFlat.Convert(src, front, back);
+        var shape = src.Shape;
+        Console.WriteLine($"  converted in {sw.ElapsedMilliseconds} ms; colours {string.Join(" ", res.Palette.Select(c => c.ToString("X6")))}");
+        Console.WriteLine($"  collar: wing {res.Collar.Wing:X6} tab {res.Collar.Tab:X6} rim {res.Collar.Rim:X6} inside {res.Collar.InsideBack:X6} back band {res.Collar.BackBand:X6} back rim {res.Collar.BackRim:X6}");
+        Console.WriteLine($"  hem {shape.Hem:0.000}, armpit {shape.PitY - shape.Hem:0.000} up, pit x {shape.PitX:0.000}, sleeve {shape.Cuff + shape.Shoulder:0.000}, top {shape.Map.Bounds[4] - shape.Hem:0.000}");
+        var opaque = (byte[])res.Art.Clone();
+        for (int i = 3; i < opaque.Length; i += 4) opaque[i] = 255;
+        File.WriteAllBytes(Path.Combine(dir, "art.png"), ImageFiles.Png(opaque, 2048, 2048));
+        File.WriteAllBytes(Path.Combine(dir, "look_front.png"), ImageFiles.Png(JerseyFlat.Look(shape, res.Art, false, 1600, out _), 1600, 1600));
+        File.WriteAllBytes(Path.Combine(dir, "look_back.png"), ImageFiles.Png(JerseyFlat.Look(shape, res.Art, true, 1600, out _), 1600, 1600));
+        var stock = (byte[])src.Base.Clone();
+        for (int i = 3; i < stock.Length; i += 4) stock[i] = 255;
+        File.WriteAllBytes(Path.Combine(dir, "stock.png"), ImageFiles.Png(stock, 2048, 2048));
+        if (opts.Has("maps"))
+        {
+            sw.Restart();
+            var neutral = JerseyMaps.LoadNeutral(index);
+            Console.WriteLine($"  garment from {neutral.Kits} kits in {sw.ElapsedMilliseconds} ms");
+            sw.Restart();
+            var maps = JerseyMaps.Generate(neutral, shape, res.Art, res.PrintMask);
+            Console.WriteLine($"  maps in {sw.ElapsedMilliseconds} ms");
+            void Save(string name, byte[] rgba)
+            {
+                var o = (byte[])rgba.Clone();
+                for (int i = 3; i < o.Length; i += 4) o[i] = 255;
+                File.WriteAllBytes(Path.Combine(dir, name + ".png"), ImageFiles.Png(o, 2048, 2048));
+            }
+            Save("gen_base_normal", maps.BaseNormal);
+            Save("gen_normal", maps.Normal);
+            Save("gen_base_coeff", maps.BaseCoeff);
+            Save("gen_coeff", maps.Coeff);
+            foreach (var slot in new[] { "jersey_base_normal", "jersey_normal", "jersey_base_coeff", "jersey_coeff", "jersey_color" })
+                Save("stock_" + slot, Kits.Load(index, kit.Slot(slot).Name, 2048, 0).Rgba);
+        }
+        if (opts.Has("clean"))
+        {
+            File.WriteAllBytes(Path.Combine(dir, "clean_front.png"), ImageFiles.Png(res.CleanFront, fw, fh));
+            File.WriteAllBytes(Path.Combine(dir, "clean_back.png"), ImageFiles.Png(res.CleanBack, bw, bh));
+        }
+        return 0;
+    }
+
+    /// <summary>A plain 8-bit RGB or RGBA PNG (not interlaced), enough for the shots a browser saves.</summary>
+    private static (byte[] Rgba, int W, int H) ReadPng(string file)
+    {
+        var d = File.ReadAllBytes(file ?? throw new ArgumentException("missing a PNG"));
+        static int U32(byte[] b, int o) => b[o] << 24 | b[o + 1] << 16 | b[o + 2] << 8 | b[o + 3];
+        int w = U32(d, 16), h = U32(d, 20), depth = d[24], type = d[25];
+        if (depth != 8 || (type != 2 && type != 6) || d[28] != 0) throw new InvalidDataException($"{file}: only plain 8-bit RGB(A) PNGs");
+        int ch = type == 6 ? 4 : 3;
+        using var idat = new MemoryStream();
+        for (int o = 8; o < d.Length;)
+        {
+            int len = U32(d, o);
+            if (d[o + 4] == 'I' && d[o + 5] == 'D' && d[o + 6] == 'A' && d[o + 7] == 'T') idat.Write(d, o + 8, len);
+            o += 12 + len;
+        }
+        idat.Position = 0;
+        using var z = new System.IO.Compression.ZLibStream(idat, System.IO.Compression.CompressionMode.Decompress);
+        int stride = w * ch;
+        var raw = new byte[(stride + 1) * h];
+        z.ReadExactly(raw);
+        var o2 = new byte[w * h * 4];
+        var prev = new byte[stride];
+        var cur = new byte[stride];
+        for (int y = 0; y < h; y++)
+        {
+            int f = raw[y * (stride + 1)];
+            Array.Copy(raw, y * (stride + 1) + 1, cur, 0, stride);
+            for (int x = 0; x < stride; x++)
+            {
+                int a = x >= ch ? cur[x - ch] : 0, b = prev[x], c = x >= ch ? prev[x - ch] : 0;
+                int add = f switch
+                {
+                    1 => a,
+                    2 => b,
+                    3 => (a + b) / 2,
+                    4 => Paeth(a, b, c),
+                    _ => 0,
+                };
+                cur[x] = (byte)(cur[x] + add);
+            }
+            for (int x = 0; x < w; x++)
+            {
+                int q = (y * w + x) * 4;
+                o2[q] = cur[x * ch]; o2[q + 1] = cur[x * ch + 1]; o2[q + 2] = cur[x * ch + 2]; o2[q + 3] = ch == 4 ? cur[x * ch + 3] : (byte)255;
+            }
+            (prev, cur) = (cur, prev);
+        }
+        return (o2, w, h);
+        static int Paeth(int a, int b, int c)
+        {
+            int p = a + b - c, pa = Math.Abs(p - a), pb = Math.Abs(p - b), pc = Math.Abs(p - c);
+            return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+        }
+    }
+
     private static int CollarCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);

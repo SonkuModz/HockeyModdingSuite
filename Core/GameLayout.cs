@@ -21,8 +21,9 @@ public sealed class GameLayout
 
     public GameLayout(string gameDir)
     {
-        GameDir = Path.GetFullPath(gameDir).TrimEnd('\\', '/');
-        DataDir = Path.Combine(GameDir, "Data");
+        GameDir = Path.GetFullPath(KitPaths.Canonical(gameDir)).TrimEnd('\\', '/');
+        // a shadPS4 update folder reads the base game's Data (KitPaths.Canonical)
+        DataDir = KitPaths.DataDirOf(GameDir);
         PatchDir = Path.Combine(GameDir, "Patch");
         var layout = DbObject.ReadFile(Path.Combine(DataDir, "layout.toc"));
         SuperBundles = ((List<object>)layout["superBundles"]).Cast<Dictionary<string, object>>()

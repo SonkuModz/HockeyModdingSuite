@@ -199,16 +199,7 @@ public static partial class Replacements
         if (h.Codec != 15 && h.Codec != 12 && h.Codec != 14)
             throw new NotSupportedException($"{h.CodecName} sounds can't be replaced yet.");
 
-        uint flags = BinaryPrimitives.ReadUInt32BigEndian(oldRaw.AsSpan(stream.Offset + 8)) & 0xF0000000u;
-        byte[] sps = null;
-        int used = 0;
-        foreach (int br in Bitrates)
-        {
-            var s = SpsOpusWriter.Encode(mapped, target, br, flags, stream.Length);
-            if (s != null) { sps = s; used = br; break; }
-        }
-        if (sps == null)
-            throw new InvalidDataException($"Even at 6 kbps the replacement ({mapped.Length / target / 48000.0:0.0} s) does not fit in the original's {stream.Length:N0} bytes ({h.Seconds:0.0} s). Use a shorter sound.");
+        var (sps, used) = EncodeOpusToFit(oldRaw, stream, h, mapped, target);
         if (used < 32000) plan0.Add($"encoded at {used / 1000} kbps per channel to fit the original's space");
         // only this stream's bytes change; the chunk's other streams stay where they are
         var raw = (byte[])oldRaw.Clone();
@@ -220,6 +211,58 @@ public static partial class Replacements
         if (Math.Abs(result.Seconds - h.Seconds) > 0.05)
             plan.Warnings.Add($"the replacement is {result.Seconds:0.0} s, the original {h.Seconds:0.0} s; the sound's asset may still expect the original length");
         return plan;
+    }
+
+    /// <summary>The replacement as an Opus stream at the highest bitrate that fits the original's bytes.</summary>
+    private static (byte[] Sps, int Bitrate) EncodeOpusToFit(byte[] oldRaw, SoundStream stream, SpsHeader h, short[] mapped, int channels)
+    {
+        uint flags = BinaryPrimitives.ReadUInt32BigEndian(oldRaw.AsSpan(stream.Offset + 8)) & 0xF0000000u;
+        foreach (int br in Bitrates)
+        {
+            var s = SpsOpusWriter.Encode(mapped, channels, br, flags, stream.Length);
+            if (s != null) return (s, br);
+        }
+        throw new InvalidDataException($"Even at 6 kbps the replacement ({mapped.Length / channels / 48000.0:0.0} s) does not fit in the original's {stream.Length:N0} bytes ({h.Seconds:0.0} s). Use a shorter sound.");
+    }
+
+    /// <summary>One take of a batch: which stream to replace, and with what (48 kHz is not required).</summary>
+    public sealed record BatchTake(SoundStream Stream, short[] Pcm, int Channels, int Rate, string Label);
+
+    /// <summary>What a batch did to each take: its bitrate and lengths, or why it was left alone.</summary>
+    public sealed record BatchResult(BatchTake Take, int Bitrate, double OldSeconds, double NewSeconds, string Skipped);
+
+    /// <summary>
+    /// Plans replacing many speech takes that share one chunk (a wave's variations usually do): each Opus take is
+    /// re-encoded in place at the highest bitrate that fits, and the chunk is planned once, so the whole batch is one
+    /// set of ranges (one mod entry). Takes that aren't Opus, or don't fit even at 6 kbps, are left as they are.
+    /// </summary>
+    public static (ChunkPlan Chunk, List<BatchResult> Results) PlanSoundBatch(AssetIndex index, Guid chunkId, IReadOnlyList<BatchTake> takes, LocationIndex locations, TocCache tocs)
+    {
+        byte[] oldRaw = index.Read(takes[0].Stream.Chunk);
+        var raw = (byte[])oldRaw.Clone();
+        var results = new List<BatchResult>();
+        foreach (var t in takes)
+        {
+            var s = t.Stream; var h = s.Header;
+            if (s.ChunkId != chunkId) throw new ArgumentException("every take of a batch must be in the same chunk");
+            if (h == null || (h.Codec != 15 && h.Codec != 12 && h.Codec != 14)) { results.Add(new(t, 0, h?.Seconds ?? 0, 0, "not an Opus stream")); continue; }
+            var pcm = t.Rate != 48000 ? WavReader.Resample(t.Pcm, t.Channels, t.Rate, 48000) : t.Pcm;
+            int frames = pcm.Length / t.Channels, target = h.Channels;
+            var mapped = new short[frames * target];
+            for (int f = 0; f < frames; f++)
+            {
+                if (target == 1) { int sum = 0; for (int c = 0; c < t.Channels; c++) sum += pcm[f * t.Channels + c]; mapped[f] = (short)(sum / t.Channels); }
+                else { mapped[f * target] = pcm[f * t.Channels]; mapped[f * target + 1] = pcm[f * t.Channels + Math.Min(1, t.Channels - 1)]; }
+            }
+            try
+            {
+                var (sps, used) = EncodeOpusToFit(oldRaw, s, h, mapped, target);
+                sps.CopyTo(raw, s.Offset);
+                results.Add(new(t, used, h.Seconds, frames / 48000.0, null));
+            }
+            catch (InvalidDataException e) { results.Add(new(t, 0, h.Seconds, frames / 48000.0, e.Message)); }
+        }
+        return (ChunkPatcher.Plan(index, chunkId, raw, locations, tocs), results);
     }
 
     /// <summary>

@@ -163,8 +163,9 @@ public partial class ModsPage : UserControl
 
     private async void OnImportPack(object sender, RoutedEventArgs e)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Import mod pack", Filter = ModPack.Filter };
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Import mod pack", Filter = ModPack.Filter + "|Center Ice Mod package (NHL 24)|*.cimspkg|All mod files|*.nhl27mod;*.cimspkg" };
         if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+        if (dlg.FileName.EndsWith(".cimspkg", StringComparison.OrdinalIgnoreCase)) { await ImportPackage(dlg.FileName); return; }
         if (MessageBox.Show(Window.GetWindow(this), $"Write the replacements in {System.IO.Path.GetFileName(dlg.FileName)} into the game files?\n\nThe originals stay in the kit's mods folder, and Restore puts them back.",
                             "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         await ImportPack(dlg.FileName);
@@ -180,6 +181,39 @@ public partial class ModsPage : UserControl
             if (!App.Args.ContainsKey("shot"))
                 MessageBox.Show(Window.GetWindow(this), string.Join("\n", results), $"Imported {ok} of {results.Count}", MessageBoxButton.OK,
                                 ok == results.Count ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        });
+    }
+
+    /// <summary>
+    /// A CIMS package (the NHL 24 Center Ice Mod): checks it against the game first (nothing written), shows what it
+    /// changes and the space it needs, then installs it through the mod list on OK. Restore takes it out again.
+    /// </summary>
+    public async Task ImportPackage(string file)
+    {
+        CimsInstaller.Plan plan = null;
+        await Do("Checking the package", async () =>
+        {
+            plan = await _mods.PlanPackageAsync(file, line => Dispatcher.BeginInvoke(() => StatusChanged?.Invoke(line)));
+        });
+        if (plan == null) return;
+        long need = CimsInstaller.SpaceNeeded(plan);
+        var drive = new System.IO.DriveInfo(System.IO.Path.GetPathRoot(plan.GameDir));
+        string text = $"{plan.Package.Title}\n\n" + string.Join("\n", plan.Lines.Select(l => "• " + l)) +
+                      (plan.EmulatorNote != null ? "\n• Emulator: " + plan.EmulatorNote : "") +
+                      $"\n\nIt needs {need / 1073741824.0:0.0} GB free on {drive.Name} ({drive.AvailableFreeSpace / 1073741824.0:0.0} GB free now). " +
+                      $"Keep {System.IO.Path.GetFileName(file)} where it is: the added data is read from it when the mod is applied.\n\n" +
+                      "Write it into the game files? Restore takes it out again.";
+        if (drive.AvailableFreeSpace < need)
+        {
+            MessageBox.Show(Window.GetWindow(this), text.Replace("Write it into the game files? Restore takes it out again.", "Free up space first: nothing was written."),
+                            "HMS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (App.Args.ContainsKey("shot") || MessageBox.Show(Window.GetWindow(this), text, "HMS", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        await Do($"Installing {plan.Package.Title}", async () =>
+        {
+            var entries = await _mods.InstallPackageAsync(plan, line => Dispatcher.BeginInvoke(() => StatusChanged?.Invoke(line)));
+            StatusChanged?.Invoke($"{plan.Package.Title}: in the game ({entries.Count} mod list entr{(entries.Count == 1 ? "y" : "ies")})");
         });
     }
 

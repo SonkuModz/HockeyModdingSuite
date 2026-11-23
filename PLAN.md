@@ -1066,6 +1066,17 @@ A generator for a new design:
   from their alpha (Sobel of a blurred mask, with an outline groove). Encode as BC5.
 - Coeff: R 127, G 54 on fabric and ~38 under logos, B 0. Keep the mesh vent pattern from the original.
 
+### Built for shop shots (2026-11-05)
+
+`Core/JerseyMaps.cs`. Not every kit's cloth is G 54: Colorado's and Chicago's are lower (median 24 on Colorado), so "logo = G < 50"
+doesn't hold for them. The garment is the per-texel median of 15 kits (one per team, spread out, about 2 s): base normal and
+base coeff over all of them; knit (normal minus base) and coeff over those with G >= 50 there. That drops each kit's old
+stripes, yoke lines and logos and keeps the folds, panel seams, vents and knit. The low-back rectangle stays: the shop
+photos show it too. On it: a raised seam at each colour edge, the print as a plateau with a groove round it, no knit and
+G 38 under the print. Relief direction measured on real logos: R falls and G rises where height increases along x / y.
+Written with the design: `jersey_base_normal`, `jersey_normal`, `jersey_base_coeff`, `jersey_coeff`, recoloured `font_color`.
+The 3D view shows only the base normal. Not yet checked in the game itself.
+
 ## 27. Named centre logos laid out (2026-11-02)
 
 - In game at Washington (WPG @ WSH), centre ice showed the EA SPORTS globe blown up and off centre, with black
@@ -1233,11 +1244,27 @@ Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide w
   entry on eboot.bin (427 small ranges). `TunablePatcher`: immediates rewritten; float loads repointed at read-only
   bytes holding the new value, else at 4-byte slots in nop padding after a ret (23). The patched eboot is read back
   before writing (every change as wanted, every other value unchanged). Skipped 7 (zeroed registers, a sign change);
-  29 differ only in their minimum. List: docs/nhl24/tuning-from-nhl27.txt. Awaiting an in-game check.
+  29 differ only in their minimum. List: docs/nhl24/tuning-from-nhl27.txt. **Undone 2026-11-04**: the user reported it breaks the game, so the entry was restored (all 478 ranges back to the original bytes; the entry stays in the mod list, not applied). Which values caused it isn't known.
 - **Real-life calibration (on hold, 2026-11-03, user's call)**: NHL EDGE (api-web.nhle.com/v1/edge/..., no key; see
   github.com/coreyjs/nhl-api-py) plus api.nhle.com/stats team reports. Real per-team-game baselines for 2025-26 and
   EDGE save % by danger are in docs/nhl24/nhl_baseline_2025-26.json. NHL 24 has no rating-to-mph table: speeds come
   from ratings through code, sliders (`gSkatingSpeedSlider` 7-point curve 0.85..1.2, `gShotPowerSlider`) and
   multipliers (`gSlapShotPowerScale` 1.1), so the plan is to match outcomes: the user sims CPU vs CPU games, HMS
   compares box-score stats to the baselines and adjusts shooting/goalie/penalty tuning. Next step waits on the user's
-  sim results. Also pending: re-run tunables-match now that 2,062 more NHL 24 values are read.
+  sim results. Don't re-run tunables-match: it broke the game (see above).
+
+## 29. NHL24 PC 0.9.3b, NHL 24 1.60 and CIMS packages (2026-11-22)
+
+- NHL24 PC 0.9.3b installs the base game (1.00) in `game\` and the 1.60 update next to it in `game-UPDATE\` (eboot,
+  sce_sys, Patch; its Data is empty). KitPaths pairs them: either folder opens the update folder as the game, its Data
+  read from `game\Data` (`KitPaths.Canonical`, `DataDirOf`). Checked: every stock TOC ref resolves; nhl_game.db and EBX
+  read from the 1.60 Patch; Tunables read from the 1.60 eboot.
+- A TOC rebuilt by the Center Ice Mod installer has a 12-int header (0x30), flags 0 and plain NUL-terminated bundle
+  names; SuperBundleToc reads both forms.
+- `.cimspkg` (CIMSPKG1): magic, raw-deflate blob per file, JSON manifest (stock/mod size + SHA-256, ranges), u64
+  manifest length, magic. `CimsInstaller` checks every target is stock, verifies stock + package = mod hash (dry run,
+  ~2 min), then writes through ModStore: TOC ranges kept in the mod list, CAS growth as *sourced* ranges read from the
+  package when applied (the package must stay where it was), emulator `user\patches\nhl24.xml` as its own entry.
+  Restore gives the stock files back; a crash mid-apply resumes; another mod's data where the package's goes is refused.
+- CLI: `cims PACKAGE [--plan] [--install]`; app: Mods > Import pack… takes `.cimspkg`.
+- Center Ice Mod 2026-11-15: 48 game files + emulator patch, 8.6 GB added, ~10.1 GB free needed. Not installed yet.

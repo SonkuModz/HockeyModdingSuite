@@ -19,7 +19,7 @@ public partial class App : Application
     ///   --uslotadd "boston adidas home", --uslotmove "28:1;3:5" (menu place to place, 1-based), --uslotremove PLACE, --uslotname "PLACE=Name", --uslotsave;
     ///   --ulegacy FILE (convert a legacy-template jersey and preview it on the kit), --ulegacywrite [--ulegacykeeplogos];
     ///   for the Jersey Studio (--page studio): your own uniform --jcolors "#MAIN,#SECOND,#THIRD" --jfont N --jpant N --jsock N
-    ///   --jletter "#FILL,#OUTLINE", or a team's kit --jselect N [--jsearch TEXT] [--jkit N]; then --jtemplate adidas:5|kit, --jimage FILE [--jlegacy],
+    ///   --jletter "#FILL,#OUTLINE", or a team's kit --jselect N [--jsearch TEXT] [--jkit N]; then --jtemplate adidas:5|kit, --jimage FILE [--jlegacy], --jflat "FRONT|BACK",
     ///   --jcolor "z0=#FF0000;r4=#FFFFFF", --jline "body:10,5,#FFFFFF,#C8102E,1;sleeves:6,4,#FFFFFF", --jlogo "FILE|0.5,0.2,0.1",
     ///   --jspot "8:0.5,0.27,1.2", --jslot "TEAM|kit folder", --jtemplatefile FILE.dds|png, --jturn DEG, --jzoom F [--jup U], --jscroll Y, --jwrite, --jaddteam;
     ///   for the Teams page --tsearch TEXT, --tteam ABBR|INDEX|NAME, --tset "feprimarycolor=#FF0000;arena.arenaname=X",

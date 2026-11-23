@@ -37,7 +37,8 @@ public partial class MainWindow : Window
         _searchDelay.Tick += (_, _) => { _searchDelay.Stop(); Refresh(); };
     }
 
-    private string Game => GameDir.Text.Trim().TrimEnd('\\', '/');
+    // a base NHL 24 folder with its shadPS4 update next to it is known by the update folder (KitPaths.Canonical)
+    private string Game => KitPaths.Canonical(GameDir.Text.Trim().TrimEnd('\\', '/'));
 
     // ================================================================ startup
 
@@ -719,7 +720,7 @@ public partial class MainWindow : Window
     /// <summary>The game folders the kit knows: the one open, ones picked before, and dumps found next to the kit.</summary>
     private List<GameChoice> KnownGames() =>
         new[] { Game }.Concat(_settings.Games).Concat(KitPaths.FindGames(_settings.Games.Prepend(Game)))
-            .Where(KitPaths.IsGame).Select(d => Path.GetFullPath(d).TrimEnd('\\', '/')).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(KitPaths.IsGame).Select(d => Path.GetFullPath(KitPaths.Canonical(d)).TrimEnd('\\', '/')).Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(d => new GameChoice(d, GameProfile.Detect(d)))
             .OrderBy(g => g.Profile.Kind == GameKind.Nhl27 ? 0 : g.Profile.Kind == GameKind.Nhl24 ? 1 : 2).ToList();
 
@@ -1048,6 +1049,7 @@ public partial class MainWindow : Window
             await Task.Delay(5000);
             if (a.TryGetValue("jtemplate", out var stpl)) { await StudioPage.StudioUseTemplate(stpl); await Task.Delay(1500); }
             if (a.TryGetValue("jimage", out var simg)) { await StudioPage.UseImage(simg, a.ContainsKey("jlegacy")); await Task.Delay(1500); }
+            if (a.TryGetValue("jflat", out var sflat)) { await StudioPage.StudioFlat(sflat); await Task.Delay(1500); }
             if (a.TryGetValue("jphoto", out var sphoto)) { await StudioPage.StudioPhoto(sphoto, a.ContainsKey("jphotoshow")); await Task.Delay(1500); }
             foreach (var spec in a.GetValueOrDefault("jcolor", "").Split(';', StringSplitOptions.RemoveEmptyEntries)) await StudioPage.StudioColor(spec);
             if (a.TryGetValue("jcollar", out var jcollar)) await StudioPage.StudioCollar(jcollar);
@@ -1166,7 +1168,9 @@ public partial class MainWindow : Window
         if (a.TryGetValue("page", out var sb24Page) && sb24Page == "scorebug" && _profile.Kind == GameKind.Nhl24)
         {
             // FFDec reads the movie's settings code first
-            await Task.Delay(9000);
+            await Task.Delay(3000);
+            for (int w = 0; w < 120 && Scorebug24Page.IsReading; w++) await Task.Delay(500);
+            await Task.Delay(800);
             if (a.TryGetValue("sb24group", out var sbg)) { Scorebug24Page.SelectGroup(sbg); await Task.Delay(400); }
             if (a.TryGetValue("sb24set", out var sbs)) { Scorebug24Page.SetValues(sbs); await Task.Delay(600); }
             if (a.ContainsKey("sb24save")) { await Scorebug24Page.SaveAsync(); await Task.Delay(1500); }

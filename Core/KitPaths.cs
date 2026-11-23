@@ -54,7 +54,7 @@ public static class KitPaths
         {
             // a dump has its eboot; FMT's __FMTBackup (a copy of Data) doesn't
             if (!IsGame(d) || !File.Exists(Path.Combine(d, "eboot.bin"))) return;
-            string full = Path.GetFullPath(d).TrimEnd('\\', '/');
+            string full = Path.GetFullPath(Canonical(d)).TrimEnd('\\', '/');
             if (!found.Contains(full, StringComparer.OrdinalIgnoreCase)) found.Add(full);
         }
         IEnumerable<string> Dirs(string d)
@@ -83,5 +83,41 @@ public static class KitPaths
         return found.OrderBy(d => GameProfile.Detect(d).Kind == GameKind.Nhl27 ? 0 : 1).ThenBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    public static bool IsGame(string dir) => !string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, "Data", "layout.toc"));
+    public static bool IsGame(string dir) => !string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(DataDirOf(dir), "layout.toc"));
+
+    // shadPS4 (NHL24 PC) installs a game's update next to it: <game>-UPDATE holds the update's eboot.bin, sce_sys and
+    // Patch, its Data is empty, and the emulator reads <game>\Data underneath. The pair is one game, known by its update
+    // folder, so picking either folder opens the same game (and the base folder alone isn't mistaken for the old version).
+    private const string UpdateSuffix = "-UPDATE";
+
+    /// <summary>The update folder next to a base game folder (shadPS4's &lt;game&gt;-UPDATE with a Patch), or null.</summary>
+    public static string UpdateOf(string dir)
+    {
+        if (Full(dir) is not { } full || full.EndsWith(UpdateSuffix, StringComparison.OrdinalIgnoreCase)) return null;
+        string update = full + UpdateSuffix;
+        return File.Exists(Path.Combine(update, "Patch", "layout.toc")) && File.Exists(Path.Combine(full, "Data", "layout.toc")) ? update : null;
+    }
+
+    /// <summary>The base game folder an update folder sits on (its Data is the game's data), or null.</summary>
+    public static string BaseOf(string dir)
+    {
+        if (Full(dir) is not { } full) return null;
+        if (!full.EndsWith(UpdateSuffix, StringComparison.OrdinalIgnoreCase) || File.Exists(Path.Combine(full, "Data", "layout.toc"))) return null;
+        string root = full[..^UpdateSuffix.Length];
+        return File.Exists(Path.Combine(root, "Data", "layout.toc")) ? root : null;
+    }
+
+    private static string Full(string dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir)) return null;
+        try { return Path.GetFullPath(dir).TrimEnd('\\', '/'); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return null; }
+    }
+
+    /// <summary>The folder the kit knows a game by: the update folder of a base game that has one, else the folder itself.</summary>
+    public static string Canonical(string dir) => UpdateOf(dir) ?? dir;
+
+    /// <summary>The game's Data folder: its own, or the base game's for an update folder.</summary>
+    public static string DataDirOf(string dir) => string.IsNullOrWhiteSpace(dir) ? "Data" :
+        !File.Exists(Path.Combine(dir, "Data", "layout.toc")) && BaseOf(dir) is { } root ? Path.Combine(root, "Data") : Path.Combine(dir, "Data");
 }

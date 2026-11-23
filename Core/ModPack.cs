@@ -56,6 +56,11 @@ public static class ModPack
                     manifest.Items.Add(new PackItem { Kind = e.Kind, Name = e.Name, File = path, Summary = e.Summary });
                     continue;
                 }
+                if (e.Kind == CimsInstaller.Kind)
+                {
+                    notes.Add($"{e.Name}: left out (an installed package: share its .cimspkg file instead)");
+                    continue;
+                }
                 if (string.IsNullOrEmpty(e.Source) || !System.IO.File.Exists(e.Source))
                 {
                     notes.Add($"{e.Name}: left out (its source file {e.Source} is gone)");

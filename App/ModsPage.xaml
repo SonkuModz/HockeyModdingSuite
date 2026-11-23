@@ -11,7 +11,7 @@
 
         <DockPanel Margin="0,0,0,16">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="ImportButton" Click="OnImportPack" ToolTip="Write a .nhl27mod pack's replacements into the game">
+                <Button x:Name="ImportButton" Click="OnImportPack" ToolTip="Write a .nhl27mod pack's replacements, or an NHL 24 Center Ice Mod .cimspkg, into the game">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE8B5;" Style="{StaticResource Icon}" FontSize="13" />
                         <TextBlock Text="Import pack…" Margin="8,0,0,0" />
