@@ -1,0 +1,208 @@
+{
+    "commonName": "Composite",
+    "name": "GameStatsItem",
+    "height": 68.0,
+    "width": 702.0,
+    "propertyMap":
+    {
+        "data.attrName": "AttrName.text",
+        "data.awayColor":
+        [
+            "Away.BarContainer.Bar.color"
+        ],
+        "data.awayScale": "Away.AttrBar.scaleX",
+        "data.awayText": "Away.Label.text",
+        "data.homeColor":
+        [
+            "Home.BarContainer.Bar.color"
+        ],
+        "data.homeScale": "Home.AttrBar.scaleX",
+        "data.homeText": "Home.Label.text"
+    },
+    "layout":
+    {
+        "type": "PanelLayout"
+    },
+    "children":
+    [
+        {
+            "commonName": "Rectangle",
+            "name": "BaseLine",
+            "alignH": "CENTER",
+            "alignV": "CENTER",
+            "height": 1.0,
+            "width": 340.0,
+            "marginTop": 4.0,
+            "alpha": 0.5,
+            "styles":
+            [
+                "DIVIDER_COLOR"
+            ]
+        },
+        {
+            "commonName": "Label",
+            "name": "AttrName",
+            "width": "AUTO",
+            "styles":
+            [
+                "NHL_BODY_8_ALT",
+                "FONT_SWATCH_DEFAULT"
+            ],
+            "alignH": "CENTER",
+            "alignV": "TOP",
+            "marginTop": 10.0
+        },
+        {
+            "commonName": "Container",
+            "name": "Away",
+            "alignH": "LEFT",
+            "alignV": "FILL",
+            "width": 351.0,
+            "marginTop": -10.0,
+            "layout":
+            {
+                "type": "PanelLayout"
+            },
+            "children":
+            [
+                {
+                    "commonName": "Label",
+                    "name": "Label",
+                    "styles":
+                    [
+                        "NHL_HEADER_3_ALT",
+                        "FONT_SWATCH_DEFAULT"
+                    ],
+                    "alignH": "LEFT",
+                    "alignV": "CENTER",
+                    "textAlignH": "LEFT",
+                    "marginLeft": 8,
+                    "marginTop": -6,
+                    "width": 120,
+                    "height": 58.0
+                },
+                {
+                    "commonName": "Rectangle",
+                    "name": "AttrBar",
+                    "alignH": "RIGHT",
+                    "alignV": "CENTER",
+                    "alpha": 0,
+                    "height": 4.0,
+                    "width": 170.0,
+                    "marginTop": 12.0
+                },
+                {
+                    "commonName": "Group",
+                    "name": "BarContainer",
+                    "mask": "AttrBar",
+                    "alignH": "RIGHT",
+                    "alignV": "CENTER",
+                    "height": 4.0,
+                    "width": 170.0,
+                    "marginTop": 12.0,
+                    "marginRight": 1,
+                    "children":
+                    [
+                        {
+                            "commonName": "Asset",
+                            "name": "Bar",
+                            "type": "team_stats_dotline_bar",
+                            "height": 4.0,
+                            "width": 235.0
+                        },
+                        {
+                            "commonName": "Asset",
+                            "name": "BarGlow",
+                            "type": "team_stats_dotline_bar_glow",
+                            "height": 4.0,
+                            "width": 235.0,
+                            "blendMode": "ADD",
+                            "alpha": 0.0
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "commonName": "Container",
+            "name": "Home",
+            "alignH": "RIGHT",
+            "alignV": "FILL",
+            "width": 351.0,
+            "marginTop": -10.0,
+            "layout":
+            {
+                "type": "PanelLayout"
+            },
+            "children":
+            [
+                {
+                    "commonName": "Label",
+                    "name": "Label",
+                    "styles":
+                    [
+                        "NHL_HEADER_3_ALT",
+                        "FONT_SWATCH_DEFAULT"
+                    ],
+                    "alignH": "RIGHT",
+                    "alignV": "CENTER",
+                    "textAlignH": "RIGHT",
+                    "marginRight": 8,
+                    "marginTop": -6,
+                    "width":120,
+                    "height": 58.0
+                },
+                {
+                    "commonName": "Rectangle",
+                    "name": "AttrBar",
+                    "alignH": "LEFT",
+                    "alignV": "CENTER",
+                    "alpha": 0,
+                    "height": 4.0,
+                    "width": 170.0,
+                    "marginTop": 12.0
+                },
+                {
+                    "commonName": "Group",
+                    "name": "BarContainer",
+                    "mask": "AttrBar",
+                    "alignH": "LEFT",
+                    "alignV": "CENTER",
+                    "height": 4.0,
+                    "width": 170.0,
+                    "marginTop": 12.0,
+                    "marginLeft": 1,
+                    "children":
+                    [
+                        {
+                            "commonName": "Asset",
+                            "name": "Bar",
+                            "type": "team_stats_dotline_bar",
+                            "width": 235.0,
+                            "flipX": true
+
+                        },
+                        {
+                            "commonName": "Asset",
+                            "name": "BarGlow",
+                            "type": "team_stats_dotline_bar_glow",
+                            "height": 4.0,
+                            "width": 235.0,
+                            "flipX": true,
+                            "blendMode": "ADD",
+                            "alpha": 0.0
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "authoringData":
+    {
+        "designSize":
+        {
+            "width": 700.0,
+            "height": 68.0
+        }
+    }
+}

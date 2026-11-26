@@ -1,0 +1,367 @@
+{
+  "level27": "utah_30",
+  "placement": "identity",
+  "clearBox": [
+    -12.5,
+    1.2,
+    -29.5,
+    12.5,
+    30,
+    29.5
+  ],
+  "report": "content/worlds/components/structures/utah/",
+  "lightmapMirror": "+z",
+  "extra": [
+    {
+      "mesh": "content/worlds/components/structures/utah/stands_vipboxes_02*",
+      "transform": [
+        -1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "mesh": "content/worlds/components/structures/utah/stands_vipboxes_03*",
+      "transform": [
+        -1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "host": "content/worlds/components/structures/arizonageneric/stands_lower_mesh",
+      "doubleSided": [
+        "cloth_canvas_black_mat",
+        "wall_brick_wood_handrail_mat",
+        "vip_ceiling_tiles_mat",
+        "concrete_forms_grey_mat"
+      ],
+      "flatUv": {
+        "cloth_canvas_black_mat": null,
+        "stair_concrete_stairs_grey_mat": null,
+        "stair_alluminum_blackstripe_mat": [
+          0.5,
+          0.9
+        ],
+        "rubber_bench_floor_mat": null
+      },
+      "blank": [
+        6,
+        7,
+        9,
+        10,
+        11,
+        12
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/rink_*",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/railings/railings_05_*",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "props_paged_mat",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "hotel_window_night",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "light_glow_fridge_mat",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_steel_bare*",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_painted_01_clean_1mx1m_gray*",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_painted_01_clean_1mx1m_white_mat",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_railing_card*",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_painted_01_clean_1mx1m_black_mat",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "concrete_bare_01_clean_2mx2m_stair_nosing*",
+          "to": "stair_concrete_stairs_grey_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "concrete_bare_01_clean_2mx2m_mat",
+          "to": "stands_concrete_grey_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "concrete_polished*",
+          "to": "stands_concrete_grey_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "concrete_cast_situ*",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_nosing_black*",
+          "to": "stair_alluminum_blackstripe_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "wood_*",
+          "to": "wall_brick_wood_handrail_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "fabric_carpet*",
+          "to": "wall_brick_wood_handrail_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "vip_dropceiling*",
+          "to": "vip_ceiling_tiles_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "speaker_ceiling_mat",
+          "to": "vip_ceiling_tiles_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "light_potlight*",
+          "to": "vip_ceiling_tiles_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "rubber_trim*",
+          "to": "rubber_bench_floor_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "plastic_rubber_mat*",
+          "to": "rubber_bench_floor_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "*black*",
+          "skip": "metal_*|powerring*",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "fabric_*",
+          "to": "cloth_canvas_black_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "concrete_*",
+          "to": "concrete_forms_grey_mat",
+          "skip": "concrete_terrazzo*"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "plaster_*",
+          "to": "concrete_forms_grey_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "stone_*",
+          "to": "concrete_forms_grey_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "plastic_common*",
+          "to": "concrete_forms_grey_mat"
+        }
+      ]
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/stands_upper_mesh",
+      "blank": [
+        0,
+        1,
+        2,
+        4,
+        5
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "concrete_terrazzo*",
+          "to": "stands_concrete_grey_mat"
+        }
+      ]
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/railings_mesh",
+      "blank": [
+        0
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_aluminum*",
+          "to": "stair_alluminum_blackstripe_mat"
+        }
+      ],
+      "flatUv": {
+        "stair_alluminum_blackstripe_mat": [
+          0.5,
+          0.9
+        ]
+      }
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/vipboxes_mesh",
+      "blank": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        6
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "glass_*",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "glass_mirror",
+          "to": "drop"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_painted_corrugated*",
+          "to": "stair_alluminum_blackstripe_mat"
+        }
+      ],
+      "flatUv": {
+        "stair_alluminum_blackstripe_mat": [
+          0.5,
+          0.9
+        ]
+      }
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/roof_mesh",
+      "flatUv": [
+        "metal_bare_roof_beams_mat"
+      ],
+      "blank": [
+        0,
+        3
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_painted_01_clean_1mx1m_beigelighter_mat",
+          "to": "metal_bare_roof_beams_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "airduct",
+          "to": "metal_corrugated_panel_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "CorrigatedMetal",
+          "to": "metal_corrugated_panel_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "vent",
+          "to": "metal_corrugated_panel_mat"
+        }
+      ]
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/roof_speakers_mesh",
+      "flatUv": [
+        "metal_bare_roof_beams_mat"
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "PaintedMetal1",
+          "to": "metal_bare_roof_beams_mat"
+        }
+      ]
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/banners_mesh",
+      "blank": [
+        0,
+        3
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "flags_*",
+          "to": "flags_canada_usa_vertical_mat"
+        },
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "metal_steelcable*",
+          "to": "metal_steelcable_black_mat"
+        }
+      ]
+    },
+    {
+      "host": "content/worlds/components/structures/arizonageneric/powerring_mesh",
+      "ringUv": {
+        "powerring_default_black": 0.172
+      },
+      "rules": [
+        {
+          "mesh": "content/worlds/components/structures/utah/*",
+          "material": "powerring*",
+          "to": "powerring_default_black"
+        }
+      ]
+    }
+  ]
+}

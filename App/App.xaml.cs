@@ -22,6 +22,7 @@ public partial class App : Application
     ///   --jletter "#FILL,#OUTLINE", or a team's kit --jselect N [--jsearch TEXT] [--jkit N]; then --jtemplate adidas:5|kit, --jimage FILE [--jlegacy], --jflat "FRONT|BACK",
     ///   --jcolor "z0=#FF0000;r4=#FFFFFF", --jline "body:10,5,#FFFFFF,#C8102E,1;sleeves:6,4,#FFFFFF", --jlogo "FILE|0.5,0.2,0.1",
     ///   --jspot "8:0.5,0.27,1.2", --jslot "TEAM|kit folder", --jtemplatefile FILE.dds|png, --jturn DEG, --jzoom F [--jup U], --jscroll Y, --jwrite, --jaddteam;
+    ///   for the Leagues page (--page leagues, NHL 24) --lpick "bigten,he" (tick conferences), --lconf KEY [--lteam N], --lverify;
     ///   for the Teams page --tsearch TEXT, --tteam ABBR|INDEX|NAME, --tset "feprimarycolor=#FF0000;arena.arenaname=X",
     ///   --tsave, --tscroll OFFSET, --tlogoexport DIR, --tlogo main|all|STYLE --tlogofile IMAGE;
     ///   for the Tuning page --tusearch TEXT, --tugroup PATH, --turatings, --tucsv FILE, --tumatch (NHL 24: Match NHL 27, no dialogs);

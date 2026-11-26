@@ -1,4 +1,4 @@
-# NHL27Kit: feature plan (Oct 27)
+﻿# NHL27Kit: feature plan (Oct 27)
 
 This is the order I'm working in while you're away. Each item ends in something you can see. I'll send a screenshot
 when it lands, and a note if something turns out not to work.
@@ -1268,3 +1268,374 @@ Pages that don't apply to NHL 24 (Be A Pro until its saves are looked at) hide w
   Restore gives the stock files back; a crash mid-apply resumes; another mod's data where the package's goes is refused.
 - CLI: `cims PACKAGE [--plan] [--install]`; app: Mods > Import pack… takes `.cimspkg`.
 - Center Ice Mod 2026-11-15: 48 game files + emulator patch, 8.6 GB added, ~10.1 GB free needed. Not installed yet.
+
+## 30. Custom leagues: NCAA (NHL 24, 2026-11-23)
+
+Sources: `refs\custom-leagues.md` (how the USHL went in), `refs\NCAA_Leagues.md` and `refs\NCAAHANDOFF\ncaa-export`
+(7 conferences, 63 teams, 1,720 players from the Blueline NHL 19 project). The pack is copied to `leagues\ncaa`
+(`ncaa_leagues.json`, logos).
+
+Decided with the user: one conference first (Big Ten); one Play Now league "NCAA" (league 29, TXT_USA_LEAGUE) with the
+conferences as conference groups; later teams beyond 16 try added team rows; ratings flat 60-70 (the pack's NHL 19
+overalls).
+
+How it goes in (`Core/CustomLeague.cs`, `Core/LeagueInstaller.cs`, `Core/LocDb.cs`):
+- One mod entry, kind `league`, name "NCAA league", over nhl_game.db, initial_experience.db (opened with
+  nhl_game-meta.xml) and loc/eng_us.db: all three share the legacy index chunk, so they're planned together
+  (`LegacyEditor.PlanPs4`). Applying again restores the old entry first. It refuses while a db/legacy entry for those
+  files is applied, and while an emulator is running.
+- Teams take over the 16 Aces rows (883-898): the template team's row (the pack's `kitsCopiedFrom` when NHL 24 has
+  it, else Brandon) is copied over the slot. Then the slot's strategy and arena rows, jerseys (by jerseyindex),
+  equipment (by item and jersey; the template's all-jersey row as fallback) and palette. Names, colours, arena name and
+  city, groups 24/24/24, art abbreviation `NC<abbr>`.
+- Players: new rows in bio, skater/goalie ratings and equipment, players, and both roster tables. Ids are free in both
+  databases from 40000; roster key = team × 40 + n; tables re-sorted as stock; lines from `RosterLines.Build`.
+  Ratings, ratings rows and faces are a stock AHL/CHL/ECHL player's with the same position and overall. Birthplace
+  codes are the pack's NHL 19 ones (they match NHL 24's: ON 9, US 14, AZ 17, MA 36, NY 47). Commentary surname from
+  nhl_game.db's playernames when there is one (85 of the 182 Big Ten players have none).
+- Strings: LanguageStrings holds 65,498 rows, and the u16 row count caps it at 65,535. New keys are added as rows up
+  to 65,520 (as the USHL's were), then take over keys of old circuit abbreviations no team has (`NHLCityName_1T01`…).
+  Numbered keys are never taken: `NHLCityName_0` is Anaheim and `NHLTeamName_21` the Flyers, a live by-number family.
+  `LocDb.Write` rebuilds the table: same tree, strings deduplicated, sorted by hash. An unchanged rewrite reads back the
+  same: CRCs 4/4, 65,498/65,498 rows. Big Ten: 22 rows added, 34 taken over.
+- initial_experience.db gets each new player's rows copied from nhl_game.db (same layouts), so both give him the same
+  ratings, face and gear. A failed re-apply puts the earlier league back.
+- CLI: `league [PACK] --conf bigten[,he…] [--apply|--verify|--restore]`; `loc-test`. App: **Leagues** page
+  (`--page leagues --lconf KEY --lteam N --lverify`).
+
+Done: Big Ten applied to NHL24 PC 0.9.3b and checked off-game: 23/23 checks. A restore round trip went back to stock
+(checked by mod state, row counts and loc size, not by file hash), then it was applied again. Rollback tested.
+
+**Checked in game (2026-11-23, by the user):** "NCAA" shows in Play Now with its 7 teams, the team names and colours
+look right, and a game loads. The template teams' logos show (Minnesota: Chicago Wolves, Ohio State: Cincinnati), as
+expected. Team ratings come out at about OFF 52-53, DEF 50-56, GOA 56-57.
+Not done yet: logos, which are still the template team's (the art id is kept; next is the kettle_assets fallback with
+new art ids), generated jerseys, the other 6 conferences (more than 16 teams needs added team rows), Maryville (no
+roster), and real ratings.
+
+## 31. NHL 27 alternates in NHL 24 (2026-11-24)
+
+44 NHL 27 kits added to NHL 24 as new kit folders and jersey slots (one mod entry, "NHL 27 alternates"; confirmed in game):
+NHL 27's current alternates (menu label 2, named "2026-27 Alternate") and its 2024-25 / 2025-26 kits Center Ice doesn't have.
+
+- `kit-alts-find --game NHL24 --game27 NHL27 [--specs FILE]` lists them per team and writes the `kit-alts` arguments: each
+  kit onto a team kit of the same shade laid out like NHL 27's (base colour, branding arrays with room for NHL 27's
+  layers), the Center Ice Fanatics kit first, as a free variant whose word is as long as the donor's.
+- `kit-alts ... --loc-rows 65530 --apply`. Each kit gets NHL 27's textures and stamps, its name (eng_us), and NHL 27's
+  helmet/pant colours (stockteamequipmenttable zones) where NHL 27 has them.
+- What it took:
+  - New kit folders: player_team_brt entries, patch-TOC root bundles, odd res ids.
+  - Fanatics weave: textile/weave/fanatc, listed in each kit bundle. NHL 27's Fanatics arrays are NHL 24's adidas ones
+    without layer 1 (holes); kits pick layers by NHL 24's order, so the copy is in NHL 24's order, with layers 1-2 (holes,
+    dimple mesh) as plain knit in both normal and coeff arrays. Coeffs stay NHL 24's (NHL 27's look like chrome).
+    The tie weaves' last, blotchy stitch layer (tie 6, metal_tie 7) draws on logos of kits whose donor uses a tie
+    weave; NHL 27's kits use the default weave without it, so it takes the flat layer before it.
+  - Menu names: eng_us.db grows in place (`LegacyEditor.PlanPs4`); moving it to its chunk's end crashed start-up.
+    Names take over unused vintage rows, then add rows (65,530 of 65,535).
+  - Stamps too long: numbers lose trailing zeros. Branding arrays with more layers than NHL 24's: the layers past the
+    stamp's last brand hotspot switched on are left out.
+- Left out: Chicago 2024-25 Classic (3 pant logos shown, NHL 24 has room for 2).
+
+## 32. NHL 24 gameplay: how it is defined and changed (research, 2026-11-24)
+
+Read only; nothing written. Full write-up `docs/nhl24/gameplay-deep-dive.md` (plus `gameplay-levers.md`,
+`tunables-nhl24-1.60.csv`, `curves-nhl24-1.60.csv`, `settings-1.60/`, probe in `tools/eboot-curves/`).
+- Reference: College Football 27 (Frostbite) keeps gameplay in AttribSys EBX with `_gamestyle_simulation` twins and
+  `gameplay_sliders` FloatCurves. NHL 24 has no AttribSys EBX; the same layers live in the eboot and legacy CSVs.
+- Eboot tweakable type codes beyond bool/int/float: 12 float curve (807; `+0x38` count, `+0x40` pointer, `+0x48`
+  editor min/max, `+0x50` runtime instance), 14 x→y pairs (897), 13 (463), 15, 11, 5/7/9/10. Curve points are plain
+  floats in the RW data segment (file offset = VA − 0xAA00000 + 0xA75CB20), each array distinct and referenced once.
+- The 84 menu-slider curves are among them. Evaluation (checked in code): slider value v (0–100) → pos =
+  v × (count−1)/(steps−1), linear interpolation between points, read live. So a curve edit is a data-only write.
+- Settings: `gamemodes/setting_csv/` (setting, range, context, contextsetting, choice); hidden Simulation style and
+  Hardcore preset. The profile save (LZ4 JSON, `Settings.SettingGroupList`) holds 0–100 slider values that don't
+  match the CSV defaults: the CSV route is unverified.
+- AI tuner sets (EA's live tuning blobs) exist in code; none offline; format not decoded.
+- Next (waiting on the user's OK): one in-game proof, `gSkatingSpeedSlider` all points 1.5 as one eboot.bin
+  ModStore entry (28 bytes at 0xA7B8740), then `curves`/`curve-set` in HMS.
+
+### 32.1 Sustained Pressure off switch (2026-11-24, not applied)
+- AddPressure is at VA 0x2C5CE30. It is the only writer of player pressure state `+0x780` (1 = pinned, 2 = adrenaline).
+- Off switch: eboot file offset 0x2CAEBD4, `74` → `EB` (the `[meter+0x3C]` enabled check always returns).
+  - SHA1 before: 4047f9f0…
+  - SHA1 after: d552d54b…
+- Waiting on the user's OK. It needs a one-byte ModStore eboot entry command first.
+- Details and the issue → lever map: docs/nhl24/pressure-system-and-issues.md.
+- **Applied 2026-11-24** with the user's OK: ModStore entry 4d7c573cfad1, kind `eboot`, name "Sustained Pressure off".
+  - New CLI command: `eboot-bytes --name --at --old --new [--sha1] [--write]`.
+  - Not yet tested in a match.
+  - **Confirmed in game 2026-11-24:** the pressure meter is gone.
+- Issue fixes batch 1 (5 values) applied 2026-11-24 as ModStore 8bbcebe28c34 (kind tuning-set). Not yet tested in a match. See docs/nhl24/pressure-system-and-issues.md section 5.
+  - Batch 1 boots and plays (2026-11-24); effects not checked.
+- Hitting fixes batch 1 (7 values) applied 2026-11-24 as ModStore 66b44c5d2f4f. Not yet tested in a match.
+  - Hitting batch 1 boots and plays (2026-11-24); effects not checked.
+- Skating fixes 1 (41cd61cc74f2) and Scalar route test (94531285f4da, gSkateModelMaxSpeed 0.29 -> 0.35) applied 2026-11-24. Still to do: the user checks speed in a match, then restores the test entry.
+  - **Scalar route proven on 1.60 (2026-11-24):** the speed test was visibly faster. Test entry restored.
+- Stumble fixes 1 (d1042c2ca44c) and Hit power -10% (849640859dd4, the first curve/data write) applied 2026-11-24. Not yet tested in a match.
+  - Both reverted 2026-11-24 (hits overpowered). Cause unknown; test each alone.
+- Penalty and puck fixes 1 (1f329959f9f4) applied 2026-11-24. Not yet tested in a match. Hitting on hold.
+  - Penalty and puck fixes 1 plays good (2026-11-24).
+
+## 33. IHN broadcast package (NHL 24, started 2026-11-24)
+
+The user's own broadcast package, **IHN (Ice Hockey Network)**: navy and gold (HMS colours, different name), angled
+and sporty. Every broadcast graphic first, the menus last. The inventory of what draws each graphic, how proven each
+write path is, and the phases are in `docs/nhl24/broadcast-package-ihn.md`.
+
+Phases: 1 scorebug (`tools/scorebug-ihn`, a fork of the Sportsnet clock), 2 lower thirds, 3 intros, 4 end of period,
+5 replays and transitions, 6 stat overlays, 7 menus. Each one gets a concept for the user first, then a screenshot from
+the game.
+
+- **Phase 1 (scorebug):** after ten concepts (A-J, `previews/ihn/`), the user picked **G Puck** (2026-11-24): the clock in a gold-rimmed puck, with rounded team capsules and oversized logos. Six versions of G were then sent to choose from (`concept-g1-puck-plus` … `concept-g6-night-glow`, made by `previews/ihn/gen_puck.py`). Logos are NHL 24's own (`ui/textures/common/teamlogos/large/tN`: 0 ANA … 29 WSH, 32 VGK, 33 SEA), never the centre-ice art. `tools/scorebug-ihn` is forked and builds (BASE `App/Assets/scoreclock-sportsnet.swf`). **Then the user shared the look they have in mind** (`previews/ihn/user-reference.png`): centred, a bevelled gunmetal frame, glowing team-colour panels with big logos and abbreviations, a raised clock ("1st PERIOD" over the time), a SOG row with PENALTY TIME in the middle, and a POWER PLAY tab under the team. Concepts from it: `concept-r1-gunmetal` (true to the image) and `concept-r2-navy-and-gold` (`gen_ref.py`), waiting for a pick. The game feeds one comparison number per team (`showComparison`), so the reference's "12 / 18" becomes one number.
+- **Phase 1 done (2026-11-25):** the user picked **R1 Gunmetal** and it is **in the game and confirmed** (regular game, goals, power play, shootout mode). Source `tools/scorebug-ihn/ScoreClock.tpl.as`, built movie `App/Assets/scoreclock-ihn.swf`, installed as "Score clock: IHN" (`scorebug24 --movie … --name IHN`). The user moved it from top centre to the **top left** after seeing it in game. Logos are fitted on a wrapper Sprite (the game's `loader.ImageLoader` resets its own clip's scale on every redraw) and start at 256-px scale, so reloads don't flash. The goal banner has 4 styles taking turns (Burst, Slash, Spotlight, Strobe; cfg `goalStyle` 0 = rotate, 1-4 = fixed) with 128 px logos. During a power play the middle box reads "PENALTY 1:36". Lessons: the movie must compress to at most **162,761 bytes** (its slot); a bigger one is moved and the game shows no clock. `build.py` runs `strip.py`, which empties only EA's decorative animation sprites (about 144 KB). Emptying every sprite crashed shootout mode, and no pixel reads are allowed on game textures. Always check that the install says "read back: same movie". Not done: the app's Scorebug page (Core `Scorebug24.Load` reports "Not a Scaleform" on some read-backs; the CLI install is fine) and an IHN entry in the app's style list. Phase 2 (lower thirds) skipped: the user likes EA's as they are (2026-11-25).
+- **Phase 3 (replays/transitions), started 2026-11-25:** the replay wipes are 3D worlds under `content/worlds/wipes/`, not gfx. A marker test (7 recoloured wipe textures) showed **none** of them in game: the player/team wipes take shapes and team colours from geometry, and those markers are restored (entries left NotApplied). The wipe the user sees most is the **Play Now flat wipe** ("EA SPORTS": white disc, black letters, dot/plus/hatch patterns), whose logo is geometry: `wipe_flat_logos/meshes/unified/wipes_play_now_flat_medallion_main_mesh` (white disc = part 0 cap), `wipes_play_now_flat_easports_main_mesh` (part 1 = "EA", part 2 = "SPORTS"), `wipe_play_now_flat_alt_main_mesh` (part 0 ring + parts 1/2); each cap has a shell (extruded sides) and a position+UV twin section. UVs are a planar map of position. Colours come from the wipe's materials, so the user's SVG logo (`tools/wipe-ihn/ihn-logo.svg`) goes in as a one-colour cut-out.
+  - **Built:** `Core/MeshWriter24.cs` + CLI `mesh24 NAME [--geo F.json] [--dry OUT.obj]` (PS4 layout, half positions/UVs, other elements kept; the chunk is stored uncompressed at the end of its CAS via ChunkGrower, one `mesh` ModStore entry). `tools/wipe-ihn/build_logo.py SVG ORIG_OBJ_DIR OUT` makes the geometry (own ear clipping with holes; HOCKEY NETWORK from Arial Black). CLI `ebx-floats NAME --at N [--set ..] [--expect ..]` (one `ebx` entry).
+  - **In the game and confirmed by the user (2026-11-25, "looks good"):** 3 `mesh` entries "IHN wipe logo (medallion/easports/alt)" (shells blanked, twins filled); first mesh write on NHL 24: apply → restore gave identical TOC hashes and file sizes → applied again. Separate `ebx` entry "IHN wipe navy background test": the Vec4 at byte 352 of `wipe_play_now_flat_dsub_schematic` (0.05,0.05,0.05,1 → 0.02,0.06,0.22,1); a guess that it is the background colour (no type info to name the field). If the game crashes, restore the ebx entry first, then the meshes.
+- **Phase 4 (pre-game team intro): in the game and confirmed by the user (2026-11-25, "Looks good"):** the user picked concept **B Broadcast Band** (`previews/ihn/intro-b-band.png`) over A Split. `team_intro.gfx` (collector `globals/chunkfilecollectoruikettle_launch_swfassets`) is driven by `nhl.overlays.teamvsteam.TeamVsTeam` (nhluidata) with `sendMessage`: `setOnHideCompleteCallback`(fn), `init`(data), `show`, `hide` (the movie must call the callback when its out-animation ends; the game then sends `evt_close_TeamIntro`), `dispose`. Source `tools/intro-ihn/TeamIntro.tpl.as` (document class `overlays.teamintro.TeamIntro`, everything drawn in code; the IHN logo comes from `gen_art.py` → `art.txt`), `build.py BASE OUT` replaces the class with FFDec and drops every EA symbol, shape and image. Text uses the game's font map names (`$Header`, `$HeaderItalic`, `$Default`, `$BodyAlternate`) with `embedFonts` false, like EA's `SWFAssetTextUtil`. Logos load with `loader.DeprecatedImageLoader` (EA's choice here) on a wrapper Sprite fitted to 160 px. Team colours: the primary brightened to the same hue; the secondary when the primary is black/grey. Records show only when the game sends them; a significance ("ELIMINATED" …) replaces the record tab. **The file has no free space after it: room 16,815 B** (EA's own size); the build is 12,065 B. New CLI `ui24 PATH [--movie F.swf --name N] [--dry]` lists a UI movie's room and writes it as one `legacy` entry, refusing anything bigger than its room. Installed as "Team intro: IHN" (built movie `App/Assets/team-intro-ihn.swf`; read back: same movie). Preview: Ruffle via `scratchpad/pv` with flashvar `nhl24kitPreview=1` (fonts fall back to `_sans`).
+  - **Restore order:** the intro and the score clock share the collector's index chunk, so the intro entry was saved on top of the clock's and the clock entry now reads **Changed** (its data is untouched and still in the game). Restore the intro first, then the clock. `scorebug24 --set/--movie` restores the clock entry first, so it refuses while the intro is applied: restore the intro, change the clock, then reinstall the intro.
+- **Phase 5 (end of period): in the game and confirmed by the user (2026-11-25, "Looks good"):** the user picked concept **A Score Band** (`previews/ihn/eop-a-band.png`; B was an intermission board). `endofperiod.gfx` is driven by `nhl.overlays.endofperiod.EndOfPeriodOverlay` with `sendMessage`: `SetData`(data, playSfx), `show`, `hide` (immediate: the overlay goes invisible at once, so no out-animation), `dispose`. Data: `AwayTeamCity/Name`, `HomeTeamCity/Name`, `AwayTeamScore`, `HomeTeamScore`, `PeriodString`, `AwayTeamLogoPath`, `HomeTeamLogoPath`, `Away/HomePrimaryTeamColor`, `Away/HomeSecondaryTeamColor` (no shots or other stats). Source `tools/eop-ihn`: `make_tpl.py` writes `EndOfPeriod.tpl.as` from `head.as` + the intro's shared drawing code (band halves, logo art, logo loading, colour helpers) + `tail.as`; `build.py BASE OUT` (document class `overlays.endofperiod.EndOfPeriodSWF`). Room **15,661 B**, build 11,450 B. Installed as "End of period: IHN" (built movie `App/Assets/end-of-period-ihn.swf`). It shares its **data chunk** with the score clock, so the whole 10.4 MB chunk was re-stored; afterwards the clock (both copies), intro and end-of-period movies all read back byte-identical to their built files.
+- **Line on the ice (LineFatigue panel), in the game and confirmed by the user (2026-11-25, "looks good"):** the user picked the **horizontal bar** (`previews/ihn/linefatigue-horizontal.png`) in navy/gold. Only `faceoffstrategy.layout` (collector `globals/chunkfilecollectoruicommon_nhluidata`) draws it; the overlay code `nhl.overlays.linefatigue.LineFatigueOverlay` looks up nodes one level deep only (zinc `TreeNode.getNodeByName` is not recursive), so PanelBase/ProgressFooter/PosPlayersGroup and their named children stay; the nodes it resizes (PanelBackground, edges) are alpha 0 and the bar is `background_white` fills with `color`. The clip top is 994-(n*30+95) and ProgressFooter sits at n*30+49, so the footer (line name + energy bar) is screen-anchored while the rest moves 30 px per player: the bar is drawn for n=3 (screen 928..994), the footer row lands in its lower half (n=3) or upper half (n=2, penalty kill). Energy bar width = 250 - layout x - 28 (x 134 → 88 px). One widget serves both sides, so the home bar is not mirrored; `linefatiguehome.layout` x 1670 → 1221 (bar 700 wide). Source `tools/linefatigue-ihn/build.py OUTDIR SRC_DIR`. Entries "Line on the ice: IHN bar" + "(home x)" via `legacy-set --game <NHL 24 dir>` (**always pass --game: the default is NHL 27**; a first run went to NHL 27 and was restored at once). Restore the home-x entry first.
+- **Line change menu, in the game and confirmed by the user (2026-11-25, "Looks good"):** `linechangedisplay.layout` (collector `globals/chunkfilecollectoruicommon_nhluidata`, class `nhl.overlays.linechange.LineChangeElement`) recoloured in place by `tools/linechange-ihn/build.py SRC OUT`: the code keeps resizing PanelBackground (206 + 38*lines), edges and bottom line and moving SelectedLineBackground/StrategyGroup, so those became navy/gold `background_white` fills; header keeps the team-colour glow, gold header lines, IHN tag, gold highlight (alpha .55, white text stays readable: the code cannot recolour one line's text), gold strategy dividers added inside StrategyGroup. `linechangestrategies.layout` is shared with other strategy panels and was not touched (strategy titles stay white). Entry "Line change menu: IHN"; restore it before the Line on the ice entries.
+- **Stat overlays: skipped (2026-11-25).** The user keeps EA's stat overlays as they are and has no intent to edit them. Only the menus are left, and only if the user asks.
+- **Live shots feed (SOG row), installed 2026-11-25, waiting for the user's check:** NHL 24 never sends shot totals to the score clock (`nhl.overlays.scoreclock.ScoreClockOverlay` only forwards them inside occasional comparison events, `receiveEvent` 8 → `showComparison`), so the SOG row stayed 0. Feed: a lua VM added to `scoreclock.vvm` (`"vms":[["lua","/features/debug/vvms/widgettester/widgettester.lua"]]`; absolute paths work in vvms) runs `tools/shots-feed-ihn/ihnshots.lua`, installed over the unused debug file widgettester.lua (no new legacy files can be added). It polls `nhl:game-stats:team-performance:info:get:01.00.00` with `api("DataWatch").SetupWatch` (frequency 1) and publishes `away|home` (PeriodStatsList[1].Away/HomeTeamStats.Shots) on `bnd_ihn_shots` (viewname `ihn_shots`); `scoreclockoverlay.layout` gets a hidden Label `IhnShots` bound to it; the IHN movie (`pollFeed` in ScoreClock.tpl.as) walks up its display parents to the node with `getNodeByName`, reads the label twice a second. Status texts starting with `!` (`!init`, `!watching`, `!no data`, `!bad data …`) and `FEED: NO LABEL` show in the middle box for this first test. Entries: "Score clock: IHN + shots feed" (ui24 with new `--twin` and `--entry`, stacked on top of the old "Score clock: IHN" so that one stays restorable), "Shots feed script/label/hook (IHN)". ModStore.Add replaces an entry of the same kind+name, so **never reinstall an entry that reads Changed under the same name**.
+  - **Test 1 (2026-11-25): the clock disappeared** with the lua VM in `scoreclock.vvm`; restoring only that hook brought it back (so a VM there changes how that VVM loads). It then read FEED: NO LABEL: zinc elements are not DisplayObjects (`TreeNode` wraps `_display`), so walking display parents never meets `getNodeByName`; but `ElementBase` names its DisplayObject after the node. **Version 2:** the script is a second VM of `linefatigueaway.vvm` (that overlay is loaded the whole time the HUD is up; multiple `vms` are allowed), the hidden Label `IhnShots` sits in `linefatigueaway.layout`, and the movie searches the stage for a DisplayObject named IhnShots and reads its first TextField. Scoreclock label entry restored. Entries now: "Score clock: IHN + shots feed 2" (`--entry …(shots feed 2)`), "Shots feed hook/label (IHN, line panel)"; the older "shots feed" movie entry and the widgettester script entry stay (both still in the game).
+  - **Test 2: FEED: NO LABEL again.** `TreeNode.set name` doesn't rename the DisplayObject (only a name given to the constructor does), so layout nodes can't be found by name. **Version 3:** every published text starts with the tag `IHNSOG` (the hidden label's default text too, width 2000, resizeType NONE) and the movie searches the stage for a TextField whose text starts with it. If this still says NO LABEL, the overlays are probably separate movie views with no shared stage. Line-panel script/hook/label entries were restored and reinstalled in order; movie entry "Score clock: IHN + shots feed 3" on top.
+  - **Test 3: NO LABEL; diagnostic (feed 4) read NL S1 O2047 T126 D15:** the clock movie shares one stage with the other overlays (2,047 display objects, 126 TextFields), so the route works but no TextField held IHNSOG (a binding likely blanks the label's default text until the script publishes). **Version 5:** an unbound marker Label `IhnMark` ("IHNMARK") right before IhnShots in linefatigueaway.layout; the movie finds the marker, takes the next sibling's TextField as the feed label, and reports FEED: NO SCRIPT (label empty), FEED: MARK ONLY, or NL … (no marker: line panel parts not on stage). Errors now show their message (`ERR 1065 …`). Movie entry "Score clock: IHN + shots feed 5".
+  - **Test 4 (feed 5): NL S1 O2088 T137 D15** at 20:00: the line panel's marker is not on the stage (its extra root labels aren't drawn, or the 2-VM linefatigueaway VVM doesn't load). **Feed 6:** the same marker + feed label also go into `scoreclockoverlay.layout` (labels alone there are safe); the movie checks every marker and reports `FEED: NO SCRIPT a/b` (a feed labels after b markers). If the clock's label gets the text, bindings cross VVMs; if not, the script isn't running or bindings are per-VVM.
+  - **Test 5 (feed 6): FEED: WAITING at 18:47.** The movie found the score clock layout's own IhnShots label by its default text "IHNSOG" (an unresolved binding leaves default text alone), so labels in that layout are on the stage and readable. Nothing the script published ever reached it: either bindings are per-VVM, or the script in linefatigueaway.vvm never runs (that VVM's extra labels never appeared on the stage either). Waiting for the user's choice: one more test (a do-nothing lua VM in scoreclock.vvm, to see if any VM hides the clock) or stop and restore the feed entries.
+  - **Restore order now (last in, first out):** End of period → Team intro → Score clock. The earlier two read **Changed** while a later one is applied.- Realistic Sim preset (NHL24 Tuner v1.0, 110 of 115 values) applied 2026-11-25 as ModStore c800c28017ad. Not yet tested in a match.
+- 2026-11-25: Realistic Sim preset is now all 115 tuner values (5b858070ace3); Issue fixes 1 is 531e4b1dbe66 (3 values). Not yet tested in a match.
+
+## 34. Center Ice 2026.11.24: rosters only (2026-11-25)
+
+The user asked for only the new Center Ice Mod's rosters, nothing else. Its .cimspkg replaces every file the 2026-11-15
+one changed (and has a new "add" action CimsInstaller doesn't take), so it isn't installed:
+- `tools/cims-view GAME PACKAGE OVERLAY [--extract]`: rebuilds the package's TOCs over stock ones (the game's TOCs with
+  every kit mod's ranges put back, checked by SHA-256), extracts its CAS data (~12 GB), and reads the game through
+  `GameLayout.ReadRedirect` (stock file + package data). Saves its legacy DBs to OVERLAY\out. All CRCs ok. Also `--dump`,
+  `--diff`, `--newvalues`.
+- `cims-rosters DIR --name NAME [--apply]` (`Core/CimsRosters.cs`): the player tables (bio, skater/goalie ratings and
+  equipment, players, both roster tables, free agents, resort extras, goalie gear, career stats) of nhl_game.db and
+  initial_experience.db become the package's; NCAA league players (ids 40000-56499) and their roster rows are kept.
+  Teams, jerseys, arenas, leagues and strings untouched.
+- Applied as "Center Ice 2026.11.24 rosters" (kind rosters, 5ede75a9b929): 9,123 package bios + 1,720 league ones;
+  read back from the game matches. No new head/hair/eyebrow ids. Not checked in game yet.
+- Restore this entry before restoring the NCAA league or the NHL 27 alternates (they share the legacy index chunk).
+
+### §33 update 2026-11-25: SOG hidden, power play box in the team's slot
+- Live shots feed abandoned at the user's request. All 11 feed entries restored LIFO; scoreclock.vvm / scoreclockoverlay.layout /
+  linefatigueaway.vvm+layout / widgettester.lua back to EA's bytes; the game movie matched App/Assets/scoreclock-ihn.swf again.
+  Lesson: the 2-VM linefatigueaway.vvm broke the away line panel. Don't touch other overlays' VVMs for experiments.
+- New build (tools/scorebug-ihn/ScoreClock.tpl.as, based on ScoreClock.tpl.before-feed.as; the feed version is kept as
+  ScoreClock.tpl.feed-attempt.as): no SOG row. The warning/power play tab is drawn in the team's row slot (rowPts(i), team glow)
+  and slides out from under the bar. The middle box shows only for popups, neutral warnings and the shootout (team boxes then
+  carry the round markers). The side panel sits at TOP+4 when nothing is below the bar.
+- Movie App/Assets/scoreclock-ihn-pp.swf, installed with ui24 --twin score_clock.gfx --entry "scoreclock.gfx (pp box)". Awaiting the user's in-game check.
+- 2026-11-25 fixes after the user's test:
+  - PP box only appeared after pause/unpause. ScoreClockOverlay sends showWarning only from _runShowPowerPlayScript, on
+    penalty overlay / faceoff / done-simming events, and only if powerPlayTimeSeconds > 0. Otherwise only
+    updatePowerplayTime ticks arrive, and the movie dropped those while _warnText was null. The movie now opens the box
+    on a tick (side AWAY/HOME with a clock other than 0:00). Entry "scoreclock.gfx (pp box 2)".
+  - Line bar off centre / at different heights for 3-man vs 2-man lines: LineFatigueOverlay moves the clip by
+    30*n+95 and moves only ProgressFooter back (getNodeByName isn't recursive, so the layout can't pin the bar).
+    linefatigueaway/home.layout now drop the {side}_players_count -> data binding, so the panel height stays 0 and the
+    clip top sits at the panel bottom. The bar is drawn at clip y -66..0 and the footer is centred. Entries "(fixed y)" on all three
+    layouts (legacy-set got --entry). Awaiting the user's check.
+- **Title screen (2026-11-25):** bootflow/vvms/pressstart plays `nhl/data/common/movie/bootflow/press_start_reveal` (VP8
+  1920x1080, 30 fps, 260 frames, 8.63 s, Vorbis 8ch) once and holds its last frame; PRESS prompt at layout 1448,835
+  (300x52), legal 1500,1000. My own concept (`previews/ihn/title-ihn.html`, `title-concept.png`) was set aside: the user
+  made their own clip (Downloads/1125/1125.mp4; it fades to black, so it was cut at frame 240 = 8.0 s →
+  1125-freeze8.mp4 and the encoder holds that frame). Installed with the new `movie-replace … --apply` (CLI; same entry
+  as the app's Videos page, kind `movie`) → read back same video, 260-frame table. Fixes: MovieReplacement used Vorbis
+  128k, which libvorbis rejects for 8 channels ("Invalid argument"); now 32 kbps a channel (min 128k). The movie lives
+  in the base Data CAS (cas_05 / cas_03, contentlaunchsb.toc). Awaiting the user's in-game check.
+  - **First install failed in game** (the EA boot movie's last frame stayed up): a MovieTexture2Asset has a block table
+    for EVERY track (u32 count + {float time, u32 offset, u32 size}), not only the picture. EA's title movie has 3 tracks:
+    1 VP8 picture (und), 2 VP8 alpha (language "eaa", one flat level, 255 = opaque, dropping to 168 at the end),
+    3 Vorbis 8ch 48k (622 packets, one per block). It also holds the sound's CodecPrivate offset/size (562/3889),
+    per-track kbit/s (20219, 65, 594), the sound's length (7.977) and the file size. Our 2-track encode left tables 2 and 3
+    pointing into EA's old file. Table counts are EBX arrays (count + array table at the end), so they can't change.
+  - **Fix:** `MovieReplacement.RetableAll` rewrites every track's table (and the CodecPrivate pair) and refuses a file
+    whose tracks or block counts differ (EA's own file round-trips with 0 patches; the broken 2-track file is refused).
+    `Movies.Tracks` + `Movies.Frames(d, track)`. CLI `movie-replace --webm FILE` installs a ready WebM (padded to size);
+    the read-back now compares the whole asset. `tools/movie-ihn/build_title.py` builds EA's layout: Vorbis q 9 cut to
+    8.44 s gives exactly 622 packets for clip 1125. Alpha 255 flat. **Confirmed in game 2026-11-25 ("looks clean").**
+  - Still to do for movies in general: EncodeAsync only makes picture + sound, so any movie with an alpha track or a
+    fixed sound packet count needs this layout (make Encode copy the track layout and tune the sound to the count).
+
+### §33 main menu: top bar test (2026-11-25)
+- Concept D (previews/ihn/menu/menu-D-15.png) built by tools/menu-ihn/build.py from EA originals in tools/menu-ihn/src.
+- Entries "<file> (ihn top bar)" for mainmenubackground, backgroundwidget (scrim 0.25), mainmenu (logo y, IHN tag),
+  tabsviewmanager (tabs y 18, sections y 58), mainmenusection (HORIZONTAL list, scroll steps from EA's trade list,
+  d-pad left/right), listmenurow (title 46/40, headers hidden, gold highlight, max width 520), tabbutton (gold tab,
+  shared by every tab bar). Movie: "menu movie s6 (1123)" = user's 1123.mp4 (the date picks s6; backup
+  nhl24_main_menu untouched). Untested in game at install: horizontal scroll, For You card placement, d-pad.
+- In-game fixes: mainmenusection needs checkItemWidths (rows all at x 0 without it) -> entry "(ihn top bar 2)";
+  TabsViewSections width 1200 clipped the bar after 4 modes -> 1920, entry "tabsviewmanager.layout (ihn top bar 2)".
+  User: "looks good" (2026-11-25). Still EA magenta: For You card (HomepageDynamicButtonTile), now-playing toast.
+
+### §33 pause menu: jumbotron test (2026-11-25)
+- User picked concept D (previews/ihn/menu/pause-D.png) from ten (A..J). Built by tools/pause-ihn/build.py from EA
+  originals in tools/pause-ihn/src; entries "<file> (ihn jumbotron)" for hubmanager, hubhomesectionprimaryversion,
+  gamestatspanel, gamestatsitem, manageteamrow (shared with Manage Teams list), singlefilter (shared filter tabs).
+- Home is hub section 0 (scroll clamps it to x 0), so section coords = screen coords; hub y 256 -> 130.
+- Matchup art (native ReplayHighlights widget) hidden; no clock in the jumbotron (not in the panel's data).
+- Untested at install: Group scale on the score header, horizontal option row navigation, stat tile strip.
+- In-game fixes: logos native ~115 -> scale 1.1 at y -34; strip moves by marginLeft (x ignored in PanelLayout);
+  neighbour page gap is paddingAroundSelected (400, with paddingBetweenItems 400); option text 23 px via the
+  section's CustomRowStyles. Entries "(ihn jumbotron 2/3)". User: "looks good" (2026-11-25). Other tabs still EA.
+- End of period/game Home = hubhomesection3stars (and shootout end of game): same jumbotron via jumbotron(); entries '(ihn jumbotron)'.
+  User: end-of-period jumbotron "looks good now" (2026-11-25).
+
+## 35. Utah's NHL 27 arena and jumbotron in NHL 24 (started 2026-11-25)
+
+**What picks the arena.** NHL 24 `exhibitionteams[22]` is Utah Mammoth (Center Ice renamed Arizona), arenaid 22.
+`exhibitionarena[22]` is "Delta Center" with `arenaartid` 22, and arenaartid is the level number, so the level is
+`content/worlds/stadiums/arizonageneric_22`. Row 279 "Arizona Arena" also uses level 22. Only that level places
+`structures/arizonageneric/*` and `scoreboard/arizonageneric/*` (`ebx-refs --scan content/worlds`), so rebuilding
+those meshes changes only Utah's arena, with no DB entry.
+
+**NHL 27 source.** `content/worlds/stadiums/utah_30` is the real Delta Center. It has 14 layers and 316 placements of
+126 meshes, 1.59M triangles in total: `structures/utah/` is 1.37M triangles over 214 placements, the rink pieces are
+104k, and props make up the rest. The jumbotron is `scoreboard/utah/` (the main mesh at 18.5k triangles, 4 screens,
+ribbon). `utahgeneric_30` is NHL 26's generic Utah. The crowd placement is
+`content/crowd/configs/worlds/stadiums/utah/crowd_utah_placement` (type 0132086d, 473 KB). In NHL 24 the crowd placement
+is `structures/arizonageneric/crowd` (type 14568e26, 241 KB). NHL 27's arizonageneric placement is 241,266 bytes
+against NHL 24's 241,236, so the formats look close.
+
+**NHL 24 host.** arizonageneric_22 has 19 placements and 200k triangles. The bowl (stands, vipboxes, roof, banners)
+is only about 20k triangles in about 40 sections, all at identity, with one LOD each.
+
+**Formats (checked).** The same mesh, `structures/arizonageneric/stands_lower_mesh`, holds byte-identical vertex
+streams in both games: position 01:03, part index 02:16, UV 21:06, lightmap UV + id 2A:03, and tangent frame 34:0D.
+NHL 27 only adds colour 1E:0D, so NHL 27 vertex data copies into NHL 24 raw.
+- **Tangent frame (34:0D, 4 bytes):** not a quaternion. Bits 24-26 are the normal's major axis (+x 0, −x 1, +y 2, −y 3,
+  +z 4, −z 5; 99.5% match). Bits 0-8 hold one off-axis normal component as c·361 (511/√2). The other fields pack
+  additively (borrow patterns 00/FF), and they aren't decoded yet.
+- **PS4 MeshSet resize fields (RES length unchanged):**
+  - LOD: +0x54 index format (33 = 16-bit), +0x58 index bytes, +0x5C vertex bytes (padded to 16). The chunk holds the
+    vertex buffer, then the index buffer.
+  - Section (0xE0): +0x1C material index, +0x20 tris, +0x24 first index, +0x28 vertex byte offset, +0x2C vertex count,
+    +0xC0/+0xD0 box.
+  - Header: box at 0/16; composite part count at +0x98, part boxes (32 bytes each) at the u64 at +0xA4.
+
+**Built.**
+- `Core/MeshRaw.cs`: sections with raw element streams, for both games.
+- `Core/MeshRebuild24.cs`: rewrites a host mesh's chunk geometry with new counts per section. Source elements are
+  copied raw by usage, positions are transformed, and mirrored placements get their winding flipped. Part index and
+  lightmap UV keep the host section's first vertex. Section, mesh and part boxes are grown.
+- CLI `arena-port elems|placements|build`:
+  - `build PLAN.json --game <NHL24> --game27 <NHL27> [--dry DIR] [--apply --name N]`. The plan maps NHL 27 meshes or
+    materials, at their level placements, onto host sections.
+  - A write is one ModStore entry of kind `arena`: each grown chunk via ChunkGrower, each RES via ResPatcher.
+- Plans live in `tools/arena-utah/`.
+
+**Jumbotron: in the game and confirmed by the user (2026-11-25, "it works";
+`previews/utah-jumbotron-ingame.png`).**
+- Entry "Utah jumbotron (NHL 27)" (`tools/arena-utah/scoreboard.json`) rebuilds `scoreboard_arizonageneric_mesh`:
+  - digit page → digits;
+  - truss, black metal, speakers, LED body, rope and the ribbon ring → `metal_painted_01_clean_1mx1m_black_mat`;
+  - the 4 screens plus Utah's data and ad screens → `scoreboard_screen_01` (the game's live screen content draws on
+    them);
+  - the Arizona ad strips and body are blanked.
+- 18,583 triangles. Read back from the game: screens 78, digits 84, black metal 18,421.
+- First resized NHL 24 mesh (new counts, grown chunk, patched RES): it loads and draws.
+
+**Limits.**
+- Materials are limited to the host's sections. NHL 27's own textures (Utah banners, arena graphics) can't be bound
+  without new material/MVDB entries, and retexturing shared `worlds/textures` would change other arenas.
+- Baked lighting belongs to the host: lightmap UVs are the host's constant per section.
+- Rotated placements keep unrotated tangent frames (shading only).
+- 16-bit indices cap a host section at 65,535 vertices.
+
+**Bowl (entry "Utah bowl (NHL 27)", plan `tools/arena-utah/bowl.json`; in-game rounds on 2026-11-25).**
+Every Utah `structures/utah/*` mesh the level places goes into the eight arizonageneric bowl meshes by material family
+(stands_lower, stands_upper, railings, vipboxes, roof, roof_speakers, banners, powerring). Lessons from the test rounds:
+- **Placement: `"placement": "identity"`.** ArenaScene's transform arrays are found heuristically, and for utah_30 many
+  belong to other records: the first apply put 14 rotated, 0.75-scaled copies of `stands_lower_01_mesh` over the ice.
+  Utah's structure meshes are modelled in place, so each goes in once at identity. `"clearBox"` (rink interior,
+  y > 1.2) leaves out whole meshes modelled around the origin that need a parent transform (aisle railings), and
+  `railings_05_*` is dropped by name (they sit at ice level). Roof trusses `roof_lower_01_mesh` go in once (29k tris).
+- **Index format.** Sections over 65,535 vertices switch the LOD to format 46 (32-bit); NHL 24 uses 46 on 50 LODs.
+- **Lightmap UV (0x2A).** Its last u32 is the section's lightmap chart id (Carolina stands_lower: 0x60, 0x74, 0x86 …
+  per section). Copying it from another section renders flat white (lavender under the sky). Per-vertex nearest
+  lookups also banded. Now: one entry per piece, the nearest old vertex of the same host section to the piece centre.
+- **UVs.** Strip/atlas host textures (stairs, black-stripe aluminium, bare railing, roof beams, black cloth, rubber floor)
+  streak under Utah's tiling UVs: `"flatUv"` keeps the host's first UV. `"ringUv"` rebuilds the power ring's u from
+  distance around the ring at NHL 24's 0.172 u/m (Utah's upper ribbon spans u 0..1 once around: one stretched image);
+  the seam is behind the +z end.
+- **Two-sided.** NHL 27 draws walls, curtains and railings two-sided; NHL 24's host materials don't, so the concourse
+  walls vanished from the rink side. `"doubleSided"` adds back faces for those host materials (+~170k triangles).
+- **Suites.** In NHL 27, Utah's suites (`stands_vipboxes_02/03`) are on the −x side only; +x at that height is a
+  standing-room concourse whose back walls are plaster (now grey concrete). That side is NHL 27's camera side, so the
+  band above the concourse (y 13–17) is simply left empty there and shows sky in NHL 24. The plan's new `"extra"` list
+  (identity placement only) puts matching meshes in again under a transform: `stands_vipboxes_02*/03*` (suites and
+  their bg meshes) go in a second time mirrored across x (det < 0 flips the winding; the packed tangent frames are copied
+  as they are, so the mirrored suites' shading may be off).
+- **Texture density.** Section +0x34 is the section's UV units per metre (Carolina stands_lower: 0.0842/0.0846/0.0709/
+  0.1304 against measured 0.083/0.085/0.071/0.13), which texture streaming chooses mips from. The rebuild now writes
+  sqrt(UV area / world area) of the new geometry there (e.g. vip_ceiling_tiles 0.169 → 0.937); flat-UV sections keep
+  the host's value. It is the suspect for the white "unloaded" surfaces.
+- **White glass.** NHL 24's `glass_stadium_generic_color` is flat white (230) at alpha 36–98. With all of Utah's glass in
+  it, two-sided, glass edge strips (`glass_*_edge_mat`, face-on as thin bands) and `glass_mirror` drew bright white
+  outlines on suite fronts and windows. Those two are now dropped and the panes are single-sided (7,436 → 1,124 glass
+  triangles). The +x suites (mirrored) were confirmed in game 2026-11-25.
+- **Flat UV texel.** That didn't clear the white: flat-UV sections take the host's first UV, which for
+  `stair_alluminum_blackstripe` (all of Utah's bare/painted metal: railings, the camera scaffold and its stairs) is the
+  167-grey band, and NHL 24's arena lights push that to white. `"flatUv"` can now be an object {material: [u, v] or
+  null}; the metal sits on the dark stripe (0.5, 0.9). (The OBJ dumps write v as 1 − v.)
+- Still light grey in game, so all of Utah's metal now goes into stands_lower's `cloth_canvas_black_mat` (flat,
+  two-sided), and all glass is dropped (the white square on the end wall was a pane). railings_mesh and vipboxes_mesh
+  each keep one tiny dark metal piece (16 / 8 triangles) so no LOD chunk is empty.
+- **No Utah textures yet.** Everything borrows level 22's host textures, which other arenas share. Real Utah looks need
+  NHL 27 textures converted to PS4 and written into texture slots only level 22 uses (or new ones).
+- Level 22 is about 830k triangles (stock 218k). Utah's two branded fabrics (`fabric_canvas_utah_01/02_color`) are
+  plain grey: their look comes from material tint or another texture, so they stay black for now.
+
+**Crowd (entry "Utah crowd (NHL 27)", `arena-port crowd`, `Core/CrowdPort.cs`).** NHL 24's
+`structures/arizonageneric/crowd` and NHL 27's `crowd_*_placement` are the same EBX layout: a root with a 16-byte seat
+position array and a pointer array of channels (Orientation f32, Layer u8, Attendance u8, FanProfiles u32, SeatColour
+u32, Tier u8; NHL 27 adds ActivatedPairIdAndIndex). NHL 24's and NHL 27's arizonageneric files differ only in the root
+type guid/signature, the first two EBXX array hashes and the instance guids. The port takes Utah's file and puts back
+NHL 24's file guid, instance guids, root type, signature and array hashes, cuts the channel list to 6, overwrites the
+name, wraps orientation to ±180 (same convention: +x seats face 180°), and copies Layer/Attendance/FanProfiles/
+SeatColour/Tier from the nearest NHL 24 seat in a normalised bowl (the games use different value conventions). 13,486
+seats; the 473 KB EBX is appended by the new `ResGrower.PlanEbx` (EBX mode: TOC offset/size, record size and SHA1).
+Read back byte-identical; fans sit in Utah's stands in game.
+
+**Corners.** One end's tunnel corners look black. In NHL 27's own model three of the four corners carry black metal
+fascia and curtain on those walls (~80 / 34 m²; the +x+z corner ~22 / 14 m²), so the black follows NHL 27's
+materials. A lightmap test went out with it anyway: `"lightmapMirror": "+z"` (−z pieces take their lightmap point from
+the mirrored +z position) and a facing-axis preference in the lightmap lookup (old vertices facing another way count
+4 m further). Not yet judged in game.
+
+**Jumbotron textures (entry "Utah jumbotron textures (NHL 27)", `arena-port mvdb-tex`).** Materials are shared
+SurfaceShaderPresets, but each level's MeshVariationDatabase binds textures per mesh material by import. Only
+`arizonageneric_22/environment_replay/meshvariationdb_gen4b` lists the scoreboard mesh, and its one import of
+`scoreboard_metal_chicago_color` (host section 9) now points at `scoreboard_arizona_signs_color`. That texture is
+Arizona-only and already in level 22's bundles; Chicago's jumbotron is untouched (the chunk is shared, so retexturing
+Chicago's metal was out). The signs sheet is now an atlas, written by `retexture`: top half = NHL 27's
+`scoreboard_scoredatascreen_utah_color` (DELTA / DELTA CENTER / UTAH MAMMOTH), bottom half = Utah's signs. Utah's ad
+(v 0–0.42) and data-screen (v 0.42–1) faces go into section 9 with the new rule `"uv": [1, 0.5, 0, 0]`. The other three
+Arizona state sheets (clap, crowd_meter2, make_some_noise) are retextured with Utah's (same sizes). Confirmed in game 2026-11-26.
+
+**Roof lights (entry "Utah roof lights height", `arena-port lift`).** The hanging lamps are level 22's own Arizona
+fixtures at Arizona's roof height, y 17.99: a 7 × 9 grid (x −20.19…20.7, z −32.06…32.09) of baked transforms in
+`arizonageneric_22/environment_common`. Editing the prefab they came from
+(`structures/arizonageneric/roof_prefab_nongroupable_autogen_gen4`, nine `lights_arena_flood_12` rows) changed nothing
+in game: the level layer keeps its own cooked copies, so edit the layer. `lift` moves those 63 to y 39.5, hung from
+Utah's corrugated deck (39.6 m; truss chords ~35 m; the lamps hang up to 3.5 m below their origin). The rink light rig
+(`lightrig_scaleable_rink_common_new`, shared, 10 spots at y 13–14 after the layer's −11 offset) is the light source
+and stays put. The jumbotron's Delta Center / UTAH MAMMOTH art was confirmed in game 2026-11-26, so the MVDB texture
+binding wins over the preset.
+
+**End walls.** Not started. Utah's `fabric_canvas_utah_02` colour texture is plain grey, so NHL 27's branding there
+comes from elsewhere (decal meshes or another layer); this needs an NHL 27 reference shot of the wall.
+
+**Restore order.** The entries ("Utah jumbotron (NHL 27)", "Utah bowl (NHL 27)", "Utah crowd (NHL 27)", "Utah jumbotron
+textures (NHL 27)", "Utah roof lights height" and the four `scoreboard_arizona_*_color` texture entries) touch different assets and restore in any order.
+
+**Next.** Utah textures: NHL 24's Carolina meshes already use NHL 27-style surfacing materials
+(`concrete_bare_01_clean_2mx2m_*`, `fabric_canvas_01_2mx2m_black`), which may give closer textures than the generic
+arizonageneric ones; otherwise write NHL 27 textures into texture slots only level 22 uses. The user offered to point
+out what each surface should look like.

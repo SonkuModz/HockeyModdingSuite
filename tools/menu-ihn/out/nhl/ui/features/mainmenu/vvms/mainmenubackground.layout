@@ -1,0 +1,107 @@
+{
+ "commonName": "Container",
+ "name": "MenuBackground",
+ "layout": {
+  "type": "CanvasLayout"
+ },
+ "children": [
+  {
+   "commonName": "BackgroundWidget",
+   "name": "HomePageVideoBackground",
+   "bindings": [
+    {
+     "binding": "mode_background_data",
+     "property": "data"
+    }
+   ]
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnBarLow",
+   "type": "background_white",
+   "color": "0x0B1A33",
+   "alpha": 0.92,
+   "x": 0.0,
+   "y": 0.0,
+   "width": 1920.0,
+   "height": 178.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnBarTop",
+   "type": "background_white",
+   "color": "0x13294B",
+   "alpha": 1.0,
+   "x": 0.0,
+   "y": 0.0,
+   "width": 1920.0,
+   "height": 92.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnBarLine1",
+   "type": "background_white",
+   "color": "0xC9A54C",
+   "alpha": 0.6,
+   "x": 0.0,
+   "y": 92.0,
+   "width": 1920.0,
+   "height": 2.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnBarLine2",
+   "type": "background_white",
+   "color": "0xC9A54C",
+   "alpha": 1.0,
+   "x": 0.0,
+   "y": 176.0,
+   "width": 1920.0,
+   "height": 3.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnFoot0",
+   "type": "background_white",
+   "color": "0x0B1A33",
+   "alpha": 0.2,
+   "x": 0.0,
+   "y": 984.0,
+   "width": 1920.0,
+   "height": 24.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnFoot1",
+   "type": "background_white",
+   "color": "0x0B1A33",
+   "alpha": 0.4,
+   "x": 0.0,
+   "y": 1008.0,
+   "width": 1920.0,
+   "height": 24.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnFoot2",
+   "type": "background_white",
+   "color": "0x0B1A33",
+   "alpha": 0.6,
+   "x": 0.0,
+   "y": 1032.0,
+   "width": 1920.0,
+   "height": 24.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnFoot3",
+   "type": "background_white",
+   "color": "0x0B1A33",
+   "alpha": 0.8,
+   "x": 0.0,
+   "y": 1056.0,
+   "width": 1920.0,
+   "height": 24.0
+  }
+ ]
+}

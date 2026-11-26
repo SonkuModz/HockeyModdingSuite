@@ -1,0 +1,30 @@
+{
+    "commonName": "Container",
+    "name": "MenuBackground",
+    "layout":
+    {
+        "type": "CanvasLayout"
+    },
+    "children":
+    [
+        {
+            "commonName": "BackgroundWidget",
+            "name": "HomePageVideoBackground",
+            "bindings":
+            [
+                {
+                    "binding": "mode_background_data",
+                    "property": "data"
+                }
+            ]
+        }
+    ],
+    "authoringData":
+    {
+        "designSize":
+        {
+            "width": 1920.0,
+            "height": 1080.0
+        }
+    }
+}

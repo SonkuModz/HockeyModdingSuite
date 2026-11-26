@@ -1,0 +1,128 @@
+{
+    "commonName": "Container",
+    "name": "MainMenuRoot",
+    "height": 1080.0,
+    "width": 1920.0,
+    "layout":
+    {
+        "type": "CanvasLayout"
+    },
+    "style-definitions":
+    {
+        "GridDynamicButtonTileState":
+        {
+            "height": 240.0,
+            "width": 240.0
+        }
+    },
+    "behaviors":
+    [
+        {
+            "commonName": "behavior.InputAction",
+            "name": "ShowManualInput",
+            "actionName": "game_manual",
+            "inputCode": "DIGITAL_LAS",
+            "inputHintTag": "TXT_HELP"
+        },
+        {
+            "commonName": "behavior.InputAction",
+            "name": "BackAction",
+            "actionName": "back",
+            "audioTag": "sub_menu_back",
+            "inputCode": "DIGITAL_TWO",
+            "inputHintTag": "TXT_BACK"
+        },
+        {
+            "commonName": "behavior.InputAction",
+            "name": "AdvanceAction",
+            "actionName": "advance",
+            "inputCode": "DIGITAL_ONE",
+            "inputHintTag": "TXT_ADVANCE",
+            "trapInputPolicy": "HANDLED"
+        },
+        {
+            "commonName": "behavior.InputAction",
+            "name": "OpenXfactorsDatabase",
+            "actionName": "show_xfactor_database",
+            "inputCode": "DIGITAL_RAS",
+            "inputHintTag": "TXT_X-FACTOR_DATABASE"
+        }
+    ],
+    "children":
+    [
+        {
+            "commonName": "Container",
+            "name": "LogoContainer",
+            "layout":
+            {
+                "type": "PanelLayout"
+            },
+            "children":
+            [
+                {
+                    "commonName": "Stack",
+                    "name": "LogoTopStack",
+                    "alignH": "FILL",
+                    "alignV": "FILL",
+                    "layout":
+                    {
+                        "type": "StackLayout",
+                        "data":
+                        {
+                            "orientation": "HORIZONTAL"
+                        }
+                    },
+                    "children":
+                    [
+                        {
+                            "commonName": "Asset",
+                            "name": "NHLLogo",
+                            "marginLeft": 93.0,
+                            "marginTop": 47.0,
+                            "required": false,
+                            "bindings":
+                            [
+                                {
+                                    "binding": "closed_beta_logo_type",
+                                    "property": "type"
+                                }
+                            ],
+                            "authoringData":
+                            {
+                                "locked": true
+                            }
+                        },
+                        {
+                            "commonName": "Asset",
+                            "name": "EAAccessLogoTop",
+                            "marginLeft": 30.0,
+                            "marginTop": 47.0,
+                            "required": false,
+                            "type": "ea_access_trial_logo",
+                            "visible": false,
+                            "bindings":
+                            [
+                                {
+                                    "binding": "ea_access_visible",
+                                    "property": "visible"
+                                }
+                            ],
+                            "authoringData":
+                            {
+                                "locked": true
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "authoringData":
+    {
+        "designSize":
+        {
+            "width": 1920.0,
+            "height": 1080.0
+        }
+    }
+}

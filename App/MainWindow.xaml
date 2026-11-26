@@ -102,6 +102,7 @@
                             <RadioButton x:Name="NavDatabase" Style="{StaticResource NavItem}" Content="Database" Tag="&#xE1D3;" Checked="OnNav" />
                             <RadioButton x:Name="NavTuning" Style="{StaticResource NavItem}" Content="Tuning" Tag="&#xE9E9;" Checked="OnNav" />
                             <RadioButton x:Name="NavTeams" Style="{StaticResource NavItem}" Content="Teams" Tag="&#xE790;" Checked="OnNav" />
+                            <RadioButton x:Name="NavLeagues" Style="{StaticResource NavItem}" Content="Leagues" Tag="&#xE734;" ToolTip="Custom leagues (NHL 24)" Checked="OnNav" />
                             <RadioButton x:Name="NavArenas" Style="{StaticResource NavItem}" Content="Arenas" Tag="&#xE80F;" Checked="OnNav" />
                             <RadioButton x:Name="NavBeAPro" Style="{StaticResource NavItem}" Content="Be A Pro" Tag="&#xE77B;" Checked="OnNav" />
                             <RadioButton x:Name="NavUniforms" Style="{StaticResource NavItem}" Content="Uniforms" Tag="&#xE7BF;" Checked="OnNav" />
@@ -414,6 +415,7 @@
                 <!-- ======================================================== play page -->
                 <local:PlayPage x:Name="PlayPage" Grid.Column="1" Visibility="Collapsed" />
                 <local:Play24Page x:Name="Play24Page" Grid.Column="1" Visibility="Collapsed" />
+                <local:LeaguesPage x:Name="LeaguesPage" Grid.Column="1" Visibility="Collapsed" />
 
                 <!-- ======================================================== settings page -->
                 <ScrollViewer x:Name="SettingsPage" Grid.Column="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">

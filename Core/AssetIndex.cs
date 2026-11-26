@@ -249,7 +249,7 @@ public sealed class AssetIndex
             Parallel.ForEach(toc.Bundles.Where(b => b.Entries.Count > 0).GroupBy(b => (b.Entries[0].Catalog, b.Entries[0].Cas, b.Entries[0].Patch)),
                 new ParallelOptions { MaxDegreeOfParallelism = 8 }, group =>
                 {
-                    using var fs = new FileStream(Layout.CasPath(group.Key.Catalog, group.Key.Cas, group.Key.Patch), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var fs = Layout.OpenCasRead(group.Key.Catalog, group.Key.Cas, group.Key.Patch);
                     foreach (var b in group)
                     {
                         var r = b.Entries[0];
@@ -297,7 +297,7 @@ public sealed class AssetIndex
         ebxToType = ebxToType.Where(e => ReferenceEquals(Ebx.GetValueOrDefault(e.Name), e)).ToList();
         Parallel.ForEach(ebxToType.GroupBy(e => (e.Ref.Catalog, e.Ref.Cas, e.Ref.Patch)), new ParallelOptions { MaxDegreeOfParallelism = 8 }, group =>
         {
-            using var fs = new FileStream(Layout.CasPath(group.Key.Catalog, group.Key.Cas, group.Key.Patch), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var fs = Layout.OpenCasRead(group.Key.Catalog, group.Key.Cas, group.Key.Patch);
             foreach (var e in group.OrderBy(e => e.Ref.Offset))
             {
                 try
@@ -432,7 +432,7 @@ public sealed class AssetIndex
 
     public byte[] ReadStored(int catalog, int cas, bool patch, uint offset, uint size)
     {
-        using var fs = new FileStream(Layout.CasPath(catalog, cas, patch), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var fs = Layout.OpenCasRead(catalog, cas, patch);
         var b = new byte[size];
         fs.Position = offset;
         fs.ReadExactly(b);

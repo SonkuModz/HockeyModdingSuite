@@ -27,10 +27,12 @@ public static class LegacyEditor
     }
 
     public static ModEntry Save(AssetIndex index, ModStore store, string game, string collector, string name, byte[] data,
-        string summary, Action<string> log = null)
+        string summary, Action<string> log = null, string entryName = null)
     {
+        // entryName: store the change under another mod entry name (stacks on an earlier entry of the same file)
+        entryName ??= name;
         // the original layout, under any earlier save of this file
-        var existing = store.Find(Kind, name);
+        var existing = store.Find(Kind, entryName);
         if (existing != null && store.State(existing, game) is ModState.Applied or ModState.Partial)
             store.Restore(existing, game, log);
 
@@ -85,9 +87,9 @@ public static class LegacyEditor
         }
         string sources = Path.Combine(store.Dir, "sources");
         Directory.CreateDirectory(sources);
-        string copy = Path.Combine(sources, $"legacy_{Legacy.Fnv1(name):x16}{Path.GetExtension(name)}");
+        string copy = Path.Combine(sources, $"legacy_{Legacy.Fnv1(entryName):x16}{Path.GetExtension(name)}");
         File.WriteAllBytes(copy, data);
-        var entry = store.Add(Kind, name, copy, summary, patches, notes);
+        var entry = store.Add(Kind, entryName, copy, summary, patches, notes);
         store.Apply(entry, game, log);
         return entry;
     }
@@ -103,24 +105,32 @@ public static class LegacyEditor
         PlanPs4(index, legacy, new[] { (f, data) }, notes, log);
 
     /// <summary>Several files of one collector at once (one mod entry; their chunks and the index chunk are added once).</summary>
-    public static List<PatchData> PlanPs4(AssetIndex index, Legacy legacy, IReadOnlyList<(LegacyFile File, byte[] Data)> files, List<string> notes, Action<string> log)
+    /// <param name="planned">CAS files other parts of the same change append to (relative path -> planned length), so the
+    /// chunks go after their data, not over it.</param>
+    public static List<PatchData> PlanPs4(AssetIndex index, Legacy legacy, IReadOnlyList<(LegacyFile File, byte[] Data)> files, List<string> notes, Action<string> log, IDictionary<string, long> planned = null)
     {
         var idx = legacy.ReadChunk(legacy.IndexChunk);
         long L(int p) => BinaryPrimitives.ReadInt64LittleEndian(idx.AsSpan(p));
         void W(int p, long v) => BinaryPrimitives.WriteInt64LittleEndian(idx.AsSpan(p), v);
         var tocs = new TocCache(index);
         var locations = LocationIndex.Build(index, tocs);
-        var ends = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var ends = planned ?? new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var patches = new List<PatchData>();
         foreach (var group in files.GroupBy(x => x.File.ChunkId))
         {
             var raw = legacy.ReadChunk(group.Key);
             // where each edited file goes: in place, or at the end of the chunk when it grew
             var placed = new Dictionary<int, (long Offset, long Size)>();
+            var inChunk = legacy.Files().Where(x => x.ChunkId == group.Key).GroupBy(x => x.Entry).Select(g => g.First()).ToList();
             foreach (var (f, data) in group)
             {
                 int offset = f.Offset;
-                if (data.Length > f.Size)
+                // the room a file has where it is: up to the next file in the chunk, or the chunk's end. A file that fits stays
+                // put: loc/eng_us.db moved to its chunk's end (grown 16 bytes) crashed NHL 24 at start-up (2026-11-24)
+                long room = inChunk.Where(x => x.Entry != f.Entry && x.Offset >= f.Offset + f.Size).Select(x => (long)x.Offset).DefaultIfEmpty(raw.Length).Min() - f.Offset;
+                if (data.Length > f.Size && data.Length <= room)
+                    notes.Add($"{f.Name} grew by {data.Length - f.Size:N0} bytes, into the free space after it");
+                else if (data.Length > f.Size)
                 {
                     offset = (raw.Length + 15) & ~15;
                     Array.Resize(ref raw, offset + data.Length);

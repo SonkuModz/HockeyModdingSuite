@@ -14,6 +14,8 @@ public sealed record WebmInfo(string DocType, string VideoCodec, int Width, int 
 /// <summary>A video frame in a WebM file: its time, and where its data is.</summary>
 public readonly record struct MovieFrame(double Seconds, int Offset, int Size, bool Key);
 
+public sealed record WebmTrack(long Number, long Type, string Language, int CodecPrivateOffset, int CodecPrivateSize);
+
 /// <summary>
 /// A movie in the game: a MovieTexture2Asset and its chunks. The biggest is the video (a WebM file, or EA's VP6); any
 /// others are small "ST00" subtitle tracks.
@@ -159,7 +161,10 @@ public static class Movies
     /// Every video frame of a WebM file, in order: its time, where its data starts (after the block's header) and its size.
     /// This is what a MovieTexture2Asset's frame table holds.
     /// </summary>
-    public static List<MovieFrame> Frames(ReadOnlySpan<byte> d)
+    public static List<MovieFrame> Frames(ReadOnlySpan<byte> d) => Frames(d, 0);
+
+    /// <summary>The blocks of one track (<paramref name="track"/> = its TrackNumber; 0 = the first video track).</summary>
+    public static List<MovieFrame> Frames(ReadOnlySpan<byte> d, long track)
     {
         var frames = new List<MovieFrame>();
         double scale = 1_000_000;
@@ -198,7 +203,8 @@ public static class Movies
                                 else if (cid == TrackTypeId) type = Uint(d, cstart, cs);
                                 r = (int)(cstart + cs);
                             }
-                            if (type == 1 && videoTrack < 0) videoTrack = number;
+                            if (track > 0) videoTrack = track;
+                            else if (type == 1 && videoTrack < 0) videoTrack = number;
                         }
                         q = (int)(tstart + ts);
                     }
@@ -211,13 +217,13 @@ public static class Movies
                 {
                     // track number (a vint), a signed 16-bit timecode relative to the cluster, flags
                     int q = start, n = 1 + System.Numerics.BitOperations.LeadingZeroCount((uint)d[q]) - 24;
-                    long track = d[q] & (0xFF >> n);
-                    for (int i = 1; i < n; i++) track = track << 8 | d[q + i];
+                    long blockTrack = d[q] & (0xFF >> n);
+                    for (int i = 1; i < n; i++) blockTrack = blockTrack << 8 | d[q + i];
                     q += n;
                     short rel = BinaryPrimitives.ReadInt16BigEndian(d[q..]);
                     byte flags = d[q + 2];
                     q += 3;
-                    if (track == videoTrack)
+                    if (blockTrack == videoTrack)
                         frames.Add(new MovieFrame((cluster + rel) * scale / 1e9, q, (int)(end - q), id == SimpleBlockId && (flags & 0x80) != 0));
                     break;
                 }
@@ -225,6 +231,42 @@ public static class Movies
             p = (int)end;
         }
         return frames;
+    }
+
+    /// <summary>A WebM's tracks: number, type (1 video, 2 audio), language and where its CodecPrivate data is (-1 if none).</summary>
+    public static List<WebmTrack> Tracks(ReadOnlySpan<byte> d)
+    {
+        var list = new List<WebmTrack>();
+        int p = 0;
+        while (p < d.Length)
+        {
+            if (!Element(d, ref p, out uint id, out long size, out int start)) break;
+            long end = size < 0 ? d.Length : Math.Min(d.Length, start + size);
+            if (id == SegmentId) { p = start; continue; }
+            if (id == ClusterId) break;
+            if (id == TracksId)
+                for (int q = start; q < end;)
+                {
+                    if (!Element(d, ref q, out uint tid, out long ts, out int tstart)) break;
+                    if (tid == TrackEntryId)
+                    {
+                        long number = 0, type = 0; int cpo = -1, cps = 0; string lang = "eng";
+                        for (int r = tstart; r < tstart + ts;)
+                        {
+                            if (!Element(d, ref r, out uint cid, out long cs, out int cstart)) break;
+                            if (cid == TrackNumberId) number = Uint(d, cstart, cs);
+                            else if (cid == TrackTypeId) type = Uint(d, cstart, cs);
+                            else if (cid == 0x63A2) { cpo = cstart; cps = (int)cs; }
+                            else if (cid == 0x22B59C) lang = System.Text.Encoding.ASCII.GetString(d.Slice(cstart, (int)cs)).TrimEnd('\0');
+                            r = (int)(cstart + cs);
+                        }
+                        list.Add(new WebmTrack(number, type, lang, cpo, cps));
+                    }
+                    q = (int)(tstart + ts);
+                }
+            p = (int)end;
+        }
+        return list;
     }
 
     /// <summary>

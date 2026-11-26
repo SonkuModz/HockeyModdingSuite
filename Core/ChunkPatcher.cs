@@ -6,7 +6,11 @@ namespace NHL27Kit.Core;
 /// A byte range to write: the bytes there now and the bytes to put there. An <paramref name="Append"/> range adds
 /// bytes at the end of the file (Offset is its length, Old is empty); restoring it cuts the file back.
 /// </summary>
-public sealed record PatchData(string File, long Offset, byte[] Old, byte[] New, string Note, bool Append = false);
+/// <summary>
+/// One range a mod writes. <paramref name="NewFile"/>: a whole file the mod puts there (none before it): applying writes it,
+/// restoring deletes it (only while it holds what the mod wrote), and the empty folders it leaves below <paramref name="KeepDir"/>.
+/// </summary>
+public sealed record PatchData(string File, long Offset, byte[] Old, byte[] New, string Note, bool Append = false, bool NewFile = false, string KeepDir = null);
 
 /// <summary>How many TOC entries (chunk table, bundle and bundle record entries) start at each place in the CAS archives.</summary>
 public sealed class LocationIndex

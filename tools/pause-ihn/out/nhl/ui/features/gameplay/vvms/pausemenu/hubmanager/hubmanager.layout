@@ -1,0 +1,376 @@
+{
+ "commonName": "Group",
+ "name": "Root",
+ "height": "$SCREEN_HEIGHT",
+ "width": "$SCREEN_WIDTH",
+ "layout": {
+  "type": "CanvasLayout"
+ },
+ "style-definitions": {
+  "AlignLeft": {
+   "alignH": "LEFT"
+  },
+  "AlignCenter": {
+   "alignH": "CENTER"
+  },
+  "AlignBap": {
+   "alignH": "LEFT",
+   "marginTop": -26.0
+  }
+ },
+ "animationScripts": [
+  {
+   "name": "hide",
+   "script": [
+    {
+     "anim": "QUICK_SCREEN_OUT_BACK",
+     "data": {
+      "targets": [
+       "AllImmediateChildren"
+      ]
+     }
+    }
+   ]
+  }
+ ],
+ "behaviors": [
+  {
+   "commonName": "behavior.NavViewState",
+   "name": "behavior.NavViewState",
+   "actionName": "SetHubState",
+   "states": {
+    "ON": [
+     {
+      "name": "MenuContentPresenter",
+      "properties": {
+       "visible": true
+      }
+     },
+     {
+      "name": "MenuContentPresenter.MenuGroup.HubSections",
+      "properties": {
+       "isInteractive": true,
+       "z": 0
+      }
+     },
+     {
+      "name": "MenuContentPresenter.MenuGroup.TabGroup",
+      "properties": {
+       "isInteractive": true
+      }
+     }
+    ],
+    "OFF": [
+     {
+      "name": "MenuContentPresenter",
+      "properties": {
+       "visible": false
+      }
+     },
+     {
+      "name": "MenuContentPresenter.MenuGroup.HubSections",
+      "properties": {
+       "isInteractive": false,
+       "z": 500
+      }
+     },
+     {
+      "name": "MenuContentPresenter.MenuGroup.TabGroup",
+      "properties": {
+       "isInteractive": false
+      }
+     }
+    ]
+   }
+  },
+  {
+   "commonName": "behavior.ApplyStyleOnCustomState",
+   "name": "HubDetailsActivation",
+   "overrideValue": true,
+   "states": {
+    "DEFAULT": {
+     "MenuContentPresenter.MenuGroup.TabGroup.TabHolder": [
+      "AlignLeft"
+     ]
+    },
+    "CENTERED": {
+     "MenuContentPresenter.MenuGroup.TabGroup.TabHolder": [
+      "AlignCenter"
+     ]
+    },
+    "BAP": {
+     "MenuContentPresenter.MenuGroup.TabGroup.TabHolder": [
+      "AlignBap"
+     ]
+    }
+   },
+   "bindings": [
+    {
+     "binding": "current_layout_state",
+     "property": "state"
+    }
+   ]
+  },
+  {
+   "commonName": "behavior.SelectedInputMediator",
+   "name": "behavior.SelectedInputMediator",
+   "targets": [
+    "MenuContentPresenter.MenuGroup.HubSections"
+   ]
+  }
+ ],
+ "children": [
+  {
+   "commonName": "ContentPresenter",
+   "name": "MenuContentPresenter",
+   "width": "AUTO",
+   "height": "AUTO",
+   "timerDelay": 200.0,
+   "layoutData": {
+    "commonName": "Group",
+    "name": "MenuGroup",
+    "children": [
+     {
+      "commonName": "Asset",
+      "name": "IhnWash",
+      "type": "background_white",
+      "color": "0x0B1A33",
+      "alpha": 0.55,
+      "x": 0.0,
+      "y": 0.0,
+      "width": 1920.0,
+      "height": 1080.0
+     },
+     {
+      "commonName": "GridCollectionView",
+      "name": "HubSections",
+      "height": "AUTO",
+      "width": "$SCREEN_WIDTH",
+      "y": 130.0,
+      "isSelected": true,
+      "checkItemWidths": true,
+      "itemTemplateSelector": "DefaultSelector",
+      "layoutSteps": [
+       {
+        "type": "SetPropertyOnMount",
+        "data": {
+         "property": "height",
+         "value": 676
+        }
+       },
+       {
+        "type": "SetPropertyOnMount",
+        "data": {
+         "property": "width",
+         "value": 1920
+        }
+       },
+       {
+        "type": "PositionItemsInLine",
+        "data": {
+         "paddingBetweenItems": 400,
+         "paddingAroundSelected": 400
+        }
+       },
+       {
+        "type": "CalculateLayoutSize"
+       },
+       {
+        "type": "CalculateWindowPercent"
+       },
+       {
+        "type": "ScrollSelectionToCenter"
+       },
+       {
+        "type": "ClampScrollPercent"
+       },
+       {
+        "type": "PositionMountByScroll"
+       },
+       {
+        "type": "AnimateValuesOnMount",
+        "data": {
+         "speed": 0.35,
+         "properties": [
+          "x"
+         ]
+        }
+       }
+      ],
+      "orientation": "HORIZONTAL",
+      "reuseItems": true,
+      "actionName": "hub_index_changed",
+      "actionTag": "index_changed",
+      "updateIndexOnSelectionManagerItemChanged": true,
+      "layout": {
+       "type": "CanvasLayout"
+      },
+      "bindings": [
+       {
+        "binding": "hubslist_list_sections",
+        "property": "itemSource"
+       },
+       {
+        "binding": "hubslist_index",
+        "property": "selectedIndex"
+       },
+       {
+        "binding": "hubslist_selection_manager_enabled",
+        "property": "selectionManagerEnabled"
+       }
+      ],
+      "animationScripts": [
+       {
+        "name": "ScreenIn",
+        "script": [
+         {
+          "type": "Delay",
+          "data": {
+           "duration": 225
+          }
+         },
+         {
+          "type": "Direct",
+          "data": {
+           "end": {
+            "alpha": 1,
+            "z": 0
+           },
+           "duration": 250,
+           "easing": "backOut"
+          }
+         }
+        ]
+       },
+       {
+        "name": "ScreenOut",
+        "script": [
+         {
+          "type": "Delay",
+          "data": {
+           "duration": 225
+          }
+         },
+         {
+          "type": "Direct",
+          "data": {
+           "end": {
+            "alpha": 0,
+            "z": 500
+           },
+           "duration": 250,
+           "easing": "backOut"
+          }
+         }
+        ]
+       }
+      ],
+      "behaviors": [
+       {
+        "commonName": "behavior.DefaultItemTemplateSelector",
+        "name": "DefaultSelector",
+        "bindings": [
+         {
+          "binding": "hubslist_list_sections",
+          "property": "itemTemplates"
+         }
+        ]
+       },
+       {
+        "commonName": "behavior.InputAction",
+        "name": "NextScreenInputAction",
+        "actionName": "next_screen",
+        "inputCode": "RIGHT_BUMPER",
+        "inputHintTag": "TXT_NEXT"
+       },
+       {
+        "commonName": "behavior.InputAction",
+        "name": "PreviousScreenInputAction",
+        "actionName": "previous_screen",
+        "inputCode": "LEFT_BUMPER",
+        "inputHintTag": "TXT_PREVIOUS"
+       }
+      ]
+     },
+     {
+      "commonName": "Group",
+      "name": "TabGroup",
+      "height": 56.0,
+      "width": 1712.0,
+      "x": 492.0,
+      "y": 50.0,
+      "layout": {
+       "type": "PanelLayout"
+      },
+      "children": [
+       {
+        "commonName": "TabBar",
+        "name": "TabHolder",
+        "height": 56.0,
+        "width": "AUTO",
+        "isSelected": true,
+        "itemTemplate": "SingleFilter",
+        "layoutSteps": [
+         {
+          "type": "SetPropertiesOnMount",
+          "data": {
+           "properties": {
+            "height": 36.0
+           }
+          }
+         },
+         {
+          "type": "SetPropertyOnItems",
+          "data": {
+           "property": "height",
+           "value": 36.0
+          }
+         },
+         {
+          "type": "SetPropertyOnItems",
+          "data": {
+           "property": "width",
+           "value": 230.0
+          }
+         },
+         {
+          "type": "CalculateLayoutSize"
+         },
+         {
+          "type": "PositionItemsByCenterInLine",
+          "data": {
+           "paddingBetweenItems": 5
+          }
+         }
+        ],
+        "orientation": "HORIZONTAL",
+        "reuseItems": true,
+        "layout": {
+         "type": "CanvasLayout"
+        },
+        "bindings": [
+         {
+          "binding": "tab_bar_visible",
+          "property": "visible"
+         },
+         {
+          "binding": "hubslist_list_tabs",
+          "property": "itemSource"
+         },
+         {
+          "binding": "hubslist_index",
+          "property": "selectedIndex"
+         },
+         {
+          "binding": "tab_bar_item_properties",
+          "property": "itemProperties"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

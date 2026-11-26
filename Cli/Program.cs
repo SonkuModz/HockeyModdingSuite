@@ -10,7 +10,7 @@ namespace NHL27Kit.Cli;
 ///   export [ebx|res|chunk] NAME|GUID [--out DIR]   write an asset's decompressed bytes
 /// The game folder defaults to "NHL 27 dump/NHL" next to the kit.
 /// </summary>
-public static class Program
+public static partial class Program
 {
     public static int Main(string[] args)
     {
@@ -55,6 +55,8 @@ public static class Program
                 "jersey-flat" => JerseyFlatCmd(game, opts),
                 "tunables" => TunablesCmd(game, opts),
                 "tunables-match" => TunablesMatchCmd(game, opts),
+                "eboot-bytes" => EbootBytesCmd(game, opts),
+                "tunables-set" => TunablesSetCmd(game, opts),
                 "bap" => BeAProCmd(opts),
                 "arena" => ArenaCmd(game, opts),
                 "ebx-probe" => EbxProbeCmd(game, opts),
@@ -63,6 +65,8 @@ public static class Program
                 "bc-test" => BcTestCmd(opts),
                 "retexture" => RetextureCmd(game, opts),
                 "mesh-replace" => MeshReplaceCmd(game, opts),
+                "mesh24" => Mesh24Cmd(game, opts),
+                "ebx-floats" => EbxFloatsCmd(game, opts),
                 "logo-ads" => LogoAdsCmd(game, opts),
                 "logo-ads-all" => LogoAdsAllCmd(game, opts),
                 "logo-ads-named" => LogoAdsNamedCmd(game, opts),
@@ -82,6 +86,7 @@ public static class Program
                 "kyty-releases" => KytyReleasesCmd(opts),
                 "mods" => ModsCmd(game, opts),
                 "cims" => CimsCmd(game, opts),
+                "cims-rosters" => CimsRostersCmd(game, opts),
                 "apply-sound" => ApplySoundCmd(game, opts),
                 "apply-sounds" => ApplySoundsCmd(game, opts),
                 "restore" => RestoreCmd(game, opts),
@@ -99,7 +104,19 @@ public static class Program
                 "ps4-sigtest" => Ps4SigTestCmd(game, opts),
                 "modstore-selftest" => ModStoreSelfTest(),
                 "scorebug24" => Scorebug24Cmd(game, opts),
+                "ui24" => Ui24Cmd(game, opts),
                 "movie-replace" => MovieReplaceCmd(game, opts),
+                "loc-test" => LocTestCmd(game, opts),
+                "league" => LeagueCmd(game, opts),
+                "league-probe" => LeagueProbeCmd(game, opts),
+                "league-logo" => LeagueLogoCmd(game, opts),
+                "bundle-probe" => BundleProbeCmd(game, opts),
+                "bundle-dump" => BundleDumpCmd(game, opts),
+                "league-tex" => LeagueTexCmd(game, opts),
+                "kit-clone-test" => KitCloneTestCmd(game, opts),
+                "kit-alts" => KitAltsCmd(game, opts),
+                "kit-alts-find" => KitAltsFindCmd(game, opts),
+                "arena-port" => ArenaPortCmd(game, opts),
                 _ => Unknown(args[0]),
             };
         }
@@ -284,8 +301,9 @@ public static class Program
     private static int MovieReplaceCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);
-        string name = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("movie-replace NAME --video FILE [--fit fill|fit|stretch] [--mute] [--out FILE.webm]");
-        string video = opts.Get("video") ?? throw new ArgumentException("--video FILE");
+        string name = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("movie-replace NAME --video FILE|--webm FILE [--fit fill|fit|stretch] [--mute] [--out FILE.webm] [--apply [--entry NAME] [--note TEXT]]");
+        string video = opts.Get("video"), readyWebm = opts.Get("webm");
+        if (video == null && readyWebm == null) throw new ArgumentException("--video FILE or --webm FILE (a WebM already in the movie's track layout)");
         var m = Movies.List(index).FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || x.Short.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException($"no movie {name}");
         var t = MovieReplacement.Target(index, m);
@@ -293,16 +311,51 @@ public static class Program
         var fit = Enum.TryParse<MovieFit>(opts.Get("fit") ?? "fill", true, out var f) ? f : MovieFit.Fill;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         string last = null;
-        var webm = MovieReplacement.EncodeAsync(t, video, fit, !opts.Has("mute"), s => { if (!s.Contains("frame ")) Console.WriteLine("  " + s); last = s; }).GetAwaiter().GetResult();
+        byte[] webm;
+        if (readyWebm != null)
+        {
+            webm = File.ReadAllBytes(readyWebm);
+            if (webm.Length > t.Size) throw new InvalidDataException($"{readyWebm} is {webm.Length:N0} B; the movie has {t.Size:N0}.");
+            webm = MovieReplacement.Pad(webm, t.Size) ?? throw new InvalidDataException("Can't pad it to the movie's size.");
+            video = readyWebm;
+        }
+        else webm = MovieReplacement.EncodeAsync(t, video, fit, !opts.Has("mute"), s => { if (!s.Contains("frame ")) Console.WriteLine("  " + s); last = s; }).GetAwaiter().GetResult();
         Console.WriteLine($"encoded in {sw.Elapsed.TotalSeconds:0} s: {webm.Length:N0} B");
         string outFile = opts.Get("out");
         if (outFile != null) File.WriteAllBytes(outFile, webm);
         var tocs = new TocCache(index);
         var plan = MovieReplacement.Plan(index, m, webm, LocationIndex.Build(index, tocs), tocs);
-        var check = Movies.ReadTable(plan.Ebx, Movies.FrameTable(plan.Ebx, Movies.Frames(webm)));
-        Console.WriteLine($"plan: {plan.Chunk.Patches.Count} chunk patches ({plan.Chunk.Copies} copies), {plan.EbxPlan.Patches.Count} ebx patches; table {check.Count} frames, ebx {plan.Ebx.Length} B");
+        foreach (var tr in Movies.Tracks(webm))
+        {
+            var fr = Movies.Frames(webm, tr.Number);
+            int at = Movies.FrameTable(plan.Ebx, fr);
+            Console.WriteLine($"  track {tr.Number} ({(tr.Type == 1 ? "video" : "audio")}, {tr.Language}): {fr.Count} blocks, table {(at >= 0 ? $"at {at}, matches" : "NOT FOUND")}");
+        }
+        Console.WriteLine($"plan: {plan.Chunk.Patches.Count} chunk patches ({plan.Chunk.Copies} copies), {plan.EbxPlan.Patches.Count} ebx patches; ebx {plan.Ebx.Length} B");
         foreach (var n in plan.Notes) Console.WriteLine("  note: " + n);
-        return 0;
+        if (!opts.Has("apply")) return 0;
+        // --apply: what the app's Videos page + Mods page do (one "movie" entry, the fitted WebM as its source)
+        RefuseWhileRunning();
+        var store = Mods();
+        string entryName = opts.Get("entry") ?? m.Name;
+        var old = store.Find("movie", entryName);
+        if (old != null && store.State(old, game) is not (ModState.NotApplied or ModState.Applied or ModState.Partial))
+            throw new InvalidOperationException($"{entryName} already has an entry that reads {store.State(old, game)}; pass --entry NAME");
+        if (old != null && store.State(old, game) is ModState.Applied or ModState.Partial) store.Restore(old, game, Console.WriteLine);
+        string sources = Path.Combine(store.Dir, "sources");
+        Directory.CreateDirectory(sources);
+        string src = Path.Combine(sources, $"movie_{Legacy.Fnv1(entryName):x16}.webm");
+        File.WriteAllBytes(src, webm);
+        string summary = opts.Get("note") ?? $"VP8 {t.Width}x{t.Height}, {t.Frames:N0} frames at {t.Fps:0.###} fps{(t.Audio ? " with sound" : "")} from {Path.GetFileName(video)}";
+        var entry = store.Add("movie", entryName, src, summary, plan.Patches, plan.Notes);
+        store.Apply(entry, game, Console.WriteLine);
+        Console.WriteLine($"state: {store.State(entry, game)}");
+        var back = OpenIndex(game, false);
+        var bm = Movies.List(back).First(x => x.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase));
+        bool same = Movies.Read(back, bm).AsSpan().SequenceEqual(webm);
+        bool sameEbx = back.Read(bm.Entry).AsSpan().SequenceEqual(plan.Ebx);
+        Console.WriteLine($"read back {m.Name}: {(same ? "same video" : "VIDEO DIFFERS")}, {(sameEbx ? "same asset (all tables)" : "ASSET DIFFERS")}");
+        return same && sameEbx ? 0 : 1;
     }
 
     private static int MoviesCmd(string game, Options opts)
@@ -742,6 +795,66 @@ public static class Program
         return 0;
     }
 
+    /// <summary>ui24 PATH [--movie F.swf --name N] [--dry]: lists a UI movie's copies (size, room where it is) or writes a
+    /// new FWS movie into every copy (compressed like the original), as one restorable entry. Refuses a movie bigger than
+    /// its room (a moved file is not shown by the game).</summary>
+    private static int Ui24Cmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        string path = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("ui24 PATH [--movie F.swf --name N] [--dry]");
+        string collector = LegacyEditor.CollectorOf(index, path) ?? throw new FileNotFoundException($"no {path}");
+        var legacy = new Legacy(index, collector);
+        string leaf = path[(path.LastIndexOf('/') + 1)..];
+        var all = legacy.Files().ToList();
+        // --twin P2: also write the movie into P2 (scoreclock.gfx + score_clock.gfx); --entry NAME: store under NAME and
+        // keep any earlier entry for PATH as it is (stack on top of it instead of replacing it)
+        var paths = new List<string> { path };
+        if (opts.Get("twin") is { } twin) paths.Add(twin);
+        var copies = all.Where(x => paths.Any(p => x.Name.Equals(p, StringComparison.OrdinalIgnoreCase))).GroupBy(x => x.Entry).Select(g => g.First()).ToList();
+        long Room(LegacyFile f)
+        {
+            var raw = legacy.ReadChunk(f.ChunkId);
+            return all.Where(x => x.ChunkId == f.ChunkId && x.Entry != f.Entry && x.Offset >= f.Offset + f.Size).Select(x => (long)x.Offset).DefaultIfEmpty(raw.Length).Min() - f.Offset;
+        }
+        Console.WriteLine($"collector {collector}");
+        foreach (var f in copies) Console.WriteLine($"  {f.Name}: {f.Size:N0} B, room {Room(f):N0} B, chunk {f.ChunkId}");
+        foreach (var f in all.Where(x => x.Name.EndsWith("/" + leaf, StringComparison.OrdinalIgnoreCase) && !copies.Contains(x)).GroupBy(x => x.Entry).Select(g => g.First()))
+            Console.WriteLine($"  (same name) {f.Name}: {f.Size:N0} B");
+        if (opts.Get("movie") is not { } movie) return 0;
+        var swf = File.ReadAllBytes(movie);
+        if (swf[0] != 'F' || swf[1] != 'W' || swf[2] != 'S') throw new InvalidDataException("need an uncompressed FWS movie");
+        var files = new List<(LegacyFile, byte[])>();
+        foreach (var f in copies)
+        {
+            var gfx = legacy.Read(f);
+            var body = (byte[])swf.Clone();
+            BitConverter.GetBytes((uint)body.Length).CopyTo(body, 4);
+            var d = Scorebug24.Deflate(gfx, body);
+            long room = Room(f);
+            Console.WriteLine($"  new {f.Name}: {d.Length:N0} B of room {room:N0}");
+            if (d.Length > room) throw new InvalidDataException($"{f.Name}: {d.Length:N0} B does not fit its room ({room:N0} B)");
+            files.Add((f, d));
+        }
+        if (opts.Has("dry")) return 0;
+        RefuseWhileRunning();
+        var store = Mods();
+        string entryName = opts.Get("entry") ?? path;
+        var existing = store.Find(LegacyEditor.Kind, entryName);
+        if (existing != null && store.State(existing, game) is not (ModState.Applied or ModState.Partial or ModState.NotApplied))
+            throw new InvalidOperationException($"entry {entryName} is {store.State(existing, game)}: restore the entries above it first, or pass a new --entry");
+        if (existing != null && store.State(existing, game) is ModState.Applied or ModState.Partial) store.Restore(existing, game, Console.WriteLine);
+        var notes = new List<string>();
+        var patches = LegacyEditor.PlanPs4(index, legacy, files, notes, Console.WriteLine);
+        foreach (var n in notes) Console.WriteLine("  note: " + n);
+        var e = store.Add(LegacyEditor.Kind, entryName, "UI movie", opts.Get("name") ?? Path.GetFileNameWithoutExtension(movie), patches, notes);
+        store.Apply(e, game, Console.WriteLine);
+        Console.WriteLine($"{e.Summary}: {Mods().State(e, game)}");
+        var back = new Legacy(OpenIndex(game, false), collector);
+        foreach (var f in back.Files().Where(x => paths.Any(p => x.Name.Equals(p, StringComparison.OrdinalIgnoreCase))).GroupBy(x => x.Entry).Select(g => g.First()))
+            Console.WriteLine($"read back {f.Name}: " + (Scorebug24.Inflate(back.Read(f)).AsSpan(8).SequenceEqual(swf.AsSpan(8)) ? "same movie" : "DIFFERENT"));
+        return 0;
+    }
+
     /// <summary>modstore-selftest: restoring mods that added data to one file, out of order, in a scratch folder.</summary>
     private static int ModStoreSelfTest()
     {
@@ -782,6 +895,31 @@ public static class Program
         Check("re-save restored: its data cut, the old leftover stays under the second", Read("a.cas").Length == 180);
         store.Restore(e2, game);
         Check("second restored: everything cut, files original", Read("a.cas").AsSpan().SequenceEqual(origCas) && Read("t.toc").AsSpan().SequenceEqual(origToc));
+
+        // added loose files (NewFile): folders made on apply, deleted on restore below the kept folder
+        string keep = Path.Combine(root, "user", "temp");
+        Directory.CreateDirectory(keep);
+        string looseRel = "../user/temp/nhl/ui/kettle/t1.gnf", loose = Path.Combine(game, "..", "user", "temp", "nhl", "ui", "kettle", "t1.gnf");
+        PatchData File1(byte v) => new(looseRel, 0, Array.Empty<byte>(), Enumerable.Repeat(v, 300).ToArray(), "logo", NewFile: true, KeepDir: "../user/temp");
+        var e3 = store.Add("x", "three", "", "", new[] { File1(5), Toc(8, 5) });
+        Check("loose file not applied before apply", store.State(e3, game) == ModState.NotApplied);
+        store.Apply(e3, game);
+        Check("loose file written with its folders", File.Exists(loose) && File.ReadAllBytes(loose).Length == 300 && store.State(e3, game) == ModState.Applied);
+        store.Restore(e3, game);
+        Check("loose file deleted, its folders gone, the kept folder stays",
+            !File.Exists(loose) && !Directory.Exists(Path.Combine(keep, "nhl")) && Directory.Exists(keep) && store.State(e3, game) == ModState.NotApplied && Read("t.toc").AsSpan().SequenceEqual(origToc));
+        Directory.CreateDirectory(Path.GetDirectoryName(loose));
+        File.WriteAllBytes(loose, new byte[] { 1, 2, 3 });
+        bool refused = false;
+        try { store.Apply(e3, game); } catch (InvalidDataException) { refused = true; }
+        Check("a file of someone else's there refuses the apply, nothing written", refused && File.ReadAllBytes(loose).Length == 3 && Read("t.toc").AsSpan().SequenceEqual(origToc));
+        File.Delete(loose);
+        store.Apply(e3, game);
+        File.WriteAllBytes(loose, Enumerable.Repeat((byte)9, 300).ToArray());
+        Check("a changed loose file reads as Changed", store.State(e3, game) == ModState.Changed);
+        refused = false;
+        try { store.Restore(e3, game); } catch (InvalidDataException) { refused = true; }
+        Check("restoring over a changed file refuses, the file stays", refused && File.Exists(loose));
         Directory.Delete(root, true);
         Console.WriteLine(fails == 0 ? "all passed" : $"{fails} failed");
         return fails == 0 ? 0 : 1;
@@ -834,6 +972,51 @@ public static class Program
         var entries = CimsInstaller.Install(plan, Mods(), Console.WriteLine);
         foreach (var e in entries) Console.WriteLine($"{Mods().State(e, plan.GameDir),-11} {e.Name}");
         return 0;
+    }
+
+    /// <summary>
+    /// cims-rosters DIR [--name NAME] [--apply]: puts only the rosters of a newer Center Ice Mod into NHL 24 (Core/CimsRosters).
+    /// DIR holds the package's databases as tools/cims-view saves them (gamemodes\database\t3db\nhl_game.db + meta,
+    /// gamemodes\roster\initial_experience.db). Without --apply it only plans and checks; with it, one mod entry (kind
+    /// "rosters") writes both databases, and Restore puts them back.
+    /// </summary>
+    private static int CimsRostersCmd(string game, Options opts)
+    {
+        string dir = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("cims-rosters needs the folder cims-view saved the package's databases in");
+        string name = opts.Get("name") ?? "Center Ice rosters";
+        bool apply = opts.Has("apply");
+        if (apply) RefuseWhileRunning();
+        string t3 = Path.Combine(dir, "gamemodes", "database", "t3db");
+        string meta = File.ReadAllText(Path.Combine(t3, "nhl_game-meta.xml")).TrimStart('﻿');
+        var pkgGame = new T3Db(File.ReadAllBytes(Path.Combine(t3, "nhl_game.db")), meta);
+        var pkgInitial = new T3Db(File.ReadAllBytes(Path.Combine(dir, "gamemodes", "roster", "initial_experience.db")), meta);
+        var index = OpenIndex(game, false);
+        var legacy = new Legacy(index);
+        var store = Mods();
+        if (store.Find("rosters", name) is { } had && store.State(had, game) != ModState.NotApplied)
+            throw new InvalidOperationException($"\"{name}\" is in the game already: restore it first.");
+        // read fresh from the game every time
+        var (db, initial, _) = CustomLeague.Open(legacy);
+        var lines = CimsRosters.Merge(db, pkgGame);
+        lines.AddRange(CimsRosters.Merge(initial, pkgInitial));
+        foreach (var l in lines) Console.WriteLine(l);
+        foreach (var (d, what) in new[] { (db, "nhl_game.db"), (initial, "initial_experience.db") })
+        {
+            var (ok, total) = d.CheckCrcs();
+            Console.WriteLine($"{what}: CRCs {ok}/{total}");
+            if (ok != total) throw new InvalidDataException($"{what}: CRCs don't match after the merge; nothing written.");
+        }
+        if (!apply) return 0;
+        var notes = new List<string>();
+        var patches = LegacyEditor.PlanPs4(index, legacy, new List<(LegacyFile, byte[])> { (db.Source, db.Data), (initial.Source, initial.Data) }, notes, Console.WriteLine);
+        foreach (var n in notes) Console.WriteLine("  " + n);
+        var entry = store.Add("rosters", name, Path.GetFullPath(dir), $"{name}: player and roster tables of nhl_game.db and initial_experience.db from the package; league players kept", patches, notes.Where(n => n.Contains("grew")));
+        store.Apply(entry, game, Console.WriteLine);
+        // read back from the game files
+        var (g2, i2, _) = CustomLeague.Open(new Legacy(OpenIndex(game, false)));
+        bool same = g2.Data.AsSpan().SequenceEqual(db.Data) && i2.Data.AsSpan().SequenceEqual(initial.Data);
+        Console.WriteLine($"{store.State(entry, game)}: {entry.Name} ({entry.Id}); read back from the game: {(same ? "both databases match" : "DIFFERENT")}");
+        return same ? 0 : 1;
     }
 
     /// <summary>apply-sound NAME --file AUDIO [--variation N]: replaces one variation of a sound in the game files (through the mod list).</summary>
@@ -1159,7 +1342,7 @@ public static class Program
         return 0;
     }
 
-    /// <summary>legacy-set NAME --file FILE [--collector C] [--note TEXT]: writes a whole legacy file into the game (through the mod list).</summary>
+    /// <summary>legacy-set NAME --file FILE [--collector C] [--note TEXT] [--entry ENTRY]: writes a whole legacy file into the game (through the mod list).</summary>
     private static int LegacySetCmd(string game, Options opts)
     {
         RefuseWhileRunning();
@@ -1168,7 +1351,7 @@ public static class Program
         string file = opts.Get("file") ?? throw new ArgumentException("legacy-set needs --file");
         string collector = opts.Get("collector") ?? LegacyEditor.CollectorOf(index, name) ?? throw new ArgumentException($"no collector has {name}");
         var data = File.ReadAllBytes(file);
-        var entry = LegacyEditor.Save(index, Mods(), game, collector, name, data, opts.Get("note") ?? $"{Path.GetFileName(file)} ({data.Length:N0} bytes)", Console.WriteLine);
+        var entry = LegacyEditor.Save(index, Mods(), game, collector, name, data, opts.Get("note") ?? $"{Path.GetFileName(file)} ({data.Length:N0} bytes)", Console.WriteLine, opts.Get("entry"));
         foreach (var n in entry.Warnings) Console.WriteLine($"  note: {n}");
         Console.WriteLine($"state: {Mods().State(entry, game)}");
         var back = new Legacy(index, collector);
@@ -2140,6 +2323,149 @@ public static class Program
         return 0;
     }
 
+    /// <summary>
+    /// eboot-bytes --name NAME --at FILEOFFSET --old HEX --new HEX [--sha1 EBOOTSHA1] [--note TEXT] [--write]: changes a
+    /// few bytes of eboot.bin as its own mod entry (kind "eboot", restorable from the Mods page). The bytes there must
+    /// be --old (and the whole eboot --sha1 when given); without --write it only checks and prints the plan.
+    /// </summary>
+    private static int EbootBytesCmd(string game, Options opts)
+    {
+        string name = opts.Get("name") ?? throw new ArgumentException("eboot-bytes needs --name");
+        long at = Convert.ToInt64((opts.Get("at") ?? throw new ArgumentException("eboot-bytes needs --at")).Replace("0x", ""), 16);
+        byte[] oldB = Convert.FromHexString(opts.Get("old") ?? throw new ArgumentException("eboot-bytes needs --old"));
+        byte[] newB = Convert.FromHexString(opts.Get("new") ?? throw new ArgumentException("eboot-bytes needs --new"));
+        if (oldB.Length != newB.Length || oldB.Length == 0 || oldB.Length > 4096) throw new ArgumentException("--old and --new must be the same length (1-4096 bytes)");
+        string ebootPath = Path.Combine(game, "eboot.bin");
+        var store = Mods();
+        if (store.Find("eboot", name) is { } existing)
+        {
+            Console.WriteLine($"entry '{name}' already in the list: {store.State(existing, game)}");
+            if (!opts.Has("write")) return 0;
+            RefuseWhileRunning();
+            store.Apply(existing, game, Console.WriteLine);
+            Console.WriteLine($"state {store.State(existing, game)}");
+            return 0;
+        }
+        var data = File.ReadAllBytes(ebootPath);
+        string sha = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(data)).ToLowerInvariant();
+        Console.WriteLine($"eboot.bin sha1 {sha}");
+        if (opts.Get("sha1") is { } want && !want.Equals(sha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"eboot.bin isn't the expected one ({want}); nothing was written");
+        var have = data.AsSpan((int)at, oldB.Length).ToArray();
+        Console.WriteLine($"at 0x{at:X}: {Convert.ToHexString(have)} (expected {Convert.ToHexString(oldB)}) -> {Convert.ToHexString(newB)}");
+        if (!have.AsSpan().SequenceEqual(oldB)) throw new InvalidOperationException("the bytes there aren't --old; nothing was written");
+        newB.CopyTo(data, (int)at);
+        Console.WriteLine($"sha1 after {Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(data)).ToLowerInvariant()}");
+        if (!opts.Has("write")) return 0;
+
+        RefuseWhileRunning();
+        string note = opts.Get("note") ?? name;
+        var entry = store.Add("eboot", name, ebootPath, note, new[] { new PatchData("eboot.bin", at, oldB, newB, note) });
+        store.Apply(entry, game, Console.WriteLine);
+        var back = new byte[newB.Length];
+        using (var fs = File.OpenRead(ebootPath)) { fs.Position = at; fs.ReadExactly(back); }
+        Console.WriteLine($"written: mod entry {entry.Id}, state {store.State(entry, game)}, reads back {Convert.ToHexString(back)}");
+        return 0;
+    }
+
+    /// <summary>
+    /// tunables-set --name NAME --set "gA=1;gB=0.5" [--write]: sets a few hand-picked tuning values (at most 10, each
+    /// inside its [min, max]; min/max untouched; no new constants in padding, only existing ones) as one mod entry of
+    /// its own (kind "tuning-set"). The patched eboot is read back first: the changed values read as wanted and every
+    /// other value as it was.
+    /// </summary>
+    private static int TunablesSetCmd(string game, Options opts)
+    {
+        string name = opts.Get("name") ?? throw new ArgumentException("tunables-set needs --name");
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var wanted = (opts.Get("set") ?? (opts.Get("set-file") != null ? "" : throw new ArgumentException("tunables-set needs --set or --set-file")))
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(kv => kv.Split('='))
+            .Select(p => (Name: p[0].Trim(), Value: p[1].Trim() switch { "true" => 1.0, "false" => 0.0, var s => double.Parse(s, ci) }))
+            .ToList();
+        // --set-file FILE.json ({"gName": value, ...}) adds values from a preset; --max N lifts the 10-value cap (the user's call)
+        if (opts.Get("set-file") is { } sf)
+            foreach (var kv in System.Text.Json.JsonDocument.Parse(File.ReadAllText(sf)).RootElement.EnumerateObject())
+                wanted.Add((kv.Name, kv.Value.ValueKind switch { System.Text.Json.JsonValueKind.True => 1.0, System.Text.Json.JsonValueKind.False => 0.0, _ => kv.Value.GetDouble() }));
+        if (opts.Get("skip") is { } skipList)
+        {
+            var skip = skipList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
+            wanted = wanted.Where(w => !skip.Contains(w.Name)).ToList();
+        }
+        int cap = opts.Get("max") is { } m ? int.Parse(m) : 10;
+        bool clamp = opts.Has("clamp");
+        if (wanted.Count == 0 || wanted.Count > cap) throw new ArgumentException($"set 1 to {cap} values at a time (got {wanted.Count})");
+        const string kind = "tuning-set";
+        var store = Mods();
+        if (store.Find(kind, name) is { } existing && store.State(existing, game) != ModState.NotApplied)
+            throw new InvalidOperationException($"'{name}' is in the game; restore it on the Mods page first");
+        string ebootPath = Path.Combine(game, "eboot.bin");
+        var eboot = File.ReadAllBytes(ebootPath);
+        var before = Tunables.Read(eboot);
+        var byName = before.GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.ToList());
+        var changes = new List<TunablePatcher.Change>();
+        foreach (var (n, v0) in wanted)
+        {
+            if (!byName.TryGetValue(n, out var l) || l.Count != 1) throw new ArgumentException($"{n}: not set once in this eboot");
+            var t = l[0];
+            double v = v0;
+            if (t.Min is double mn && v < mn || t.Max is double mx && v > mx)
+            {
+                if (opts.Has("allow-out-of-range"))
+                    Console.WriteLine($"  OUT OF RANGE {n}: {v0.ToString(ci)} (game range [{t.Min}, {t.Max}]; set anyway, range left as it is)");
+                else
+                {
+                    if (!clamp) throw new ArgumentException($"{n}: {v} is outside [{t.Min}, {t.Max}]");
+                    v = Math.Clamp(v, t.Min ?? v, t.Max ?? v);
+                    Console.WriteLine($"  CLAMP {n}: {v0.ToString(ci)} -> {v.ToString(ci)} (game range [{t.Min}, {t.Max}])");
+                }
+            }
+            Console.WriteLine($"  {n} ({t.Type}, {t.Group}): {t.Default} -> {v.ToString(ci)}  [{t.Min}, {t.Max}]");
+            changes.Add(new TunablePatcher.Change(n, v));
+        }
+        var plan = TunablePatcher.Make(eboot, changes);
+        // no constants in padding: drop those values and plan again
+        var caved = plan.Done.Where(d => d.Contains("new constant")).Select(d => d[..d.IndexOf(':')]).ToHashSet();
+        if (caved.Count > 0)
+        {
+            foreach (var c in caved) Console.WriteLine($"  SKIP {c}: would need a new constant in padding");
+            changes = changes.Where(c => !caved.Contains(c.Name)).ToList();
+            plan = TunablePatcher.Make(eboot, changes);
+        }
+        foreach (var d in plan.Done) Console.WriteLine("  done " + d);
+        foreach (var s in plan.Skipped) Console.WriteLine("  SKIP " + s);
+        // read back
+        var after = Tunables.Read(plan.Patched);
+        var old = before.ToDictionary(t => (t.Name, t.Site));
+        var want = changes.ToDictionary(c => c.Name);
+        var wrong = new List<string>();
+        foreach (var t in after)
+        {
+            if (!old.TryGetValue((t.Name, t.Site), out var b)) { wrong.Add($"{t.Name}: appeared"); continue; }
+            bool ch = plan.Changed.Contains(t.Name);
+            if (ch && t.Default != want[t.Name].Value) wrong.Add($"{t.Name}: reads {t.Default}, wanted {want[t.Name].Value}");
+            if (!ch && t.Default != b.Default || t.Min != b.Min || t.Max != b.Max || t.Type != b.Type) wrong.Add($"{t.Name}: moved {b.Default}/{b.Min}/{b.Max} -> {t.Default}/{t.Min}/{t.Max}");
+        }
+        if (after.Count != before.Count) wrong.Add($"{before.Count} values before, {after.Count} after");
+        foreach (var w in wrong.Take(20)) Console.WriteLine("  WRONG " + w);
+        Console.WriteLine($"{plan.Changed.Count} of {wanted.Count} values set; {plan.Patches.Count} ranges, {plan.Patches.Sum(p => p.New.Length)} bytes; read back {(wrong.Count == 0 ? "ok" : wrong.Count + " wrong")}");
+        // don't touch ranges other eboot mods own
+        // entries not in the game don't block (applying one later is refused by the store if its bytes changed)
+        foreach (var e in store.Entries.Where(e => (e.Kind != kind || e.Name != name) && store.State(e, game) != ModState.NotApplied))
+            foreach (var r in e.Patches.Where(r => r.File == "eboot.bin"))
+                if (plan.Patches.Any(p => p.Offset < r.Offset + r.Length && r.Offset < p.Offset + p.New.Length))
+                    throw new InvalidOperationException($"overlaps mod '{e.Name}' at 0x{r.Offset:X}; nothing was written");
+        if (wrong.Count > 0) throw new InvalidOperationException("the patched eboot doesn't read back as planned; nothing was written");
+        if (plan.Changed.Count == 0 || !opts.Has("write")) return 0;
+
+        RefuseWhileRunning();
+        var entry = store.Add(kind, name, ebootPath, $"{name}: " + string.Join(", ", plan.Done), plan.Patches);
+        store.Apply(entry, game, Console.WriteLine);
+        var check = Tunables.Read(File.ReadAllBytes(ebootPath)).Where(t => plan.Changed.Contains(t.Name)).ToList();
+        Console.WriteLine($"written: mod entry {entry.Id}, state {store.State(entry, game)}; in the file now: " + string.Join(", ", check.Select(t => $"{t.Name}={t.Default}")));
+        return 0;
+    }
+
     private static int TunablesCmd(string game, Options opts)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -2436,6 +2762,95 @@ public static class Program
     /// material in the other LODs, --blank-shadow the shadow-only sections. --dry writes the result as an OBJ instead of
     /// patching the game.
     /// </summary>
+    /// <summary>
+    /// mesh24 NAME [--geo FILE.json] [--dry OUT.obj] [--label TEXT]: NHL 24 (PS4). Without --geo, lists the sections
+    /// (LOD:index, material, counts, elements). With --geo, writes the file's sections (MeshWriter24.Load) into the mesh
+    /// in place; --dry reads the result back as an OBJ of LOD 0 instead of writing. A write is one ModStore entry (kind
+    /// "mesh"): the new chunk is stored uncompressed at the end of its CAS file (ChunkGrower), so Restore undoes it.
+    /// </summary>
+    private static int Mesh24Cmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        if (index.Layout.IsPs5) throw new ArgumentException("mesh24 is for NHL 24 (PS4); use mesh-replace for NHL 27");
+        string name = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("mesh24 needs a mesh name");
+        var res = index.GetRes(name) ?? throw new ArgumentException($"no mesh {name}");
+        var resBytes = index.Read(res);
+        var sections = MeshWriter24.Sections(resBytes);
+        foreach (var x in sections)
+            Console.WriteLine($"  {x.Lod}:{x.Index} {x.Material,-34} {x.VertexCount,6} verts {x.TriangleCount,6} tris  chunk {x.Chunk}  [{string.Join(" ", x.Elements.Select(e => $"{e.Usage:x}/{e.Format}/{e.Size}"))}]");
+        if (opts.Get("geo") is not { } geoFile) return 0;
+        var geo = MeshWriter24.Load(geoFile);
+        var chunks = new Dictionary<Guid, byte[]>();
+        byte[] ChunkOf(Guid id) => chunks.TryGetValue(id, out var c) ? c : chunks[id] = index.Read(index.GetChunk(id) ?? throw new InvalidDataException($"no chunk {id}"));
+        foreach (var ((lod, si), g) in geo)
+        {
+            var s = sections.FirstOrDefault(x => x.Lod == lod && x.Index == si) ?? throw new ArgumentException($"no section {lod}:{si}");
+            MeshWriter24.Write(ChunkOf(s.Chunk), s, g);
+            Console.WriteLine(g.VertexCount == 0 ? $"  blanked {lod}:{si} {s.Material}" : $"  wrote {lod}:{si} {s.Material}: {g.VertexCount} verts, {g.TriangleCount} tris");
+        }
+        if (opts.Get("dry") is { } dry)
+        {
+            var back = new MeshSet(resBytes, id => chunks.TryGetValue(id, out var c) ? c : index.GetChunk(id) is { } e ? index.Read(e) : null, ps4: true, meta: res.ResMeta);
+            File.WriteAllText(dry, back.ToObj(0));
+            Console.WriteLine($"read back and wrote {dry}");
+            return 0;
+        }
+        RefuseWhileRunning();
+        var tocs = new TocCache(index);
+        var loc = LocationIndex.Build(index, tocs);
+        var store = Mods();
+        if (store.Find("mesh", name) is { } old) { store.Restore(old, game, Console.WriteLine); store.Remove(old); }
+        var patches = new List<PatchData>();
+        var notes = new List<string>();
+        var ends = new Dictionary<string, long>();
+        foreach (var (id, bytes) in chunks)
+        {
+            var plan = ChunkGrower.Plan(index, id, FrostbiteBlocks.Store(bytes), loc, tocs, ends);
+            patches.AddRange(plan.Patches);
+            notes.AddRange(plan.Notes);
+        }
+        var entry = store.Add("mesh", name, opts.Get("label") ?? geoFile, $"Mesh: {geo.Count} section(s) rewritten", patches, notes);
+        store.Apply(entry, game, Console.WriteLine);
+        Console.WriteLine($"state: {store.State(entry, game)}");
+        return 0;
+    }
+
+    /// <summary>
+    /// ebx-floats NAME --at OFFSET [--set a,b,c...] [--expect a,b,c...] [--label TEXT]: shows the floats at a byte offset
+    /// of an EBX's decoded bytes; with --set, overwrites them (same length) as one ModStore entry (kind "ebx", like the
+    /// app's EBX saves), restoring an earlier entry first. --expect refuses the write unless the old values match.
+    /// </summary>
+    private static int EbxFloatsCmd(string game, Options opts)
+    {
+        var index = OpenIndex(game, false);
+        string name = opts.Positional.FirstOrDefault() ?? throw new ArgumentException("ebx-floats needs an EBX name");
+        int at = int.Parse(opts.Get("at") ?? throw new ArgumentException("--at OFFSET"));
+        static float[] Floats(string s) => s.Split(',').Select(t => float.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        var store = Mods();
+        if (opts.Get("set") is { } set && store.Find("ebx", name) is { } old)
+        {
+            RefuseWhileRunning();
+            store.Restore(old, game, Console.WriteLine); store.Remove(old);
+            index = OpenIndex(game, false);
+        }
+        var data = index.Read(index.GetEbx(name) ?? throw new ArgumentException($"no ebx {name}"));
+        var now = Enumerable.Range(0, 8).Select(i => BitConverter.ToSingle(data, at + i * 4)).ToArray();
+        Console.WriteLine($"{name} @{at}: {string.Join(", ", now.Select(v => v.ToString("0.#####", System.Globalization.CultureInfo.InvariantCulture)))}");
+        if (opts.Get("set") is not { } values) return 0;
+        var nv = Floats(values);
+        if (opts.Get("expect") is { } exp && Floats(exp).Select((v, i) => Math.Abs(v - now[i]) > 1e-6).Any(b => b))
+            throw new InvalidDataException("the values there aren't the expected ones; nothing written");
+        RefuseWhileRunning();
+        var edited = (byte[])data.Clone();
+        for (int i = 0; i < nv.Length; i++) BitConverter.TryWriteBytes(edited.AsSpan(at + i * 4), nv[i]);
+        var tocs = new TocCache(index);
+        var plan = ResPatcher.PlanEbx(index, name, edited, LocationIndex.Build(index, tocs), tocs, new Dictionary<string, long>());
+        var entry = store.Add("ebx", name, opts.Get("label") ?? $"floats @{at}", $"EBX floats @{at} = {values}", plan.Patches, plan.Notes);
+        store.Apply(entry, game, Console.WriteLine);
+        Console.WriteLine($"state: {store.State(entry, game)}");
+        return 0;
+    }
+
     private static int MeshReplaceCmd(string game, Options opts)
     {
         var index = OpenIndex(game, false);

@@ -18,6 +18,13 @@ public sealed class RangePatch
     /// is at the end; otherwise it stays, unused, until what was added after it is restored too (<see cref="ModStore"/>).
     /// </summary>
     public bool Append { get; set; }
+    /// <summary>
+    /// A whole file the mod adds (a loose file the game looks for, none there before): its old bytes are "no file".
+    /// Applying writes it (making its folders); restoring deletes it while it holds what was written.
+    /// </summary>
+    public bool NewFile { get; set; }
+    /// <summary>For an added file: the folder (below the game folder, like File) whose empty subfolders a restore removes.</summary>
+    public string KeepDir { get; set; }
 
     // A range too big to keep a copy of (a mod package's data, gigabytes) reads its new bytes from the package instead:
     // Source is the package file, the range's bytes are the deflate stream at SourceOffset (SourceLength compressed
@@ -137,7 +144,7 @@ public sealed class ModStore
             int i = e.Patches.Count;
             File.WriteAllBytes(Old(e, i), p.Old);
             File.WriteAllBytes(New(e, i), p.New);
-            e.Patches.Add(new RangePatch { File = p.File, Offset = p.Offset, Length = p.New.Length, OldSha1 = Hex(SHA1.HashData(p.Old)), NewSha1 = Hex(SHA1.HashData(p.New)), Note = p.Note, Append = p.Append });
+            e.Patches.Add(new RangePatch { File = p.File, Offset = p.Offset, Length = p.New.Length, OldSha1 = Hex(SHA1.HashData(p.Old)), NewSha1 = Hex(SHA1.HashData(p.New)), Note = p.Note, Append = p.Append, NewFile = p.NewFile, KeepDir = p.KeepDir });
         }
     }
 
@@ -180,6 +187,13 @@ public sealed class ModStore
     /// </summary>
     private static string Current(string file, RangePatch p)
     {
+        // an added file: "no file" reads as its old (empty) bytes; a file of another length as something else
+        if (p.NewFile)
+        {
+            if (!File.Exists(file)) return Hex(SHA1.HashData(Array.Empty<byte>()));
+            long len = new FileInfo(file).Length;
+            return len == p.Length ? HashRange(file, 0, p.Length) : $"length {len}";
+        }
         // an earlier range of the same mod may be added before it, so a file that ends at or before it hasn't got it
         if (p.Append && new FileInfo(file).Length <= p.Offset) return Hex(SHA1.HashData(Array.Empty<byte>()));
         return HashRange(file, p.Offset, p.Length);
@@ -220,7 +234,7 @@ public sealed class ModStore
         {
             if (p.Append && !appendsCount) continue;
             string file = Path_(game, p);
-            if (!File.Exists(file)) return ModState.Missing;
+            if (!p.NewFile && !File.Exists(file)) return ModState.Missing;
             string h = Current(file, p);
             if (h == null) return ModState.Missing;
             // a range whose old and new bytes are the same (a size that didn't change) says nothing either way
@@ -250,7 +264,7 @@ public sealed class ModStore
         {
             var p = e.Patches[i];
             string file = Path_(game, p);
-            if (!File.Exists(file)) throw new FileNotFoundException($"Can't {verb} {e.Name}: {p.File} is not in the game folder.");
+            if (!p.NewFile && !File.Exists(file)) throw new FileNotFoundException($"Can't {verb} {e.Name}: {p.File} is not in the game folder.");
             // added data needs no check to restore: nothing points at it afterwards, and TrimAdded cuts only what it recognises
             if (p.Append && !toNew) continue;
             string h = Current(file, p) ?? throw new InvalidDataException($"Can't {verb} {e.Name}: {p.File} is shorter than the patch expects.");
@@ -272,6 +286,24 @@ public sealed class ModStore
             if (p.Append && !toNew) continue;
             var data = File.ReadAllBytes(toNew ? New(e, i) : Old(e, i));
             if (Hex(SHA1.HashData(data)) != want) throw new InvalidDataException($"The stored {(toNew ? "new" : "old")} bytes of {e.Name} (patch {i}) are damaged.");
+            if (p.NewFile)
+            {
+                if (toNew)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(file));
+                    File.WriteAllBytes(file + ".tmp", data);
+                    File.Move(file + ".tmp", file, overwrite: true);
+                }
+                else
+                {
+                    File.Delete(file);
+                    if (p.KeepDir != null) DeleteEmptyFolders(Path.GetDirectoryName(file), Path.Combine(game, p.KeepDir.Replace('/', Path.DirectorySeparatorChar)));
+                }
+                if (Current(file, p) != want) throw new IOException($"{p.File} was not {(toNew ? "written" : "deleted")}.");
+                written++;
+                log?.Invoke($"{p.Note ?? "file"}: {(toNew ? "added" : "deleted")} {p.File}");
+                continue;
+            }
             using (var fs = new FileStream(file, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
             {
                 fs.Position = p.Offset;
@@ -287,6 +319,25 @@ public sealed class ModStore
             foreach (var f in e.Patches.Where(p => p.Append).Select(p => p.File).Distinct(StringComparer.OrdinalIgnoreCase))
                 written += TrimAdded(game, f, log);
         log?.Invoke($"{e.Name}: {written} range(s) written, {e.Patches.Count - written} already as wanted");
+    }
+
+    /// <summary>
+    /// Deletes <paramref name="dir"/> and its parents while they're empty, stopping below <paramref name="keep"/> (a
+    /// loose file's folders that the mod made; a folder with anything else in it stays, and so does keep itself).
+    /// </summary>
+    private static void DeleteEmptyFolders(string dir, string keep)
+    {
+        string stop = Path.GetFullPath(keep).TrimEnd(Path.DirectorySeparatorChar);
+        for (string d = Path.GetFullPath(dir); d != null && d.Length > stop.Length + 1 && d.StartsWith(stop + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase); d = Path.GetDirectoryName(d))
+        {
+            try
+            {
+                if (!Directory.Exists(d) || Directory.EnumerateFileSystemEntries(d).Any()) return;
+                Directory.Delete(d);
+            }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+        }
     }
 
     /// <summary>

@@ -1,0 +1,340 @@
+{
+ "commonName": "Composite",
+ "name": "HubHomePrimaryVersion",
+ "height": "AUTO",
+ "width": "$SAFEZONE_WIDTH",
+ "inheritState": false,
+ "layout": {
+  "type": "CanvasLayout"
+ },
+ "style-definitions": {
+  "Deselected": {
+   "isInteractive": false,
+   "isSelected": false
+  },
+  "Selected": {
+   "isInteractive": true,
+   "isSelected": true
+  },
+  "CustomRowStyles": {
+   "separatorDefaultStyle": [
+    "ACTIVE_STATE"
+   ],
+   "separatorDisabledStyle": [
+    "ACTIVE_STATE"
+   ],
+   "separatorSelectedStyle": [
+    "ACTIVE_STATE"
+   ],
+   "titleDefaultStyle": [
+    "BUTTON_ROW_FONT_DEFAULT_DESELECTED",
+    "ACTIVE_STATE",
+    "IHN_BTN"
+   ],
+   "titleDisabledStyle": [
+    "BUTTON_ROW_FONT_DEFAULT_DISABLED",
+    "ACTIVE_STATE",
+    "IHN_BTN"
+   ],
+   "titleSelectedStyle": [
+    "BUTTON_ROW_FONT_DEFAULT_SELECTED",
+    "ACTIVE_STATE",
+    "IHN_BTN_ALT"
+   ]
+  },
+  "IHN_BTN": {
+   "fontFace": "$Body",
+   "fontSize": 23
+  },
+  "IHN_BTN_ALT": {
+   "fontFace": "$BodyAlternate",
+   "fontSize": 23
+  }
+ },
+ "propertyMap": {
+  "data.CPsTimer": [
+   "SectionGroup.Stats.timerDelay",
+   "SectionGroup.OptionsListContainer.timerDelay"
+  ],
+  "data.LocalizedHomeWidgetOptionsList": "SectionGroup.OptionsListContainer.widgetData",
+  "data.ReplayHighlights": "SectionGroup.ReplayHighlights.widgetData",
+  "data.GameStatsData": "SectionGroup.Stats.widgetData"
+ },
+ "children": [
+  {
+   "commonName": "Group",
+   "name": "SectionGroup",
+   "height": "AUTO",
+   "width": "AUTO",
+   "x": 0.0,
+   "y": 0.0,
+   "clipToBounds": false,
+   "layout": {
+    "type": "CanvasLayout"
+   },
+   "children": [
+    {
+     "commonName": "Asset",
+     "name": "IhnFrameGold",
+     "type": "background_white",
+     "color": "0xC9A54C",
+     "alpha": 1.0,
+     "x": 360.0,
+     "y": 0.0,
+     "width": 1200.0,
+     "height": 300.0
+    },
+    {
+     "commonName": "Asset",
+     "name": "IhnFrameNavy",
+     "type": "background_white",
+     "color": "0x0B1A33",
+     "alpha": 1.0,
+     "x": 363.0,
+     "y": 3.0,
+     "width": 1194.0,
+     "height": 294.0
+    },
+    {
+     "commonName": "Label",
+     "name": "IhnFrameTag",
+     "styles": [
+      "NHL_BODY_7_ALT_ITALIC"
+     ],
+     "fontColor": "0xE8CB7A",
+     "text": "IHN  \u00b7  PAUSED",
+     "x": 360.0,
+     "y": 18.0,
+     "width": 1200.0,
+     "height": 30.0,
+     "fontSize": 22.0,
+     "textAlignH": "CENTER"
+    },
+    {
+     "commonName": "ContentPresenter",
+     "name": "ReplayHighlights",
+     "layoutData": {
+      "commonName": "HubHomeReplayHighlights",
+      "name": "ReplayHighlightsItem",
+      "x": -3000,
+      "width": 828,
+      "height": 480
+     },
+     "preloadData": {
+      "commonName": "Group",
+      "name": "StatsPreload",
+      "width": 860,
+      "height": 480,
+      "x": 100.0,
+      "y": 0.0,
+      "layout": {
+       "type": "PanelLayout"
+      }
+     },
+     "setData": true,
+     "behaviors": [
+      {
+       "commonName": "behavior.MoveNodeToFrontOnSelection",
+       "name": "MoveNodeToFrontOnSelection",
+       "target": "this",
+       "triggeringElement": "this"
+      }
+     ],
+     "visible": false,
+     "alpha": 0.0
+    },
+    {
+     "commonName": "ContentPresenter",
+     "name": "Stats",
+     "layoutData": {
+      "commonName": "GameStatsPanel",
+      "name": "StatsItem",
+      "height": 670.0,
+      "width": 702.0,
+      "x": 520.0,
+      "y": 116.0
+     },
+     "preloadData": {
+      "commonName": "Group",
+      "name": "StatsPreload",
+      "height": 670.0,
+      "width": 702.0,
+      "x": 520.0,
+      "y": 116.0,
+      "layout": {
+       "type": "PanelLayout"
+      }
+     },
+     "setData": true,
+     "behaviors": [
+      {
+       "commonName": "behavior.MoveNodeToFrontOnSelection",
+       "name": "MoveNodeToFrontOnSelection",
+       "target": "this",
+       "triggeringElement": "this"
+      }
+     ]
+    },
+    {
+     "commonName": "ContentPresenter",
+     "name": "OptionsListContainer",
+     "inheritState": false,
+     "isSelected": true,
+     "preloadData": {
+      "commonName": "Group",
+      "name": "OptionsListPreload",
+      "height": 90.0,
+      "width": 1200.0,
+      "x": 360.0,
+      "y": 340.0,
+      "layout": {
+       "type": "PanelLayout"
+      }
+     },
+     "layoutData": {
+      "propertyMap": {
+       "data": "OptionsList.itemSource"
+      },
+      "commonName": "Composite",
+      "x": 360.0,
+      "y": 340.0,
+      "layout": {
+       "type": "CanvasLayout"
+      },
+      "behaviors": [
+       {
+        "commonName": "behavior.ApplyStyleOnSelection",
+        "name": "ListSelectionBehavior",
+        "onDeselected": [
+         "Deselected"
+        ],
+        "onSelected": [
+         "Selected"
+        ],
+        "target": [
+         "OptionsList",
+         "ScrollbarOptionsList"
+        ],
+        "triggeringElement": "this"
+       }
+      ],
+      "children": [
+       {
+        "commonName": "ScrollbarCollectionView",
+        "name": "ScrollbarOptionsList",
+        "height": 220.0,
+        "x": 835.0,
+        "inheritState": false,
+        "hideOnDeselected": true,
+        "collectionView": "OptionsList",
+        "pillColor": "$HIGHLIGHT_PRIMARY",
+        "layout": {
+         "type": "CanvasLayout"
+        },
+        "visible": false,
+        "alpha": 0.0
+       },
+       {
+        "commonName": "GridCollectionView",
+        "name": "OptionsList",
+        "height": 90.0,
+        "width": 1200.0,
+        "x": 0.0,
+        "clipToBounds": true,
+        "inheritState": false,
+        "isSelected": false,
+        "itemDataMapping": {
+         "": "tileData"
+        },
+        "itemStyles": [
+         "CustomRowStyles"
+        ],
+        "itemTemplate": "ManageTeamRow",
+        "layoutSteps": [
+         {
+          "type": "SetPropertyOnMount",
+          "data": {
+           "property": "height",
+           "value": 90
+          }
+         },
+         {
+          "type": "SetPropertyOnMount",
+          "data": {
+           "property": "width",
+           "value": 1200
+          }
+         },
+         {
+          "type": "SetPropertyOnItems",
+          "data": {
+           "property": "width",
+           "value": 293
+          }
+         },
+         {
+          "type": "SetPropertyOnItems",
+          "data": {
+           "property": "height",
+           "value": 84
+          }
+         },
+         {
+          "type": "PositionItemsInLine",
+          "data": {
+           "paddingBetweenItems": 9
+          }
+         },
+         {
+          "type": "CalculateLayoutSize"
+         },
+         {
+          "type": "CalculateWindowPercent"
+         },
+         {
+          "type": "ScrollSelectionToCenter"
+         },
+         {
+          "type": "ClampScrollPercent"
+         },
+         {
+          "type": "PositionMountByScroll"
+         },
+         {
+          "type": "AnimateValuesOnMount",
+          "data": {
+           "properties": [
+            "x"
+           ],
+           "speed": 0.4
+          }
+         }
+        ],
+        "actionName": "options_list_index_changed",
+        "actionTag": "index_changed",
+        "orientation": "HORIZONTAL",
+        "reuseItems": true,
+        "updateIndexOnSelectionManagerItemChanged": true,
+        "layout": {
+         "type": "CanvasLayout"
+        }
+       }
+      ]
+     },
+     "setData": true,
+     "layout": {
+      "type": "CanvasLayout"
+     },
+     "behaviors": [
+      {
+       "commonName": "behavior.MoveNodeToFrontOnSelection",
+       "name": "MoveNodeToFrontOnSelection",
+       "target": "this",
+       "triggeringElement": "this"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

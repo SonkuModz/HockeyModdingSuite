@@ -1,0 +1,352 @@
+{
+ "commonName": "Group",
+ "name": "Root",
+ "height": "$SCREEN_HEIGHT",
+ "width": "$SCREEN_WIDTH",
+ "layout": {
+  "type": "CanvasLayout"
+ },
+ "style-definitions": {
+  "AlignLeft": {
+   "alignH": "LEFT"
+  },
+  "AlignCenter": {
+   "alignH": "CENTER"
+  },
+  "AlignBap": {
+   "alignH": "LEFT",
+   "marginTop": -26.0
+  }
+ },
+ "propertyMap": {
+  "data.TabBar.visible": "TabGroup.visible"
+ },
+ "animationScripts": [
+  {
+   "name": "hide",
+   "script": [
+    {
+     "anim": "QUICK_SCREEN_OUT_BACK",
+     "data": {
+      "targets": [
+       "AllImmediateChildren"
+      ]
+     }
+    }
+   ]
+  }
+ ],
+ "behaviors": [
+  {
+   "commonName": "behavior.NavViewState",
+   "name": "behavior.NavViewState",
+   "actionName": "SetHubState",
+   "states": {
+    "ON": [
+     {
+      "name": "TabsViewSections",
+      "properties": {
+       "isInteractive": true
+      },
+      "animationScripts": [
+       "ScreenIn"
+      ]
+     },
+     {
+      "name": "TabGroup",
+      "properties": {
+       "isInteractive": true,
+       "visible": true
+      }
+     }
+    ],
+    "OFF": [
+     {
+      "name": "TabsViewSections",
+      "properties": {
+       "isInteractive": false
+      },
+      "animationScripts": [
+       "ScreenOut"
+      ]
+     },
+     {
+      "name": "TabGroup",
+      "properties": {
+       "isInteractive": false,
+       "visible": false
+      }
+     }
+    ]
+   }
+  },
+  {
+   "commonName": "behavior.ApplyStyleOnCustomState",
+   "name": "HubDetailsActivation",
+   "overrideValue": true,
+   "states": {
+    "DEFAULT": {
+     "TabGroup.TabHolder": [
+      "AlignLeft"
+     ]
+    },
+    "CENTERED": {
+     "TabGroup.TabHolder": [
+      "AlignCenter"
+     ]
+    },
+    "BAP": {
+     "TabGroup.TabHolder": [
+      "AlignBap"
+     ]
+    }
+   },
+   "bindings": [
+    {
+     "binding": "current_layout_state",
+     "property": "state"
+    }
+   ]
+  },
+  {
+   "commonName": "behavior.SelectedInputMediator",
+   "name": "behavior.SelectedInputMediator",
+   "targets": [
+    "TabsViewSections"
+   ]
+  }
+ ],
+ "children": [
+  {
+   "commonName": "GridCollectionView",
+   "name": "TabsViewSections",
+   "height": "AUTO",
+   "width": 1920,
+   "clipToBounds": true,
+   "y": 58.0,
+   "isSelected": true,
+   "checkItemWidths": true,
+   "itemTemplateSelector": "DefaultSelector",
+   "automationKey": "automationName",
+   "layoutSteps": [
+    {
+     "type": "SetPropertyOnMount",
+     "data": {
+      "property": "height",
+      "value": 776
+     }
+    },
+    {
+     "type": "SetPropertyOnMount",
+     "data": {
+      "property": "width",
+      "value": 1920
+     }
+    },
+    {
+     "type": "PositionItemsInLine",
+     "data": {
+      "paddingBetweenItems": 70,
+      "paddingAroundSelected": 25
+     }
+    },
+    {
+     "type": "CalculateLayoutSize"
+    },
+    {
+     "type": "CalculateWindowPercent"
+    },
+    {
+     "type": "ScrollSelectionToCenter"
+    },
+    {
+     "type": "ClampScrollPercent"
+    },
+    {
+     "type": "PositionMountByScroll"
+    },
+    {
+     "type": "AnimateValuesOnMount",
+     "data": {
+      "speed": 0.5,
+      "properties": [
+       "x"
+      ]
+     }
+    },
+    {
+     "type": "PropertyAroundEdges",
+     "data": {
+      "innerDistance": 0,
+      "outerDistance": 500,
+      "innerValue": 1,
+      "outerValue": 0,
+      "property": "alpha",
+      "easing": "quadInOut"
+     }
+    }
+   ],
+   "orientation": "HORIZONTAL",
+   "reuseItems": true,
+   "actionName": "hub_index_changed",
+   "actionTag": "index_changed",
+   "updateIndexOnSelectionManagerItemChanged": true,
+   "layout": {
+    "type": "CanvasLayout"
+   },
+   "bindings": [
+    {
+     "binding": "hubslist_list_sections",
+     "property": "itemSource"
+    },
+    {
+     "binding": "hubslist_index",
+     "property": "selectedIndex"
+    },
+    {
+     "binding": "hubslist_selection_manager_enabled",
+     "property": "selectionManagerEnabled"
+    }
+   ],
+   "animationScripts": [
+    {
+     "name": "ScreenIn",
+     "script": [
+      {
+       "type": "Delay",
+       "data": {
+        "duration": 225
+       }
+      },
+      {
+       "type": "Direct",
+       "data": {
+        "end": {
+         "alpha": 1,
+         "z": 0
+        },
+        "duration": 250,
+        "easing": "backOut"
+       }
+      }
+     ]
+    },
+    {
+     "name": "ScreenOut",
+     "script": [
+      {
+       "type": "Delay",
+       "data": {
+        "duration": 225
+       }
+      },
+      {
+       "type": "Direct",
+       "data": {
+        "end": {
+         "alpha": 0,
+         "z": 500
+        },
+        "duration": 250,
+        "easing": "backOut"
+       }
+      }
+     ]
+    }
+   ],
+   "behaviors": [
+    {
+     "commonName": "behavior.DefaultItemTemplateSelector",
+     "name": "DefaultSelector",
+     "bindings": [
+      {
+       "binding": "hubslist_list_sections",
+       "property": "itemTemplates"
+      }
+     ]
+    },
+    {
+     "commonName": "behavior.InputAction",
+     "name": "NextScreenInputAction",
+     "actionName": "next_screen",
+     "inputCode": "RIGHT_BUMPER",
+     "bindings": [
+      {
+       "binding": "hub_config",
+       "property": "inputHintTag",
+       "dataMapping": "Inputs.Next"
+      }
+     ]
+    },
+    {
+     "commonName": "behavior.InputAction",
+     "name": "PreviousScreenInputAction",
+     "actionName": "previous_screen",
+     "inputCode": "LEFT_BUMPER",
+     "bindings": [
+      {
+       "binding": "hub_config",
+       "property": "inputHintTag",
+       "dataMapping": "Inputs.Previous"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "commonName": "Group",
+   "name": "TabGroup",
+   "height": 56.0,
+   "width": 1712.0,
+   "x": 330.0,
+   "y": 18.0,
+   "layout": {
+    "type": "PanelLayout"
+   },
+   "children": [
+    {
+     "commonName": "TabBar",
+     "name": "TabHolder",
+     "height": 56.0,
+     "width": "AUTO",
+     "isSelected": true,
+     "checkItemWidths": true,
+     "itemTemplate": "TabButton",
+     "itemDataMapping": {
+      "tabButtonData": "data"
+     },
+     "layoutSteps": [
+      {
+       "type": "PositionItemsInLine"
+      }
+     ],
+     "orientation": "HORIZONTAL",
+     "reuseItems": true,
+     "layout": {
+      "type": "CanvasLayout"
+     },
+     "bindings": [
+      {
+       "binding": "hubslist_list_sections",
+       "property": "itemSource"
+      },
+      {
+       "binding": "hubslist_index",
+       "property": "selectedIndex"
+      },
+      {
+       "binding": "tab_bar_item_properties",
+       "property": "itemProperties"
+      }
+     ]
+    }
+   ],
+   "bindings": [
+    {
+     "binding": "tab_visible",
+     "property": "visible"
+    }
+   ]
+  }
+ ]
+}

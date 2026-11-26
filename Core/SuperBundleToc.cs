@@ -62,6 +62,10 @@ public sealed class SuperBundleToc
 
         // the chunk entries run up to the names (header int 8); their stride tells the format apart
         int stride = chunkCount > 0 ? (nameOffset - chunkEntryOffset) / chunkCount : 0;
+        // a TOC with added bundles (TocAdder) has its names moved to the end: header int 10 counts the chunk entries' ints
+        int entryInts = I(Base + 40);
+        if (chunkCount > 0 && stride is not (12 or 16) && entryInts > 0 && entryInts * 4 / chunkCount is 12 or 16 && entryInts * 4 % chunkCount == 0)
+            stride = entryInts * 4 / chunkCount;
         Ps5 = stride >= 16 || (chunkCount == 0 && catalogOf != null);
         int groupSize = Ps5 ? 8 : 4;
 

@@ -1,0 +1,173 @@
+{
+ "commonName": "ButtonTileTemplate",
+ "name": "ManageTeamRow",
+ "inheritState": false,
+ "highlightContext": "ManageTeamRowContext",
+ "inputHintTag": "Select",
+ "highlightType": "BarSimple",
+ "useBacklight": false,
+ "showPanel": false,
+ "outlineStyles": {
+  "default": [
+   "INVISIBLE"
+  ]
+ },
+ "scaleAmount": 1.0,
+ "state": "off",
+ "style-definitions": {
+  "PANEL_ON_SELECTION": {
+   "showPanel": false
+  },
+  "PANEL_ON_DESELECTION": {
+   "showPanel": false
+  }
+ },
+ "behaviors": [
+  {
+   "commonName": "ControlStateStyles",
+   "name": "ControlStateStyles",
+   "defaultStyles": [
+    "PANEL_ON_DESELECTION"
+   ],
+   "disabledStyles": [
+    "PANEL_ON_DESELECTION"
+   ],
+   "selectedStyles": [
+    "PANEL_ON_SELECTION"
+   ]
+  }
+ ],
+ "propertyMap": {
+  "tileData.userData": "InputAction.userData",
+  "tileData.actionName": "InputAction.actionName",
+  "tileData.text": "Title.text",
+  "tileData.hasNotifications": "Notification.visible",
+  "titleDefaultStyle": "Title.ControlStateStyles.defaultStyles",
+  "titleDisabledStyle": "Title.ControlStateStyles.disabledStyles",
+  "titleSelectedStyle": "Title.ControlStateStyles.selectedStyles",
+  "separatorDefaultStyle": "DividerBottom.ControlStateStyles.defaultStyles",
+  "separatorDisabledStyle": "DividerBottom.ControlStateStyles.disabledStyles",
+  "separatorSelectedStyle": "DividerBottom.ControlStateStyles.selectedStyles"
+ },
+ "children": [
+  {
+   "commonName": "Asset",
+   "name": "IhnButton",
+   "type": "background_white",
+   "color": "0x13294B",
+   "alpha": 0.95,
+   "alignH": "FILL",
+   "alignV": "FILL",
+   "marginLeft": 0.0,
+   "marginRight": 0.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnButtonOn",
+   "type": "background_white",
+   "color": "0xC9A54C",
+   "alpha": 1.0,
+   "alignH": "FILL",
+   "alignV": "FILL",
+   "behaviors": [
+    {
+     "commonName": "ControlStateStyles",
+     "name": "ControlStateStyles",
+     "defaultStyles": [
+      "INVISIBLE"
+     ],
+     "disabledStyles": [
+      "INVISIBLE"
+     ],
+     "selectedStyles": [
+      "VISIBLE"
+     ]
+    }
+   ]
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnButtonLine",
+   "type": "background_white",
+   "color": "0xC9A54C",
+   "alpha": 1.0,
+   "alignH": "FILL",
+   "alignV": "BOTTOM",
+   "height": 3.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "DividerBottom",
+   "alignH": "FILL",
+   "alignV": "BOTTOM",
+   "height": 1.0,
+   "marginLeft": 12.0,
+   "marginRight": 12.0,
+   "type": "divider_white",
+   "styles": [
+    "DIVIDER_COLOR"
+   ],
+   "behaviors": [
+    {
+     "commonName": "ControlStateStyles",
+     "name": "ControlStateStyles",
+     "defaultStyles": [
+      "ACTIVE_STATE"
+     ],
+     "disabledStyles": [
+      "INACTIVE_STATE"
+     ],
+     "selectedStyles": [
+      "ACTIVE_STATE"
+     ]
+    }
+   ],
+   "alpha": 0.0
+  },
+  {
+   "commonName": "Label",
+   "name": "Title",
+   "styles": [
+    "NHL_BODY_6_ALT"
+   ],
+   "alignH": "FILL",
+   "alignV": "FILL",
+   "height": 50.0,
+   "resizeType": "SCALEDOWN",
+   "textAlignH": "CENTER",
+   "textAlignV": "CENTER",
+   "behaviors": [
+    {
+     "commonName": "ControlStateStyles",
+     "name": "ControlStateStyles",
+     "defaultStyles": [
+      "BUTTON_ROW_FONT_DEFAULT_DESELECTED",
+      "NHL_BODY_6"
+     ],
+     "disabledStyles": [
+      "BUTTON_ROW_FONT_DEFAULT_DISABLED",
+      "NHL_BODY_6"
+     ],
+     "selectedStyles": [
+      "BUTTON_ROW_FONT_DEFAULT_SELECTED",
+      "NHL_BODY_6_ALT"
+     ]
+    }
+   ],
+   "multiline": false,
+   "wordWrap": false,
+   "marginLeft": 10.0,
+   "marginRight": 10.0
+  },
+  {
+   "commonName": "Asset",
+   "name": "Notification",
+   "alignH": "RIGHT",
+   "alignV": "CENTER",
+   "marginLeft": 0.0,
+   "marginRight": 13.0,
+   "marginTop": 0.0,
+   "type": "glossy_warning_icon"
+  }
+ ]
+}

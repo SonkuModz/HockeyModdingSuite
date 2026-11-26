@@ -1,0 +1,136 @@
+{
+    "commonName": "Composite",
+    "name": "BackgroundWidget",
+    "height": 1080.0,
+    "width": 1920.0,
+    "layout":
+    {
+        "type": "CanvasLayout"
+    },
+    "propertyMap":
+    {
+        "data.backgroundLabel.textTop": "BillboardLabelTop.htmlText",
+        "data.backgroundLabel.textBottom": "BillboardLabelBottom.htmlText",
+        "data.backgroundLabel.text": "BillboardLabel.htmlText",
+        "data.backgroundLabel.visible":
+        [
+            "BillboardLabelTop.visible",
+            "BillboardLabelBottom.visible"
+        ],
+        "data.backgroundVideo.moviePath": "BillboardMoviePlayer.movie",
+        "data.backgroundVideo.backupMoviePath" : "BillboardMoviePlayer.backupMovie",
+        "data.backgroundVideo.visible": "BillboardMoviePlayer.visible",
+        "data.backgroundVideo.triggers": "BillboardMoviePlayer.markers",
+        "data.backgroundVideo.currentMoviePaused": "BillboardMoviePlayer.currentMoviePaused",
+        "data.backgroundVideo.loop": "BillboardMoviePlayer.loop",
+        "data.backgroundImage.id": "BackgroundImage.id",
+        "data.backgroundImage.type": "BackgroundImage.type",
+        "data.backgroundImage.visible": "BackgroundImage.visible"
+    },
+    "style-definitions":
+    {
+        "LongLanguageBillboardStyle":
+        {
+            "y":295
+        }
+    },
+    "children":
+    [
+        {
+            "commonName": "Asset",
+            "name": "GridBackgroundAsset",
+            "height": 1080.0,
+            "width": 1920.0,
+            "x": 0.0,
+            "y": 0.0
+        },
+        {
+            "commonName": "Asset",
+            "name": "BackgroundImage",
+            "x": 0.0,
+            "y": 0.0,
+            "type": "blank_texture"
+        },
+        {
+            "commonName": "MoviePlayer",
+            "name": "BillboardMoviePlayer",
+            "height": 1080.0,
+            "width": 1920.0,
+            "x": 0.0,
+            "y": 0.0
+        },
+        {
+            "commonName": "Label",
+            "name": "BillboardLabelTop",
+            "styles":
+            [
+                "FONT_SWATCH_DEFAULT",
+                "NHL_HEADER_0_ALT"
+            ],
+            "height": 150.0,
+            "width": 1306.0,
+            "x": 130.0,
+            "y": 206.0
+        },
+        {
+            "commonName": "Label",
+            "name": "BillboardLabelBottom",
+            "styles":
+            [
+                "FONT_SWATCH_DEFAULT",
+                "NHL_HERO_4"
+            ],
+            "height": 120.0,
+            "scaleX": 2.1,
+            "scaleY": 2.1,
+            "width": 659.0,
+            "x": 80.0,
+            "y": 285.0,
+            "resizeType": "SCALEDOWN",
+            "scaleMarginWidth": 40.0,
+            "textAlignV": "TOP",
+            "tracking": -3.0,
+            "behaviors":
+            [
+                {
+                    "commonName": "behavior.ApplyStyleOnLanguage",
+                    "name": "ApplyStyleOnLanguage",
+                    "frenchStyle":
+                    [
+                        "LongLanguageBillboardStyle"
+                    ],
+                    "czechStyle":
+                    [
+                        "LongLanguageBillboardStyle"
+                    ],
+                    "germanStyle":
+                    [
+                        "LongLanguageBillboardStyle"
+                    ],
+                    "swedishStyle":
+                    [
+                        "LongLanguageBillboardStyle"
+                    ]
+                }
+            ]
+        },
+        {
+            "commonName": "Asset",
+            "name": "MainMenuVideoScrim",
+            "height": 1080.0,
+            "width": 1920.0,
+            "x": 0.0,
+            "y": 0.0,
+            "alpha": 0.9,
+            "type": "homepage_video_scrim"
+        }
+    ],
+    "authoringData":
+    {
+        "designSize":
+        {
+            "width": 1920.0,
+            "height": 1080.0
+        }
+    }
+}

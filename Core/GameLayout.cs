@@ -113,5 +113,18 @@ public sealed class GameLayout
         return Path.Combine(patch ? PatchDir : DataDir, Rel(Catalogs[catalog]), $"cas_{cas:D2}.cas");
     }
 
+    /// <summary>
+    /// For reading a game that isn't on disk as one (a package's changes over the game): opens a CAS path for reading
+    /// instead of the file there; null (the default) reads the file.
+    /// </summary>
+    public static Func<string, Stream> ReadRedirect { get; set; }
+
+    /// <summary>A CAS file opened for reading (<see cref="ReadRedirect"/> when set).</summary>
+    public Stream OpenCasRead(int catalog, int cas, bool patch = false)
+    {
+        string path = CasPath(catalog, cas, patch);
+        return ReadRedirect?.Invoke(path) ?? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+    }
+
     private static string Rel(string path) => path.Replace('/', Path.DirectorySeparatorChar);
 }

@@ -1,0 +1,222 @@
+{
+ "commonName": "Composite",
+ "name": "GameStatsItem",
+ "height": 200.0,
+ "width": 180.0,
+ "propertyMap": {
+  "data.attrName": "AttrName.text",
+  "data.awayColor": [
+   "Away.BarContainer.Bar.color"
+  ],
+  "data.awayScale": "Away.AttrBar.scaleX",
+  "data.awayText": "Away.Label.text",
+  "data.homeColor": [
+   "Home.BarContainer.Bar.color"
+  ],
+  "data.homeScale": "Home.AttrBar.scaleX",
+  "data.homeText": "Home.Label.text"
+ },
+ "layout": {
+  "type": "PanelLayout"
+ },
+ "children": [
+  {
+   "commonName": "Asset",
+   "name": "IhnTile",
+   "type": "background_white",
+   "color": "0x0B1A33",
+   "alpha": 0.92,
+   "alignH": "FILL",
+   "alignV": "FILL"
+  },
+  {
+   "commonName": "Asset",
+   "name": "IhnTileTop",
+   "type": "background_white",
+   "color": "0xC9A54C",
+   "alpha": 1.0,
+   "alignH": "FILL",
+   "alignV": "TOP",
+   "height": 3.0
+  },
+  {
+   "commonName": "Rectangle",
+   "name": "BaseLine",
+   "alignH": "CENTER",
+   "alignV": "CENTER",
+   "height": 1.0,
+   "width": 340.0,
+   "marginTop": 4.0,
+   "alpha": 0.0,
+   "styles": [
+    "DIVIDER_COLOR"
+   ]
+  },
+  {
+   "commonName": "Label",
+   "name": "AttrName",
+   "width": 172.0,
+   "styles": [
+    "NHL_BODY_8_ALT",
+    "IHN_GOLD_TEXT"
+   ],
+   "alignH": "CENTER",
+   "alignV": "CENTER",
+   "marginTop": 0.0,
+   "textAlignH": "CENTER",
+   "resizeType": "SCALEDOWN"
+  },
+  {
+   "commonName": "Container",
+   "name": "Away",
+   "alignH": "LEFT",
+   "alignV": "TOP",
+   "width": 180.0,
+   "marginTop": 10.0,
+   "layout": {
+    "type": "PanelLayout"
+   },
+   "children": [
+    {
+     "commonName": "Label",
+     "name": "Label",
+     "styles": [
+      "NHL_HEADER_3_ALT",
+      "FONT_SWATCH_DEFAULT"
+     ],
+     "alignH": "CENTER",
+     "alignV": "CENTER",
+     "textAlignH": "CENTER",
+     "marginLeft": 0.0,
+     "marginTop": 0.0,
+     "width": 180.0,
+     "height": 58.0,
+     "marginRight": 0.0
+    },
+    {
+     "commonName": "Rectangle",
+     "name": "AttrBar",
+     "alignH": "RIGHT",
+     "alignV": "CENTER",
+     "alpha": 0.0,
+     "height": 4.0,
+     "width": 170.0,
+     "marginTop": 12.0,
+     "visible": false
+    },
+    {
+     "commonName": "Group",
+     "name": "BarContainer",
+     "mask": "AttrBar",
+     "alignH": "RIGHT",
+     "alignV": "CENTER",
+     "height": 4.0,
+     "width": 170.0,
+     "marginTop": 12.0,
+     "marginRight": 1,
+     "children": [
+      {
+       "commonName": "Asset",
+       "name": "Bar",
+       "type": "team_stats_dotline_bar",
+       "height": 4.0,
+       "width": 235.0
+      },
+      {
+       "commonName": "Asset",
+       "name": "BarGlow",
+       "type": "team_stats_dotline_bar_glow",
+       "height": 4.0,
+       "width": 235.0,
+       "blendMode": "ADD",
+       "alpha": 0.0
+      }
+     ],
+     "alpha": 0.0,
+     "visible": false
+    }
+   ],
+   "height": 70.0,
+   "marginBottom": 0.0
+  },
+  {
+   "commonName": "Container",
+   "name": "Home",
+   "alignH": "LEFT",
+   "alignV": "BOTTOM",
+   "width": 180.0,
+   "marginTop": 0.0,
+   "layout": {
+    "type": "PanelLayout"
+   },
+   "children": [
+    {
+     "commonName": "Label",
+     "name": "Label",
+     "styles": [
+      "NHL_HEADER_3_ALT",
+      "FONT_SWATCH_DEFAULT"
+     ],
+     "alignH": "CENTER",
+     "alignV": "CENTER",
+     "textAlignH": "CENTER",
+     "marginRight": 0.0,
+     "marginTop": 0.0,
+     "width": 180.0,
+     "height": 58.0,
+     "marginLeft": 0.0
+    },
+    {
+     "commonName": "Rectangle",
+     "name": "AttrBar",
+     "alignH": "LEFT",
+     "alignV": "CENTER",
+     "alpha": 0.0,
+     "height": 4.0,
+     "width": 170.0,
+     "marginTop": 12.0,
+     "visible": false
+    },
+    {
+     "commonName": "Group",
+     "name": "BarContainer",
+     "mask": "AttrBar",
+     "alignH": "LEFT",
+     "alignV": "CENTER",
+     "height": 4.0,
+     "width": 170.0,
+     "marginTop": 12.0,
+     "marginLeft": 1,
+     "children": [
+      {
+       "commonName": "Asset",
+       "name": "Bar",
+       "type": "team_stats_dotline_bar",
+       "width": 235.0,
+       "flipX": true
+      },
+      {
+       "commonName": "Asset",
+       "name": "BarGlow",
+       "type": "team_stats_dotline_bar_glow",
+       "height": 4.0,
+       "width": 235.0,
+       "flipX": true,
+       "blendMode": "ADD",
+       "alpha": 0.0
+      }
+     ],
+     "alpha": 0.0,
+     "visible": false
+    }
+   ],
+   "height": 70.0,
+   "marginBottom": 10.0
+  }
+ ],
+ "style-definitions": {
+  "IHN_GOLD_TEXT": {
+   "fontColor": "0xE8CB7A"
+  }
+ }
+}
