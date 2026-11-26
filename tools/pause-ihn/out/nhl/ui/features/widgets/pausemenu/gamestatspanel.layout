@@ -1,0 +1,344 @@
+{
+ "commonName": "Composite",
+ "name": "GameStatsPanel",
+ "layout": {
+  "type": "PanelLayout"
+ },
+ "propertyMap": {
+  "data.HomeTeam.name": "InformationGroup.HomeTeamName.text",
+  "data.HomeTeam.id": "InformationGroup.HomeTeamLogo.id",
+  "data.HomeTeam.score": "InformationGroup.MatchInfoGroup.ScoresGroup.HomeScore.text",
+  "data.HomeTeam.aggAbbr": "InformationGroup.AggregateScoreGroup.HomeAggregateScore.AggAbbr.text",
+  "data.HomeTeam.aggScore": [
+   "InformationGroup.AggregateScoreGroup.HomeAggregateScore.Value.text",
+   {
+    "property": "visible",
+    "converter": "ux.converter.ChooseValueConverter",
+    "target": "InformationGroup.AggregateScoreGroup.HomeAggregateScore",
+    "converterParams": {
+     "default": true,
+     "-1": false
+    }
+   }
+  ],
+  "data.AwayTeam.name": "InformationGroup.AwayTeamName.text",
+  "data.AwayTeam.id": "InformationGroup.AwayTeamLogo.id",
+  "data.AwayTeam.score": "InformationGroup.MatchInfoGroup.ScoresGroup.AwayScore.text",
+  "data.AwayTeam.aggAbbr": "InformationGroup.AggregateScoreGroup.AwayAggregateScore.AggAbbr.text",
+  "data.AwayTeam.aggScore": [
+   "InformationGroup.AggregateScoreGroup.AwayAggregateScore.Value.text",
+   {
+    "property": "visible",
+    "converter": "ux.converter.ChooseValueConverter",
+    "target": "InformationGroup.AggregateScoreGroup.AwayAggregateScore",
+    "converterParams": {
+     "default": true,
+     "-1": false
+    }
+   }
+  ],
+  "data.AttrList": "Stats.itemSource",
+  "compress": "NormalCompressList.value"
+ },
+ "backgroundStyles": {
+  "default": [
+   "VISIBLE"
+  ]
+ },
+ "behaviors": [
+  {
+   "commonName": "behavior.ApplyPropertyOnBooleanValue",
+   "name": "NormalCompressList",
+   "onTrue": [
+    {
+     "type": "PositionItemsInLine",
+     "data": {
+      "paddingBetweenItems": 188
+     }
+    },
+    {
+     "type": "CalculateLayoutSize"
+    },
+    {
+     "type": "CalculateWindowPercent"
+    }
+   ],
+   "onFalse": [
+    {
+     "type": "PositionItemsInLine",
+     "data": {
+      "paddingBetweenItems": 188
+     }
+    },
+    {
+     "type": "CalculateLayoutSize"
+    },
+    {
+     "type": "CalculateWindowPercent"
+    }
+   ],
+   "targets": [
+    "Stats.layoutSteps"
+   ],
+   "value": false
+  }
+ ],
+ "children": [
+  {
+   "commonName": "Group",
+   "name": "InformationGroup",
+   "layout": {
+    "type": "CanvasLayout"
+   },
+   "children": [
+    {
+     "commonName": "Asset",
+     "name": "AwayTeamLogo",
+     "y": -34.0,
+     "type": "team_logo_small",
+     "scaleX": 1.1,
+     "scaleY": 1.1,
+     "x": -89.0
+    },
+    {
+     "commonName": "Label",
+     "name": "AwayTeamName",
+     "x": 72,
+     "y": -15,
+     "textAlignH": "CENTER",
+     "textAlignV": "CENTER",
+     "height": 96.0,
+     "width": 170.0,
+     "resizeType": "SCALEDOWN",
+     "styles": [
+      "FONT_SWATCH_DEFAULT",
+      "NHL_HEADER_1_ALT"
+     ]
+    },
+    {
+     "commonName": "Group",
+     "name": "MatchInfoGroup",
+     "x": 0.0,
+     "y": -14.0,
+     "width": 702.0,
+     "height": 96.0,
+     "layout": {
+      "type": "PanelLayout"
+     },
+     "children": [
+      {
+       "commonName": "Asset",
+       "name": "ScoresBackground",
+       "type": "background_white",
+       "alignV": "CENTER",
+       "alignH": "CENTER",
+       "height": 72,
+       "width": 206,
+       "marginTop": -8.0,
+       "color": "0xC9A54C",
+       "alpha": 1.0
+      },
+      {
+       "commonName": "Group",
+       "name": "ScoresGroup",
+       "alignV": "CENTER",
+       "alignH": "CENTER",
+       "height": 72,
+       "width": 186,
+       "marginTop": -4.0,
+       "layout": {
+        "type": "PanelLayout"
+       },
+       "children": [
+        {
+         "commonName": "Label",
+         "name": "AwayScore",
+         "alignH": "LEFT",
+         "height": 72.0,
+         "width": 88.0,
+         "indent": 15.0,
+         "resizeType": "SCALEDOWN",
+         "textAlignH": "CENTER",
+         "textAlignV": "CENTER",
+         "styles": [
+          "IHN_SCORE_TEXT",
+          "NHL_HEADER_2_ALT"
+         ]
+        },
+        {
+         "commonName": "Label",
+         "name": "SeparatorLabel",
+         "alignH": "CENTER",
+         "height": 72,
+         "width": 50,
+         "marginLeft": -2,
+         "text": "-",
+         "textAlignH": "CENTER",
+         "textAlignV": "CENTER",
+         "styles": [
+          "IHN_SCORE_TEXT",
+          "NHL_HEADER_2_ALT"
+         ]
+        },
+        {
+         "commonName": "Label",
+         "name": "HomeScore",
+         "alignH": "RIGHT",
+         "height": 72.0,
+         "width": 88.0,
+         "indent": 15.0,
+         "resizeType": "SCALEDOWN",
+         "textAlignH": "CENTER",
+         "textAlignV": "CENTER",
+         "styles": [
+          "IHN_SCORE_TEXT",
+          "NHL_HEADER_2_ALT"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "commonName": "Label",
+     "name": "HomeTeamName",
+     "height": 96.0,
+     "width": 170.0,
+     "textAlignH": "CENTER",
+     "textAlignV": "CENTER",
+     "resizeType": "SCALEDOWN",
+     "x": 461.0,
+     "y": -15.0,
+     "styles": [
+      "FONT_SWATCH_DEFAULT",
+      "NHL_HEADER_1_ALT"
+     ]
+    },
+    {
+     "commonName": "Asset",
+     "name": "HomeTeamLogo",
+     "x": 614.0,
+     "y": -34.0,
+     "type": "team_logo_small",
+     "scaleX": 1.1,
+     "scaleY": 1.1
+    },
+    {
+     "commonName": "Group",
+     "name": "AggregateScoreGroup",
+     "y": -65.0,
+     "width": 702.0,
+     "layout": {
+      "type": "PanelLayout"
+     },
+     "children": [
+      {
+       "commonName": "Stack",
+       "name": "AwayAggregateScore",
+       "height": 65.0,
+       "width": "AUTO",
+       "marginLeft": 5.0,
+       "orientation": "HORIZONTAL",
+       "spacing": 8.0,
+       "visible": false,
+       "layout": {
+        "type": "StackLayout"
+       },
+       "children": [
+        {
+         "commonName": "Label",
+         "name": "Value",
+         "width": "AUTO",
+         "height": 40.0,
+         "alignV": "CENTER",
+         "textAlignV": "CENTER",
+         "styles": [
+          "NHL_HEADER_6_ALT"
+         ]
+        },
+        {
+         "commonName": "Label",
+         "name": "AggAbbr",
+         "width": "AUTO",
+         "height": 40.0,
+         "alignV": "CENTER",
+         "textAlignV": "CENTER",
+         "styles": [
+          "NHL_BODY_7_ALT"
+         ]
+        }
+       ]
+      },
+      {
+       "commonName": "Stack",
+       "name": "HomeAggregateScore",
+       "height": 65.0,
+       "width": "AUTO",
+       "marginLeft": 550.0,
+       "orientation": "HORIZONTAL",
+       "spacing": 8.0,
+       "reverseDirection": true,
+       "alignH": "RIGHT",
+       "visible": false,
+       "layout": {
+        "type": "StackLayout"
+       },
+       "children": [
+        {
+         "commonName": "Label",
+         "name": "Value",
+         "width": "AUTO",
+         "height": 40.0,
+         "alignV": "CENTER",
+         "textAlignH": "RIGHT",
+         "textAlignV": "CENTER",
+         "styles": [
+          "NHL_HEADER_6_ALT"
+         ]
+        },
+        {
+         "commonName": "Label",
+         "name": "AggAbbr",
+         "width": "AUTO",
+         "height": 40.0,
+         "alignV": "CENTER",
+         "textAlignV": "CENTER",
+         "styles": [
+          "NHL_BODY_7_ALT"
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "scaleX": 1.35,
+   "scaleY": 1.35
+  },
+  {
+   "commonName": "CollectionView",
+   "name": "Stats",
+   "x": 0.0,
+   "alignH": "LEFT",
+   "alignV": "TOP",
+   "marginTop": 394.0,
+   "clipToBounds": false,
+   "isSelected": false,
+   "checkItemHeights": false,
+   "itemTemplate": "GameStatsItem",
+   "selectedIndex": -1,
+   "orientation": "HORIZONTAL",
+   "layout": {
+    "type": "CanvasLayout"
+   },
+   "marginLeft": -400.0,
+   "width": 1680.0,
+   "height": 200.0
+  }
+ ],
+ "style-definitions": {
+  "IHN_SCORE_TEXT": {
+   "fontColor": "0x0B1A33"
+  }
+ }
+}

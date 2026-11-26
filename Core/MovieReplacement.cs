@@ -76,7 +76,9 @@ public static class MovieReplacement
             bool sourceAudio = keepAudio && t.Audio && await HasAudioAsync(source, ct);
             bool still = IsStill(source);
             long budget = t.Size - 64;
-            double seconds = t.Seconds, audioBits = t.Audio ? 128_000 : 0;
+            // libvorbis refuses less than about 32 kbps a channel (an 8-channel movie at 128k fails with "Invalid argument")
+            int audioRate = Math.Max(128_000, 32_000 * Math.Max(1, t.AudioChannels));
+            double seconds = t.Seconds, audioBits = t.Audio ? audioRate : 0;
             double bitrate = Math.Clamp((budget * 8 / seconds - audioBits) * 0.9, 100_000, 60_000_000);
             int gop = Math.Clamp(t.Frames / t.Keyframes, 30, 300);
             string scale = fit switch
@@ -101,7 +103,7 @@ public static class MovieReplacement
                     string filter = $"[0:v]{scale},setsar=1{Simplify(t, attempt)},fps={Num(t.Fps)},tpad=stop_mode=clone:stop_duration={Num(seconds + 1)},format=yuv420p[v]";
                     if (audio) filter += sourceAudio ? $";[0:a]aresample={t.AudioRate},apad[a]" : ";[1:a]anull[a]";
                     args.AddRange(new[] { "-filter_complex", filter, "-map", "[v]" });
-                    if (audio) args.AddRange(new[] { "-map", "[a]", "-c:a", "libvorbis", "-b:a", "128k", "-ac", t.AudioChannels.ToString(), "-ar", t.AudioRate.ToString() });
+                    if (audio) args.AddRange(new[] { "-map", "[a]", "-c:a", "libvorbis", "-b:a", audioRate.ToString(), "-ac", t.AudioChannels.ToString(), "-ar", t.AudioRate.ToString() });
                     else args.Add("-an");
                     args.AddRange(new[]
                     {
@@ -193,12 +195,12 @@ public static class MovieReplacement
     }
 
     /// <summary>The asset with its frame table rewritten for <paramref name="webm"/> (same frame count).</summary>
-    public static byte[] Retable(byte[] ebx, int at, byte[] webm)
+    public static byte[] Retable(byte[] ebx, int at, byte[] webm) => WriteTable((byte[])ebx.Clone(), at, Movies.Frames(webm), "video");
+
+    private static byte[] WriteTable(byte[] output, int at, IReadOnlyList<MovieFrame> frames, string what)
     {
-        var frames = Movies.Frames(webm);
-        int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(ebx.AsSpan(at));
-        if (frames.Count != count) throw new InvalidDataException($"The video has {frames.Count} frames; the movie's table holds {count}.");
-        var output = (byte[])ebx.Clone();
+        int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(output.AsSpan(at));
+        if (frames.Count != count) throw new InvalidDataException($"The new {what} has {frames.Count} blocks; the movie's table holds {count}.");
         for (int i = 0; i < count; i++)
         {
             int o = at + 4 + 12 * i;
@@ -206,6 +208,43 @@ public static class MovieReplacement
             BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(o + 4), (uint)frames[i].Offset);
             BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(o + 8), (uint)frames[i].Size);
         }
+        return output;
+    }
+
+    /// <summary>
+    /// The asset rewritten for <paramref name="webm"/>: a MovieTexture2Asset has a block table for EVERY track of its
+    /// WebM (picture, the "eaa" alpha track, sound), plus the sound's CodecPrivate offset and size. The new file must have
+    /// the same tracks (number and type) with the same block counts; anything else is refused (stale tables point into
+    /// the old file and the game skips the movie).
+    /// </summary>
+    public static byte[] RetableAll(byte[] ebx, byte[] original, byte[] webm)
+    {
+        var oldTracks = Movies.Tracks(original);
+        var newTracks = Movies.Tracks(webm);
+        var output = (byte[])ebx.Clone();
+        foreach (var ot in oldTracks)
+        {
+            var nt = newTracks.FirstOrDefault(x => x.Number == ot.Number)
+                ?? throw new InvalidDataException($"The new file has no track {ot.Number} ({(ot.Type == 1 ? "video" : "audio")}, \"{ot.Language}\"); the movie needs the same tracks.");
+            if (nt.Type != ot.Type) throw new InvalidDataException($"Track {ot.Number} is type {nt.Type} in the new file, {ot.Type} in the movie.");
+            var oldFrames = Movies.Frames(original, ot.Number);
+            int at = Movies.FrameTable(output, oldFrames);
+            if (at < 0) throw new InvalidDataException($"Track {ot.Number}'s table wasn't found in the asset.");
+            WriteTable(output, at, Movies.Frames(webm, nt.Number), $"track {ot.Number}");
+            if (ot.CodecPrivateOffset >= 0)
+            {
+                Span<byte> key = stackalloc byte[8];
+                BinaryPrimitives.WriteUInt32LittleEndian(key, (uint)ot.CodecPrivateOffset);
+                BinaryPrimitives.WriteUInt32LittleEndian(key[4..], (uint)ot.CodecPrivateSize);
+                int k = output.AsSpan().IndexOf(key);
+                if (k >= 0)
+                {
+                    BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(k), (uint)nt.CodecPrivateOffset);
+                    BinaryPrimitives.WriteUInt32LittleEndian(output.AsSpan(k + 4), (uint)nt.CodecPrivateSize);
+                }
+            }
+        }
+        if (newTracks.Count != oldTracks.Count) throw new InvalidDataException($"The new file has {newTracks.Count} tracks; the movie has {oldTracks.Count}.");
         return output;
     }
 
@@ -218,7 +257,7 @@ public static class MovieReplacement
         var ebx = index.Read(m.Entry);
         int at = Movies.FrameTable(ebx, oldFrames);
         if (at < 0) throw new InvalidDataException($"{m.Short}'s frame table wasn't found in its asset.");
-        var newEbx = Retable(ebx, at, webm);
+        var newEbx = RetableAll(ebx, original, webm);
         var plan = new MoviePlan
         {
             Movie = m,

@@ -1,0 +1,216 @@
+{
+ "commonName": "TabButtonBase",
+ "name": "TabElement",
+ "height": 60.0,
+ "width": "AUTO",
+ "inheritState": false,
+ "layout": {
+  "type": "PanelLayout"
+ },
+ "propertyMap": {
+  "Mode": [
+   "ComponentStack.TabNameGroup.Background.ButtonBackgroundControlStateTrigger.state",
+   "ComponentStack.TabNameGroup.TabName.ButtonTileControlStateTrigger.state",
+   "ComponentStack.TabNameGroup.NotificationCircle.NotificationStyleControlStateTrigger.state"
+  ],
+  "NotificationBackgroundColor": "ComponentStack.NotificationBadgeWidget.NotificationBackgroundColor",
+  "NotificationLabel": "ComponentStack.NotificationBadgeWidget.NotificationLabel",
+  "NotificationLabelColor": "ComponentStack.NotificationBadgeWidget.NotificationLabelColor",
+  "TitleWidth": "ComponentStack.TabNameGroup.TabName.width",
+  "data.NotificationVisible": "ComponentStack.TabNameGroup.NotificationCircle.visible"
+ },
+ "style-definitions": {
+  "NotificationNormalOnStyle": {
+   "fillColor": "$WHITE"
+  },
+  "NotificationNormalOffStyle": {
+   "fillColor": "$HIGHLIGHT_PRIMARY"
+  },
+  "NotificationAlternateOnStyle": {
+   "fillColor": "$HIGHLIGHT_SECONDARY"
+  },
+  "NotificationAlternateOffStyle": {
+   "fillColor": "$HIGHLIGHT_PRIMARY"
+  },
+  "IHN_TAB_ON": {
+   "color": "0xC9A54C"
+  },
+  "IHN_TAB_TEXT_ON": {
+   "fontColor": "0x0B1A33"
+  }
+ },
+ "children": [
+  {
+   "commonName": "Stack",
+   "name": "ComponentStack",
+   "alignH": "FILL",
+   "alignV": "FILL",
+   "width": "AUTO",
+   "layout": {
+    "type": "StackLayout",
+    "data": {
+     "orientation": "HORIZONTAL",
+     "spacing": 10.0
+    }
+   },
+   "children": [
+    {
+     "commonName": "Group",
+     "name": "TabNameGroup",
+     "height": 60.0,
+     "width": "AUTO",
+     "layout": {
+      "type": "PanelLayout"
+     },
+     "children": [
+      {
+       "commonName": "Rectangle",
+       "name": "Background",
+       "alignH": "FILL",
+       "alignV": "CENTER",
+       "height": 30.0,
+       "width": "AUTO",
+       "cornerRadius": 5.0,
+       "styles": [
+        "TAB_BUTTON_BACKGROUND_COLOR"
+       ],
+       "behaviors": [
+        {
+         "commonName": "ButtonTileControlStateTrigger",
+         "name": "ButtonBackgroundControlStateTrigger",
+         "state": "normal",
+         "target": "ChooseStyleBackground"
+        },
+        {
+         "commonName": "ChooseStyle",
+         "name": "ChooseStyleBackground",
+         "styleStates": {
+          "default": [
+           "DEACTIVE_STATE"
+          ],
+          "normalselected": [
+           "IHN_TAB_ON",
+           "ACTIVE_STATE"
+          ],
+          "alternateselected": [
+           "IHN_TAB_ON",
+           "ACTIVE_STATE"
+          ],
+          "RUSHselected": [
+           "IHN_TAB_ON",
+           "ACTIVE_STATE"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "commonName": "Label",
+       "name": "TabName",
+       "height": 60.0,
+       "width": "AUTO",
+       "forceCaps": true,
+       "marginTop": -1.0,
+       "resizeType": "COMPRESS",
+       "textAlignH": "CENTER",
+       "textAlignV": "CENTER",
+       "behaviors": [
+        {
+         "commonName": "ButtonTileControlStateTrigger",
+         "name": "ButtonTileControlStateTrigger",
+         "state": "normal",
+         "target": "ChooseStyle"
+        },
+        {
+         "commonName": "ChooseStyle",
+         "name": "ChooseStyle",
+         "styleStates": {
+          "default": [
+           "NHL_HEADER_9_WIDE",
+           "TAB_BUTTON_LABEL_UNSELECTED_COLOR",
+           "ACTIVE_STATE"
+          ],
+          "normalselected": [
+           "NHL_HEADER_9_WIDE_ALT",
+           "IHN_TAB_TEXT_ON",
+           "ACTIVE_STATE"
+          ],
+          "alternateselected": [
+           "NHL_HEADER_9_WIDE_ALT",
+           "IHN_TAB_TEXT_ON",
+           "ACTIVE_STATE"
+          ],
+          "alternatedeselected": [
+           "NHL_HEADER_9_WIDE",
+           "TAB_BUTTON_LABEL_UNSELECTED_COLOR",
+           "ACTIVE_STATE"
+          ],
+          "lockeddeselected": [
+           "NHL_HEADER_9_WIDE",
+           "TAB_BUTTON_LABEL_UNSELECTED_COLOR",
+           "INACTIVE_STATE"
+          ],
+          "RUSHselected": [
+           "NHL_HEADER_9_WIDE_ALT",
+           "HIGHLIGHT_PRIMARY",
+           "ACTIVE_STATE"
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "commonName": "Circle",
+       "name": "NotificationCircle",
+       "alignH": "RIGHT",
+       "alignV": "CENTER",
+       "height": 20.0,
+       "marginLeft": 0.0,
+       "marginTop": 0.0,
+       "marginRight": 10.0,
+       "visible": false,
+       "width": 20.0,
+       "radius": 3.5,
+       "behaviors": [
+        {
+         "commonName": "ButtonTileControlStateTrigger",
+         "name": "NotificationStyleControlStateTrigger",
+         "state": "normal",
+         "target": "ChooseNotificationStyle"
+        },
+        {
+         "commonName": "ChooseStyle",
+         "name": "ChooseNotificationStyle",
+         "styleStates": {
+          "default": [
+           "NotificationNormalOffStyle"
+          ],
+          "normalselected": [
+           "NotificationNormalOnStyle"
+          ],
+          "normaldeselected": [
+           "NotificationNormalOffStyle"
+          ],
+          "alternateselected": [
+           "NotificationAlternateOnStyle"
+          ],
+          "alternatedeselected": [
+           "NotificationAlternateOffStyle"
+          ]
+         }
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "commonName": "NotificationBadge",
+     "name": "NotificationBadgeWidget",
+     "marginTop": 18.0,
+     "marginLeft": -10.0,
+     "marginRight": 12.0
+    }
+   ]
+  }
+ ]
+}

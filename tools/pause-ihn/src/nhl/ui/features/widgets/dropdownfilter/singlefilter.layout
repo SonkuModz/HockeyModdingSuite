@@ -1,0 +1,872 @@
+{
+    "commonName": "Composite",
+    "name": "SingleFilter",
+    "height": 44.0,
+    "width": 280.0,
+    "inheritState": false,
+    "mode": "TAB",
+    "layout":
+    {
+        "type": "PanelLayout"
+    },
+    "style-definitions":
+    {
+        "SpecialPrimaryLabel":
+        {
+            "z": 0.0
+        },
+        "TriggerIconDefault":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_COLOR"]
+        },
+        "TriggerIconDefaultSelected":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_SELECTED_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_SELECTED_COLOR"]
+        },
+        "TriggerIconSelected":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_SELECTED_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_SELECTED_COLOR"]
+        },
+        "TriggerIconAlternateDeselected":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_ALTERNATE_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_ALTERNATE_COLOR"]
+        },
+        "TriggerIconAlternateSelected":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_SELECTED_ALTERNATE_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_SELECTED_ALTERNATE_COLOR"]
+        },
+        "TriggerIconRushDeselected":
+        {
+            "baseStyles": ["HIGHLIGHT_PRIMARY_COLOR"],
+            "frontStyles": ["DARK_BLACK_COLOR"]
+        },
+        "TriggerIconRushSelected":
+        {
+            "baseStyles": ["BLACK_COLOR"],
+            "frontStyles": ["WHITE_COLOR"]
+        },
+        "TriggerIconLockedDeselected":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_LOCKED_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_LOCKED_COLOR"]
+        },
+        "TriggerIconLockedSelected":
+        {
+            "baseStyles": ["FILTER_CONTROLLER_BUTTON_BASE_SELECTED_LOCKED_COLOR"],
+            "frontStyles": ["FILTER_CONTROLLER_BUTTON_FRONT_SELECTED_LOCKED_COLOR"]
+        }
+    },
+    "animationScripts":
+    [
+        {
+            "name": "HideAnimMainLabel",
+            "script":
+            [
+                {
+                    "type": "Direct",
+                    "data":
+                    {
+                        "end":
+                        {
+                            "rotationX": 90
+                        },
+                        "duration": 300,
+                        "easing": "quadInOut",
+                        "targets":
+                        [
+                            "Grid.LabelsGroup.Labels"
+                        ]
+                    }
+                },
+                {
+                    "type": "Direct",
+                    "data":
+                    {
+                        "end":
+                        {
+                            "alpha": 1,
+                            "marginLeft": 0
+                        },
+                        "duration": 150,
+                        "easing": "quadInOut",
+                        "targets":
+                        [
+                            "Grid.LabelsGroup.Labels.SecondFilterLabel"
+                        ]
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "data":
+                    {
+                        "duration": 150
+                    }
+                },
+                {
+                    "type": "Direct",
+                    "data":
+                    {
+                        "end":
+                        {
+                            "alpha": 0
+                        },
+                        "duration": 150,
+                        "easing": "quadInOut",
+                        "targets":
+                        [
+                            "Grid.LabelsGroup.Labels.FilterLabel"
+                        ]
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "data":
+                    {
+                        "duration": 150
+                    }
+                },
+                {
+                    "type": "Function",
+                    "data":
+                    {
+                        "name": "trigger",
+                        "target": "OnLabelAnimationComplete"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "ShowAnimMainLabel",
+            "script":
+            [
+                {
+                    "type": "Direct",
+                    "data":
+                    {
+                        "end":
+                        {
+                            "rotationX": 0
+                        },
+                        "duration": 300,
+                        "easing": "quadInOut",
+                        "targets":
+                        [
+                            "Grid.LabelsGroup.Labels"
+                        ]
+                    }
+                },
+                {
+                    "type": "Direct",
+                    "data":
+                    {
+                        "end":
+                        {
+                            "alpha": 1
+                        },
+                        "duration": 150,
+                        "easing": "quadInOut",
+                        "targets":
+                        [
+                            "Grid.LabelsGroup.Labels.FilterLabel"
+                        ]
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "data":
+                    {
+                        "duration": 150
+                    }
+                },
+                {
+                    "type": "Direct",
+                    "data":
+                    {
+                        "end":
+                        {
+                            "alpha": 0,
+                            "marginLeft": 0
+                        },
+                        "duration": 150,
+                        "easing": "quadInOut",
+                        "targets":
+                        [
+                            "Grid.LabelsGroup.Labels.SecondFilterLabel"
+                        ]
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "data":
+                    {
+                        "duration": 150
+                    }
+                },
+                {
+                    "type": "Function",
+                    "data":
+                    {
+                        "name": "trigger",
+                        "target": "OnLabelAnimationComplete"
+                    }
+                }
+            ]
+        }
+    ],
+    "propertyMap":
+    {
+        "data.Mode": "ApplyPropertiesOnMode.state",
+        "data.State":
+        [
+            "Grid.LabelsGroup.Labels.FilterLabel.FilterLabelControlStateTrigger.state",
+            "Grid.LabelsGroup.Labels.SecondFilterLabel.FilterSecondLabelControlStateTrigger.state",
+            "Grid.TriggerGroup.TriggerIcon.FilterIconControlStateTrigger.state"
+        ],
+        "data.Categories": "Grid.LabelsGroup.Labels.FilterLabel.text",
+        "data.Time":
+        [
+            "TimedBar.time",
+            {
+                "property": "visible",
+                "converter": "NullToBooleanConverter",
+                "target": "TimedBar"
+            }
+        ],
+        "data.IsLocked": "ApplyStyleToBackgroundOnLockedGroup.value",
+        "filterLabel": "Grid.LabelsGroup.Labels.FilterLabel.text",
+        "filterLabelGroupSpecialStyle": "LabelGroupSpecialStyleBehavior.value",
+        "filterLabelSpecialStyle": "LabelSpecialStyleBehavior.value",
+        "filterLabelWidth":
+        [
+            "Grid.LabelsGroup.Labels.FilterLabel.width",
+            "Grid.LabelsGroup.Labels.SecondFilterLabel.width",
+            "Grid.LabelsGroup.width"
+        ],
+        "hasErrors": "ErrorNotification.visible",
+        "labelAnimationCompleteActionName": "OnLabelAnimationComplete.actionName",
+        "labelResizeType": "Grid.LabelsGroup.Labels.FilterLabel.resizeType",
+        "mode": "ApplyPropertiesOnMode.state",
+        "secondfilterLabel": "Grid.LabelsGroup.Labels.SecondFilterLabel.text",
+        "showFirstLabel": "ShowFirstLabel.value",
+        "showTriggerIcon": "Grid.TriggerGroup.visible",
+        "state":
+        [
+            "Grid.LabelsGroup.Labels.FilterLabel.FilterLabelControlStateTrigger.state",
+            "Grid.LabelsGroup.Labels.SecondFilterLabel.FilterSecondLabelControlStateTrigger.state",
+            "Grid.TriggerGroup.TriggerIcon.FilterIconControlStateTrigger.state"
+        ],
+        "triggerType": "Grid.TriggerGroup.TriggerIcon.type",
+        "labelsColor":
+        [
+            "Grid.LabelsGroup.Labels.FilterLabel.color",
+            "Grid.LabelsGroup.Labels.SecondFilterLabel.color"
+        ]
+    },
+    "behaviors":
+    [
+        {
+            "commonName": "behavior.Action",
+            "name": "OnLabelAnimationComplete",
+            "actionName": "label_animation_complete"
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnBooleanValue",
+            "name": "LabelGroupSpecialStyleBehavior",
+            "onFalseStyles":
+            [
+                "FilterLabelPrimaryPos"
+            ],
+            "onTrueStyles":
+            [
+                "SpecialLabelGroup"
+            ],
+            "targets":
+            [
+                "Grid.LabelsGroup.Labels"
+            ]
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnBooleanValue",
+            "name": "LabelSpecialStyleBehavior",
+            "onFalseStyles":
+            [
+                "FilterLabelPrimaryPos"
+            ],
+            "onTrueStyles":
+            [
+                "SpecialPrimaryLabel"
+            ],
+            "targets":
+            [
+                "Grid.LabelsGroup.Labels.FilterLabel"
+            ]
+        },
+        {
+            "commonName": "behavior.ApplyAnimationOnBooleanValue",
+            "name": "ShowFirstLabel",
+            "onFalseAnimations":
+            [
+                "ShowAnimMainLabel"
+            ],
+            "onTrueAnimations":
+            [
+                "HideAnimMainLabel"
+            ],
+            "targets":
+            [
+                "Grid.LabelsGroup.Labels"
+            ]
+        },
+        {
+            "commonName": "behavior.ApplyPropertiesOnCustomState",
+            "name": "ApplyPropertiesOnMode",
+            "states":
+            {
+                "FILTER":
+                {
+                    "Grid.TriggerGroup":
+                    {
+                        "visible": true
+                    },
+                    "Grid.LabelsGroup":
+                    {
+                        "width": 190
+                    },
+                    "Grid.LabelsGroup.Labels":
+                    {
+                        "alignH": "LEFT"
+                    },
+                    "TimedBar":
+                    {
+                        "visible": false
+                    }
+                },
+                "FILTER_ALTERNATE_COLOR":
+                {
+                    "Grid.LabelsGroup.Labels.FilterLabel.FilterLabelControlStateTrigger":
+                    {
+                        "state": "alternate"
+                    },
+                    "Grid.LabelsGroup.Labels.SecondFilterLabel.FilterSecondLabelControlStateTrigger":
+                    {
+                        "state": "alternate"
+                    },
+                    "Grid.TriggerGroup":
+                    {
+                        "visible": true
+                    },
+                    "Grid.LabelsGroup":
+                    {
+                        "width": 190
+                    },
+                    "Grid.LabelsGroup.Labels":
+                    {
+                        "alignH": "LEFT"
+                    },
+                    "TimedBar":
+                    {
+                        "visible": false
+                    }
+                },
+                "TAB":
+                {
+                    "Grid.TriggerGroup":
+                    {
+                        "visible": false
+                    },
+                    "Grid.LabelsGroup":
+                    {
+                        "width": 230
+                    },
+                    "Grid.LabelsGroup.Labels":
+                    {
+                        "width": 230
+                    },
+                    "Grid.LabelsGroup.Labels.FilterLabel":
+                    {
+                        "width": 230,
+                        "textAlignH": "CENTER"
+                    }
+                },
+                "RUSH_TAB":
+                {
+                    "Grid.TriggerGroup":
+                    {
+                        "visible": false
+                    },
+                    "Grid.LabelsGroup":
+                    {
+                        "width": 230
+                    },
+                    "Grid.LabelsGroup.Labels":
+                    {
+                        "width": 230
+                    },
+                    "Grid.LabelsGroup.Labels.FilterLabel":
+                    {
+                        "width": 230,
+                        "textAlignH": "CENTER"
+                    },
+                    "Grid.LabelsGroup.Labels.SecondFilterLabel":
+                    {
+                        "width": 230,
+                        "textAlignH": "CENTER"
+                    }
+                },
+                "PROAM_TAB":
+                {
+                    "Grid.TriggerGroup":
+                    {
+                        "visible": false
+                    },
+                    "Grid.LabelsGroup":
+                    {
+                        "width": 230,
+                        "marginLeft": 5
+                    },
+                    "Grid.LabelsGroup.Labels":
+                    {
+                        "width": 230
+                    },
+                    "Grid.LabelsGroup.Labels.FilterLabel":
+                    {
+                        "width": 230,
+                        "textAlignH": "CENTER"
+                    }
+                }
+            }
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnSelection",
+            "name": "ApplyHighlightStyleOnSelection",
+            "onDeselected":
+            [
+                "INVISIBLE"
+            ],
+            "onSelected":
+            [
+                "VISIBLE"
+            ],
+            "target":
+            [
+                "HighlightBackground"
+            ],
+            "triggeringElement": "this"
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnSelection",
+            "name": "ApplyErrorStyleOnSelection",
+            "onDeselected":
+            [
+                "RED_COLOR"
+            ],
+            "onSelected":
+            [
+                "BLACK_COLOR"
+            ],
+            "target":
+            [
+                "ErrorNotification.NotificationBackground"
+            ],
+            "triggeringElement": "this"
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnSelection",
+            "name": "ApplyFilterStyleOnSelection",
+            "onDeselected":
+            [
+                "FILTER_BACKGROUND_UNSELECTED_COLOR"
+            ],
+            "onSelected":
+            [
+                "HIGHLIGHT_PRIMARY"
+            ],
+            "target":
+            [
+                "BgFilterActive"
+            ],
+            "triggeringElement": "this"
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnBooleanValue",
+            "name": "ApplyStyleToBackgroundOnLockedGroup",
+            "onFalseStyles":
+            [
+                "HIGHLIGHT_PRIMARY_COLOR"
+            ],
+            "onTrueStyles":
+            [
+                "DARK_BLACK_COLOR"
+            ],
+            "targets":
+            [
+                "Background",
+                "HighlightBackground"
+            ]
+        }
+    ],
+    "children":
+    [
+        {
+            "commonName": "Rectangle",
+            "name": "Background",
+            "alignH": "FILL",
+            "alignV": "FILL",
+            "alpha": 0.0,
+            "color": "$HIGHLIGHT_PRIMARY",
+            "height": "AUTO",
+            "marginBottom": 4.0,
+            "marginLeft": 4.0,
+            "marginRight": 4.0,
+            "marginTop": 4.0,
+            "width": "AUTO",
+            "cornerRadius": 5.0,
+            "outlineAlpha": 0.0
+        },
+        {
+            "commonName": "Rectangle",
+            "name": "BgFilterActive",
+            "alignH": "FILL",
+            "alignV": "FILL",
+            "height": "AUTO",
+            "width": "AUTO",
+            "cornerRadius": 5.0,
+            "outlineAlpha": 0.0,
+            "styles": ["FILTER_BACKGROUND_UNSELECTED_COLOR"]
+        },
+        {
+            "commonName": "Rectangle",
+            "name": "HighlightBackground",
+            "alignH": "FILL",
+            "alignV": "FILL",
+            "color": "$HIGHLIGHT_PRIMARY",
+            "height": "AUTO",
+            "width": "AUTO",
+            "cornerRadius": 5.0,
+            "outlineAlpha": 0.0,
+            "sliceAngle": 32.0
+        },
+        {
+            "commonName": "Container",
+            "name": "Grid",
+            "alignH": "FILL",
+            "alignV": "CENTER",
+            "height": 40.0,
+            "layout":
+            {
+                "type": "StackLayout",
+                "data":
+                {
+                    "orientation": "HORIZONTAL"
+                }
+            },
+            "children":
+            [
+                {
+                    "commonName": "Group",
+                    "name": "TriggerGroup",
+                    "alignV": "FILL",
+                    "height": 40.0,
+                    "marginLeft": 8.0,
+                    "width": 44.0,
+                    "layout":
+                    {
+                        "type": "PanelLayout"
+                    },
+                    "children":
+                    [
+                        {
+                            "commonName": "ControllerButtonAsset",
+                            "name": "TriggerIcon",
+                            "alignH": "CENTER",
+                            "alignV": "CENTER",
+                            "behaviors":
+                            [
+                                {
+                                    "commonName": "ButtonTileControlStateTrigger",
+                                    "name": "FilterIconControlStateTrigger",
+                                    "state": "default",
+                                    "target": "ChooseStyleState"
+                                },
+                                {
+                                    "commonName": "ChooseStyle",
+                                    "name": "ChooseStyleState",
+                                    "styleStates":
+                                    {
+                                        "default":
+                                        [
+                                            "TriggerIconDefault"
+                                        ],
+                                        "defaultselected":
+                                        [
+                                            "TriggerIconDefaultSelected"
+                                        ],
+                                        "selected":
+                                        [
+                                            "TriggerIconSelected"
+                                        ],
+                                        "alternatedeselected":
+                                        [
+                                            "TriggerIconAlternateDeselected"
+                                        ],
+                                        "rushdeselected":
+                                        [
+                                            "TriggerIconRushDeselected"
+                                        ],
+                                        "rushselected":
+                                        [
+                                            "TriggerIconRushSelected"
+                                        ],
+                                        "lockeddeselected":
+                                        [
+                                            "TriggerIconLockedDeselected"
+                                        ],
+                                        "lockedselected":
+                                        [
+                                            "TriggerIconLockedSelected"
+                                        ],
+                                        "loadoutslockeddeselected":
+                                        [
+                                            "TriggerIconLockedDeselected"
+                                        ],
+                                        "loadoutslockedselected":
+                                        [
+                                            "TriggerIconLockedSelected"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    "authoringData":
+                    {
+                        "expanded": false
+                    }
+                },
+                {
+                    "commonName": "Container",
+                    "name": "LabelsGroup",
+                    "height": 40.0,
+                    "visible": true,
+                    "layout":
+                    {
+                        "type": "PanelLayout"
+                    },
+                    "children":
+                    [
+                        {
+                            "commonName": "Container",
+                            "name": "Labels",
+                            "alignH": "LEFT",
+                            "height": 40.0,
+                            "width": "AUTO",
+                            "layout":
+                            {
+                                "type": "PanelLayout"
+                            },
+                            "children":
+                            [
+                                {
+                                    "commonName": "Label",
+                                    "name": "SecondFilterLabel",
+                                    "styles":
+                                    [
+                                        "LEADING_6",
+                                        "NHL_HEADER_7",
+                                        "WHITE"
+                                    ],
+                                    "alignH": "LEFT",
+                                    "alignV": "FILL",
+                                    "alpha": 0.0,
+                                    "height": "AUTO",
+                                    "rotationX": -90.0,
+                                    "width": 210.0,
+                                    "z": 0.0,
+                                    "resizeType": "SCALEDOWN",
+                                    "textAlignV": "CENTER",
+                                    "behaviors":
+                                    [
+                                        {
+                                            "commonName": "ButtonTileControlStateTrigger",
+                                            "name": "FilterSecondLabelControlStateTrigger",
+                                            "state": "default",
+                                            "target": "ChooseStyleState"
+                                        },
+                                        {
+                                            "commonName": "ChooseStyle",
+                                            "name": "ChooseStyleState",
+                                            "styleStates":
+                                            {
+                                                "default":
+                                                [
+                                                    "WHITE"
+                                                ],
+                                                "defaultselected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "selected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "alternatedeselected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "alternateselected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "rushdeselected":
+                                                [
+                                                    "WHITE"
+                                                ],
+                                                "rushselected":
+                                                [
+                                                    "BLACK_COLOR"
+                                                ],
+                                                "lockeddeselected":
+                                                [
+                                                    "GRAY"
+                                                ],
+                                                "lockedselected":
+                                                [
+                                                    "LIGHT_GRAY"
+                                                ],
+                                                "loadoutslockeddeselected":
+                                                [
+                                                    "LIGHT_GRAY"
+                                                ],
+                                                "loadoutslockedselected":
+                                                [
+                                                    "WHITE"
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "commonName": "Label",
+                                    "name": "FilterLabel",
+                                    "styles":
+                                    [
+                                        "LEADING_6",
+                                        "NHL_HEADER_7",
+                                        "WHITE"
+                                    ],
+                                    "alignH": "LEFT",
+                                    "alignV": "FILL",
+                                    "height": "AUTO",
+                                    "width": 190.0,
+                                    "resizeType": "COMPRESS",
+                                    "textAlignV": "CENTER",
+                                    "behaviors":
+                                    [
+                                        {
+                                            "commonName": "ButtonTileControlStateTrigger",
+                                            "name": "FilterLabelControlStateTrigger",
+                                            "state": "default",
+                                            "target": "ChooseStyleState"
+                                        },
+                                        {
+                                            "commonName": "ChooseStyle",
+                                            "name": "ChooseStyleState",
+                                            "styleStates":
+                                            {
+                                                "default":
+                                                [
+                                                    "WHITE"
+                                                ],
+                                                "defaultselected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "selected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "alternatedeselected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "alternateselected":
+                                                [
+                                                    "DARK_BLACK"
+                                                ],
+                                                "rushdeselected":
+                                                [
+                                                    "WHITE"
+                                                ],
+                                                "rushselected":
+                                                [
+                                                    "BLACK"
+                                                ],
+                                                "lockeddeselected":
+                                                [
+                                                    "GRAY"
+                                                ],
+                                                "lockedselected":
+                                                [
+                                                    "LIGHT_GRAY"
+                                                ],
+                                                "loadoutslockeddeselected":
+                                                [
+                                                    "LIGHT_GRAY"
+                                                ],
+                                                "loadoutslockedselected":
+                                                [
+                                                    "WHITE"
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "authoringData":
+                    {
+                        "expanded": false
+                    }
+                }
+            ]
+        },
+        {
+            "commonName": "NotificationBadge",
+            "name": "ErrorNotification",
+            "alignH": "RIGHT",
+            "alignV": "CENTER",
+            "marginTop": 0.0,
+            "visible": false
+        },
+        {
+            "commonName": "TimedBar",
+            "name": "TimedBar",
+            "alignH": "RIGHT",
+            "alignV": "BOTTOM",
+            "color": "$WHITE",
+            "height": 4.0,
+            "marginBottom": -5.0,
+            "width": 228.0,
+            "inheritState": true,
+            "time": 15.0,
+            "layout":
+            {
+                "type": "CanvasLayout"
+            }
+        }
+    ],
+    "authoringData":
+    {
+        "designSize":
+        {
+            "width": 270.0,
+            "height": 44.0
+        }
+    }
+}

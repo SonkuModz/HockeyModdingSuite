@@ -1,0 +1,1148 @@
+{
+    "commonName": "Composite",
+    "name": "ListMenuRow",
+    "height": 105,
+    "width": "AUTO",
+    "inheritState": false,
+    "layout":
+    {
+        "type": "PanelLayout"
+    },
+    "style-definitions":
+    {
+        "DynamicWidth":
+        {
+            "width": "AUTO",
+            "maxWidth": 680
+        },
+        "FixedWidth":
+        {
+            "width": 675
+        },
+        "DescriptionOn":
+        {
+            "height": 25,
+            "marginBottom": 7
+        },
+        "DescriptionOff":
+        {
+            "height": 0,
+            "marginBottom": 0
+        },
+        "DarkBackground":
+        {
+            "backgroundColor": "$LIGHT_GRAY"
+        },
+        "LightBackground":
+        {
+            "backgroundColor": "$DARK_BLACK"
+        },
+        "ActiveBackground":
+        {
+            "color": "$HIGHLIGHT_SECONDARY"
+        },
+        "WidgetDeselected":
+        {
+            "height": 50
+        },
+        "WidgetSelectedBig":
+        {
+            "height": 105
+        },
+        "WidgetSelectedSmall":
+        {
+            "height": 70
+        },
+        "DynamicWidthStyle":
+        {
+            "onSelected":
+            [
+                "DynamicWidth"
+            ]
+        },
+        "FixedWidthStyle":
+        {
+            "onSelected":
+            [
+                "FixedWidth"
+            ]
+        },
+        "ModeTitleSelectedWithDescription":
+        {
+            "marginTop": 0.0,
+            "height": 75
+        },
+        "ModeTitleSelectedWithoutDescription":
+        {
+            "marginTop": 0.0,
+            "height": 75
+        },
+        "ModeTitleDeselected":
+        {
+            "marginTop": 0.0,
+            "height": 50
+        },
+        "ModeTitleLabelDeselected":
+        {
+            "marginTop": 0.0,
+            "height": 56
+        },
+        "IconNone":
+        {
+            "iconType": "",
+            "NotificationLabel": ""
+        },
+        "IconExclamation":
+        {
+            "iconType": "",
+            "NotificationLabel": "!"
+        },
+        "IconMail":
+        {
+            "iconType": "mail_icon",
+            "iconScale": 0.4,
+            "NotificationLabel": ""
+        },
+        "SelectedRowBadgeAlign":
+        {
+            "marginTop": 0
+        },
+        "UnselectedRowBadgeAlign":
+        {
+            "marginTop": 4
+        }
+    },
+    "propertyMap":
+    {
+        "data.ModeName"                   : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ModeTitleGroup.ModeTitle.text",
+        "data.Subtitle"                   : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.Description.text",
+        "data.HeaderTitle"                : "RowGroupHolder.RowGroup.HeaderTitle.text",
+        "data.inactiveHiglight"           : "TriggerInactiveHighlight.value",
+        "data.inactiveHiglightDescription": "TriggerInactiveHighlightDescription.value",
+        "data.headerAltStyle"             : "HeaderAltStyle.value",
+        "data.lockedLocString"            : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup.LockedState.text",
+        "data.narrationIds"               : "RowGroupHolder.NarrationBehavior.narrationIds",
+        "data.dynamicWidth":
+        {
+            "target"   : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.HighlightMask.ControlStateTriggerWidth",
+            "property" : "state",
+            "converter": "ux.converter.ChooseValueConverter",
+            "converterParams":
+            {
+                "false": "normal",
+                "true" : "dynamic"
+            }
+        },
+        "data.haveDescription":
+        [
+            "ApplyStyleOnDescription.value",
+            {
+                "target"   : "ControlStateTrigger",
+                "property" : "state",
+                "converter": "ux.converter.ChooseValueConverter",
+                "converterParams":
+                {
+                    "false": "small",
+                    "true" : "normal"
+                }
+            },
+            {
+                "target"   : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ControlStateTrigger",
+                "property" : "state",
+                "converter": "ux.converter.ChooseValueConverter",
+                "converterParams":
+                {
+                    "false": "small",
+                    "true" : "normal"
+                }
+            },
+            {
+                "target"   : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ModeTitleGroup.ModeTitle.ControlStateTriggerHeight",
+                "property" : "state",
+                "converter": "ux.converter.ChooseValueConverter",
+                "converterParams":
+                {
+                    "false": "small",
+                    "true" : "normal"
+                }
+            }
+        ],
+        "data.state":
+        [
+            "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ModeTitleGroup.ModeTitle.ControlStateTriggerStyle.state",
+            {
+                "target"   : "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup",
+                "property" : "visible",
+                "converter": "ux.converter.ChooseValueConverter",
+                "converterParams":
+                {
+                    "default": false,
+                    "active": true,
+                    "activealternate": true,
+                    "locked": true,
+                    "lockednotag": false
+                }
+            }
+        ],
+        "data.labelType":
+        [
+            "ApplyStyleActiveLabel.state"
+        ],
+        "data.notification.asset": "ApplyNotificationAssetBehavior.state",
+        "data.headerMargin": "ChangeHeaderTopMarginOnCustomState.state"
+    },
+    "behaviors":
+    [
+        {
+            "commonName": "behavior.ApplyPropertiesOnCustomState",
+            "name": "ChangeHeaderTopMarginOnCustomState",
+            "states":
+            {
+                "DEFAULT":
+                {
+                    "RowGroupHolder.RowGroup":
+                    {
+                        "marginTop": 0
+                    }
+                },
+                "SIMPLE_HEADER_MARGIN":
+                {
+                    "RowGroupHolder.RowGroup":
+                    {
+                        "marginTop": 40
+                    }
+                },
+                "DOUBLE_HEADER_MARGIN":
+                {
+                    "RowGroupHolder.RowGroup":
+                    {
+                        "marginTop": 80
+                    }
+                },
+                "TRIPLE_HEADER_MARGIN":
+                {
+                    "RowGroupHolder.RowGroup":
+                    {
+                        "marginTop": 120
+                    }
+                }
+            }
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnCustomState",
+            "name": "ApplyStyleActiveLabel",
+            "state": "normal",
+            "states":
+            {
+                "active":
+                {
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup.LockedStateBackground":
+                    [
+                        "ActiveBackground"
+                    ],
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup.LockedState":
+                    [
+                        "FONT_SWATCH_DEFAULT",
+                        "NHL_BODY_9_ALT",
+                        "WHITE"
+                    ]
+                },
+                "normal":
+                {
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup.LockedStateBackground":
+                    [
+                        "GRAY_COLOR"
+                    ],
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup.LockedState":
+                    [
+                        "FONT_SWATCH_DEFAULT",
+                        "NHL_BODY_9_ALT"
+                    ]
+                }
+            }
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnSelection",
+            "name": "ShowHiglightAndDescriptiOnSelection",
+            "onDeselected":
+            [
+                "INVISIBLE"
+            ],
+            "onSelected":
+            [
+                "VISIBLE"
+            ],
+            "target":
+            [
+                "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.Highlight",
+                "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.Description"
+            ],
+            "triggeringElement": "this"
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnSelection",
+            "name": "AlignBadgeOnRowTop",
+            "onDeselected":
+            [
+                "UnselectedRowBadgeAlign"
+            ],
+            "onSelected":
+            [
+                "SelectedRowBadgeAlign"
+            ],
+            "target":
+            [
+                "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.LockedStateGroup"
+            ],
+            "triggeringElement": "this"
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnBooleanValue",
+            "name": "HeaderAltStyle",
+            "onFalseStyles":
+            [
+                "NHL_BODY_8_ALT",
+                "LISTMENU_ROW_HEADER_FONT_DEFAULT"
+            ],
+            "onTrueStyles":
+            [
+                "NHL_BODY_8_ALT",
+                "LISTMENU_ROW_HEADER_FONT_ALTERNATIVE"
+            ],
+            "targets":
+            [
+                "RowGroupHolder.RowGroup.HeaderTitle"
+            ]
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnBooleanValue",
+            "name": "TriggerInactiveHighlightDescription",
+            "onTrueStyles":
+            [
+                "VISIBLE"
+            ],
+            "targets":
+            [
+                "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.Description"
+            ]
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnBooleanValue",
+            "name": "ApplyStyleOnDescription",
+            "onTrueStyles":
+            [
+                "DescriptionOn"
+            ],
+            "onFalseStyles":
+            [
+                "DescriptionOff"
+            ],
+            "targets":
+            [
+                "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.Description"
+            ]
+        },
+        {
+            "commonName": "ButtonTileControlStateTrigger",
+            "name": "ControlStateTrigger",
+            "state": "normal",
+            "target": "ChooseStyle"
+        },
+        {
+            "commonName": "ChooseStyle",
+            "name": "ChooseStyle",
+            "styleStates":
+            {
+                "normalselected":
+                [
+                    "WidgetSelectedBig"
+                ],
+                "normaldeselected":
+                [
+                    "WidgetDeselected"
+                ],
+                "smallselected":
+                [
+                    "WidgetSelectedSmall"
+                ],
+                "smalldeselected":
+                [
+                    "WidgetDeselected"
+                ]
+            }
+        },
+        {
+            "commonName": "behavior.ApplyStyleOnCustomState",
+            "name": "ApplyNotificationAssetBehavior",
+            "state": "DEFAULT",
+            "states":
+            {
+                "DEFAULT":
+                {
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ModeTitleGroup.Notification":
+                    [
+                        "INVISIBLE",
+                        "IconNone"
+                    ]
+                },
+                "EXCLAMATION":
+                {
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ModeTitleGroup.Notification":
+                    [
+                        "VISIBLE",
+                        "IconExclamation"
+                    ]
+                },
+                "MAIL":
+                {
+                    "RowGroupHolder.RowGroup.HighlightGroupAndLockedState.HighlightGroup.ModeTitleGroup.Notification":
+                    [
+                        "VISIBLE",
+                        "IconMail"
+                    ]
+                }
+            }
+        }
+    ],
+    "children":
+    [
+        {
+            "commonName": "Group",
+            "name": "RowGroupHolder",
+            "width": "AUTO",
+            "height": 108.0,
+            "layout":
+            {
+                "type": "PanelLayout"
+            },
+            "children":
+            [
+                {
+                    "commonName": "Group",
+                    "name": "RowGroup",
+                    "width": "AUTO",
+                    "height": "AUTO",
+                    "layout":
+                    {
+                        "type": "PanelLayout"
+                    },
+                    "children":
+                    [
+                        {
+                            "commonName": "Label",
+                            "name": "HeaderTitle",
+                            "forceCaps" : true,
+                            "height": "AUTO",
+                            "marginLeft": 5.0,
+                            "marginTop": -25.0,
+                            "width": "AUTO",
+                            "maxWidth": 300.0,
+                            "styles":
+                            [
+                                "NHL_BODY_8_ALT",
+                                "LISTMENU_ROW_HEADER_FONT_DEFAULT"
+                            ]
+                        },
+                        {
+                            "commonName":"Group",
+                            "name":"HighlightGroupAndLockedState",
+                            "width": "AUTO",
+                            "height": "AUTO",
+                            "layout":
+                            {
+                                "type": "StackLayout",
+                                "data":
+                                {
+                                    "orientation": "HORIZONTAL"
+                                }
+                            },
+                            "children":
+                            [
+                                {
+                                    "commonName": "Group",
+                                    "name": "HighlightGroup",
+                                    "height": 108.0,
+                                    "width": "AUTO",
+                                    "layout":
+                                    {
+                                        "type": "PanelLayout"
+                                    },
+                                    "behaviors":
+                                    [
+                                        {
+                                            "commonName": "ButtonTileControlStateTrigger",
+                                            "name": "ControlStateTrigger",
+                                            "state": "normal",
+                                            "target": "ChooseStyle"
+                                        },
+                                        {
+                                            "commonName": "ChooseStyle",
+                                            "name": "ChooseStyle",
+                                            "styleStates":
+                                            {
+                                                "normalselected":
+                                                [
+                                                    "WidgetSelectedBig"
+                                                ],
+                                                "normaldeselected":
+                                                [
+                                                    "WidgetDeselected"
+                                                ],
+                                                "smallselected":
+                                                [
+                                                    "WidgetSelectedSmall"
+                                                ],
+                                                "smalldeselected":
+                                                [
+                                                    "WidgetDeselected"
+                                                ]
+                                            }
+                                        }
+                                    ],
+                                    "children":
+                                    [
+                                        {
+                                            "commonName": "Rectangle",
+                                            "name": "Highlight",
+                                            "styles":
+                                            [
+                                                "HIGHLIGHT_PRIMARY_COLOR"
+                                            ],
+                                            "alignV": "FILL",
+                                            "alignH": "FILL"
+                                        },
+                                        {
+                                            "commonName": "Element",
+                                            "name": "HighlightMask",
+                                            "behaviors":
+                                            [
+                                                {
+                                                    "commonName": "ButtonTileControlStateTrigger",
+                                                    "name": "ControlStateTriggerWidth",
+                                                    "state": "normal",
+                                                    "target": "ChooseStyleWidth"
+                                                },
+                                                {
+                                                    "commonName": "ChooseStyle",
+                                                    "name": "ChooseStyleWidth",
+                                                    "styleStates":
+                                                    {
+                                                        "normalselected":
+                                                        [
+                                                            "FixedWidth"
+                                                        ],
+                                                        "normaldeselected":
+                                                        [
+                                                            "DynamicWidth"
+                                                        ],
+                                                        "dynamicselected":
+                                                        [
+                                                            "DynamicWidth"
+                                                        ],
+                                                        "dynamicdeselected":
+                                                        [
+                                                            "DynamicWidth"
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "commonName":"Group",
+                                            "name":"ModeTitleGroup",
+                                            "width": "AUTO",
+                                            "height": "AUTO",
+                                            "layout":
+                                            {
+                                                "type": "StackLayout",
+                                                "data":
+                                                {
+                                                    "orientation": "HORIZONTAL"
+                                                }
+                                            },
+                                            "children":
+                                            [
+                                                {
+                                                    "commonName": "Label",
+                                                    "name": "ModeTitle",
+                                                    "height": 75,
+                                                    "marginLeft": 8.0,
+                                                    "marginRight": 8.0,
+                                                    "textAlignV": "CENTER",
+                                                    "styles":
+                                                    [
+                                                        "NHL_HEADER_1_ALT",
+                                                        "LISTMENU_ROW_FONT_DEFAULT",
+                                                        "DynamicWidth"
+                                                    ],
+                                                    "behaviors":
+                                                    [
+                                                        {
+                                                            "commonName": "ButtonTileControlStateTrigger",
+                                                            "name": "ControlStateTriggerStyle",
+                                                            "state": "normal",
+                                                            "target": "ChooseStyle"
+                                                        },
+                                                        {
+                                                            "commonName": "ChooseStyleOnLanguage",
+                                                            "name": "ChooseStyle",
+                                                            "styleStatesOnLanguage":
+                                                            {
+                                                                "defaultStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_1_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_1_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_1_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_1_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_1_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                },
+                                                                "frenchStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                },
+                                                                "swedishStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_3_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_3_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_3_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_3_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                },
+                                                                "finnishStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                },
+                                                                "germanStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                },
+                                                                "czechStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                },
+                                                                "russianStyles":
+                                                                {
+                                                                    "normalselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "normaldeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "alternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "alternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ],
+                                                                    "lockedselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "lockeddeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "lockednotagdeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activeselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "FONT_SWATCH_DEFAULT_2"
+                                                                    ],
+                                                                    "activealternateselected":
+                                                                    [
+                                                                        "NHL_HEADER_2_ALT",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_SELECTED"
+                                                                    ],
+                                                                    "activealternatedeselected":
+                                                                    [
+                                                                        "NHL_HEADER_3",
+                                                                        "LISTMENU_ROW_FONT_DEFAULT_DESELECTED"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        },
+                                                        {
+                                                            "commonName": "ButtonTileControlStateTrigger",
+                                                            "name": "ControlStateTriggerHeight",
+                                                            "state": "normal",
+                                                            "target": "ChooseStyleHeight"
+                                                        },
+                                                        {
+                                                            "commonName": "ChooseStyle",
+                                                            "name": "ChooseStyleHeight",
+                                                            "styleStates":
+                                                            {
+                                                                "normalselected":
+                                                                [
+                                                                    "ModeTitleSelectedWithDescription"
+                                                                ],
+                                                                "normaldeselected":
+                                                                [
+                                                                    "ModeTitleLabelDeselected"
+                                                                ],
+                                                                "smallselected":
+                                                                [
+                                                                    "ModeTitleSelectedWithoutDescription"
+                                                                ],
+                                                                "smalldeselected":
+                                                                [
+                                                                    "ModeTitleLabelDeselected"
+                                                                ]
+                                                            }
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "commonName": "NotificationBadge",
+                                                    "name": "Notification",
+                                                    "alignH": "RIGHT",
+                                                    "alignV": "CENTER",
+                                                    "NotificationBackgroundColor": "$NEGATIVE_VALUE"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "commonName": "Label",
+                                            "name": "Description",
+                                            "alignV":"BOTTOM",
+                                            "height": 25,
+                                            "marginBottom": 6.0,
+                                            "marginLeft": 8.0,
+                                            "width": "AUTO",
+                                            "maxWidth": 675.0,
+                                            "resizeType": "SCALEDOWN",
+                                            "styles":
+                                            [
+                                                "NHL_HEADER_7",
+                                                "DARK_BLACK",
+                                                "MarqueeScrollingStyle"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "commonName": "Group",
+                                    "name": "LockedStateGroup",
+                                    "height": "AUTO",
+                                    "width": "AUTO",
+                                    "visible": false,
+                                    "alignV": "TOP",
+                                    "layout":
+                                    {
+                                        "type": "PanelLayout"
+                                    },
+                                    "children":
+                                    [
+                                        {
+                                            "commonName": "Rectangle",
+                                            "name": "LockedStateBackground",
+                                            "alignV": "FILL",
+                                            "alignH": "FILL",
+                                            "styles":
+                                            [
+                                                "GRAY_COLOR"
+                                            ]
+                                        },
+                                        {
+                                            "commonName": "Label",
+                                            "name": "LockedState",
+                                            "height": 20.0,
+                                            "width": "AUTO",
+                                            "marginTop": 2.0,
+                                            "marginBottom": 2.0,
+                                            "marginRight": 5.0,
+                                            "marginLeft": 5.0,
+                                            "textAlignV": "CENTER",
+                                            "styles":
+                                            [
+                                                "FONT_SWATCH_DEFAULT",
+                                                "NHL_BODY_9_ALT"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "behaviors":
+            [
+                {
+                    "commonName": "NarrationBehavior",
+                    "name": "NarrationBehavior"
+                }
+            ]
+        }
+    ]
+}

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -174,6 +174,29 @@ public sealed class ModService
         try { await Run(() => { Store.Apply(e, Game); return 0; }); }
         finally { Forget(e); Changed?.Invoke(); }
     }
+
+    /// <summary>NHL 24: puts a custom league into the game as one mod entry (an earlier one is restored first).</summary>
+    public async Task<LeagueResult> InstallLeagueAsync(LeaguePack pack, string packPath, LeagueOptions o, Action<string> log = null)
+    {
+        RefuseWrite();
+        try { return await Run(() => LeagueInstaller.Install(Index, Store, Game, pack, packPath, o, true, log)); }
+        finally { ForgetPs4(); Changed?.Invoke(); }
+    }
+
+    /// <summary>What a league install would do, from the game's files as they are (nothing written).</summary>
+    public Task<LeagueResult> PlanLeagueAsync(LeaguePack pack, string packPath, LeagueOptions o) =>
+        Run(() => LeagueInstaller.Install(Index, Store, Game, pack, packPath, o, false));
+
+    /// <summary>Reads the league's files from the game again and checks it.</summary>
+    public Task<List<LeagueCheck>> VerifyLeagueAsync(IReadOnlyList<LeagueTeamPlan> plans, LeagueOptions o) =>
+        Run(() =>
+        {
+            var (g, _, _) = CustomLeague.Open(new Legacy(Index));
+            return LeagueInstaller.Verify(Index, LeagueInstaller.WithArtIds(g, plans), o, Game);
+        });
+
+    /// <summary>The league's databases as the game has them now.</summary>
+    public Task<(T3Db Game, T3Db Initial, T3Db Loc)> OpenLeagueDbsAsync() => Run(() => CustomLeague.Open(new Legacy(Index)));
 
     public async Task RestoreAsync(ModEntry e)
     {

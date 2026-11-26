@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Reads a .cimspkg's databases as the package would leave the game, without installing it (read only). -->
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>disable</Nullable><ImplicitUsings>enable</ImplicitUsings><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../Core/NHL27Kit.Core.csproj" /></ItemGroup>
+  <ItemGroup><None Include="../../Cli/bin/kitclone/oo2core_9_win64.dll" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+</Project>

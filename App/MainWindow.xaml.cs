@@ -79,6 +79,7 @@ public partial class MainWindow : Window
         UnusedPage.SlotsChanged += UniformsPage.SlotsChangedElsewhere;
         ScorebugPage.StatusChanged += text => Status.Text = text;
         Scorebug24Page.StatusChanged += text => Status.Text = text;
+        LeaguesPage.StatusChanged += text => Status.Text = text;
         DatabasePage.StatusChanged += text => Status.Text = text;
         TuningPage.StatusChanged += text => Status.Text = text;
         TuningPage.FindNhl27 = () => KnownGames().FirstOrDefault(g => g.Profile.Kind == GameKind.Nhl27)?.Dir;
@@ -93,7 +94,7 @@ public partial class MainWindow : Window
         VideoPage.ShowInExplorer += ShowAssetInExplorer;
         VideoPage.GoToMods += () => NavMods.IsChecked = true;
         if (App.Args.TryGetValue("page", out var page))
-            (page switch { "settings" => NavSettings, "play" => NavPlay, "textures" => NavTextures, "sounds" => NavSounds, "videos" => NavVideos, "mods" => NavMods, "roster" => NavRoster, "uniforms" => NavUniforms, "studio" => NavStudio, "unused" => NavUnused, "scorebug" => NavScorebug, "database" => NavDatabase, "tuning" => NavTuning, "beapro" => NavBeAPro, "arenas" => NavArenas, "teams" => NavTeams, _ => NavExplorer }).IsChecked = true;
+            (page switch { "settings" => NavSettings, "play" => NavPlay, "textures" => NavTextures, "sounds" => NavSounds, "videos" => NavVideos, "mods" => NavMods, "roster" => NavRoster, "uniforms" => NavUniforms, "studio" => NavStudio, "unused" => NavUnused, "scorebug" => NavScorebug, "database" => NavDatabase, "tuning" => NavTuning, "beapro" => NavBeAPro, "arenas" => NavArenas, "teams" => NavTeams, "leagues" => NavLeagues, _ => NavExplorer }).IsChecked = true;
         if (App.Args.TryGetValue("scroll", out var scroll) && double.TryParse(scroll, out double offset))
         {
             PlayPage.UpdateLayout();
@@ -234,6 +235,7 @@ public partial class MainWindow : Window
                 DatabasePage.SetMods(mods);
                 if (NavDatabase.IsChecked == true) _ = DatabasePage.Shown();
                 TeamsPage.SetMods(mods);
+                LeaguesPage.SetMods(mods);
                 BeAProPage.SetMods(mods);
                 ArenasPage.SetMods(mods);
                 TuningPage.SetMods(mods);
@@ -666,7 +668,7 @@ public partial class MainWindow : Window
         (sender as FrameworkElement)?.BringIntoView();
         // the page that's now showing glides in
         Motion.Enter(new FrameworkElement[] { ExplorerPage, TexturePage, SoundPage, VideoPage, ModsPage, RosterPage, UniformsPage, StudioPage, UnusedPage, ScorebugPage, Scorebug24Page,
-            DatabasePage, TuningPage, BeAProPage, ArenasPage, TeamsPage, PlayPage, Play24Page, SettingsPage }.FirstOrDefault(p => p.Visibility == Visibility.Visible));
+            DatabasePage, TuningPage, BeAProPage, ArenasPage, TeamsPage, LeaguesPage, PlayPage, Play24Page, SettingsPage }.FirstOrDefault(p => p.Visibility == Visibility.Visible));
     }
 
     private void ShowPage(object sender)
@@ -695,6 +697,8 @@ public partial class MainWindow : Window
         if (sender == NavArenas) _ = ArenasPage.Shown();
         TeamsPage.Visibility = sender == NavTeams ? Visibility.Visible : Visibility.Collapsed;
         if (sender == NavTeams) _ = TeamsPage.Shown();
+        LeaguesPage.Visibility = sender == NavLeagues ? Visibility.Visible : Visibility.Collapsed;
+        if (sender == NavLeagues) _ = LeaguesPage.Shown();
         if (sender == NavRoster) _ = RosterPage.Shown();
         if (sender == NavScorebug) _ = nhl24 ? Scorebug24Page.Shown() : ScorebugPage.Shown();
         // leaving a page stops what it was playing
@@ -1164,6 +1168,15 @@ public partial class MainWindow : Window
             if (a.TryGetValue("nturn", out var ut) && double.TryParse(ut, out double uyaw)) { UnusedPage.Turn(uyaw); await Task.Delay(500); }
             // thumbnails
             await Task.Delay(4000);
+        }
+        if (a.TryGetValue("page", out var lgPage) && lgPage == "leagues")
+        {
+            // the page reads the rosters from the game first
+            await Task.Delay(1500);
+            for (int w = 0; w < 240 && LeaguesPage.IsReading; w++) await Task.Delay(500);
+            if (a.TryGetValue("lpick", out var lp)) { LeaguesPage.Pick(lp); await Task.Delay(300); }
+            if (a.TryGetValue("lconf", out var lc)) { LeaguesPage.Select(lc, a.TryGetValue("lteam", out var lt) && int.TryParse(lt, out int lti) ? lti : -1); await Task.Delay(800); }
+            if (a.ContainsKey("lverify")) { await LeaguesPage.VerifyAsync(); await Task.Delay(600); }
         }
         if (a.TryGetValue("page", out var sb24Page) && sb24Page == "scorebug" && _profile.Kind == GameKind.Nhl24)
         {

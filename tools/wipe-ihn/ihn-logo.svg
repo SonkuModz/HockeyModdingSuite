@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" width="600" height="260">
+  <defs>
+    
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071224" />
+      <stop offset="100%" stop-color="#0E2445" />
+    </linearGradient>
+    
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#E2E8F0" />
+      <stop offset="50%" stop-color="#94A3B8" />
+      <stop offset="100%" stop-color="#F8FAFC" />
+    </linearGradient>
+
+    <linearGradient id="iceBlueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D2FF" />
+      <stop offset="100%" stop-color="#0066CC" />
+    </linearGradient>
+
+    <linearGradient id="goldAccent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="50%" stop-color="#EAB308" />
+      <stop offset="100%" stop-color="#CA8A04" />
+    </linearGradient>
+
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+
+  
+  <g filter="url(#dropShadow)">
+    
+    <polygon points="85,30 535,30 505,195 300,235 65,195" fill="url(#silverGrad)" />
+    
+    <polygon points="91,36 527,36 499,189 300,227 72,189" fill="url(#bgGrad)" />
+    
+    <polygon points="91,36 527,36 523,54 88,54" fill="url(#iceBlueGrad)" />
+  </g>
+
+  
+  <g transform="translate(15, 0)">
+    
+    <polygon points="75,95 160,95 152,107 67,107" fill="#00D2FF" opacity="0.85" />
+    <polygon points="62,118 145,118 137,130 54,130" fill="#00D2FF" opacity="0.55" />
+    
+    
+    <path d="M 155,62 L 175,62 L 148,162 C 145,172 136,177 125,177 L 76,177 C 70,177 67,172 69,166 L 73,155 C 75,150 79,148 85,148 L 122,148 C 127,148 130,145 132,140 Z" fill="url(#silverGrad)" />
+    
+    <polygon points="86,148 102,148 93,177 77,177" fill="#00D2FF" />
+    
+    
+    <g transform="translate(168, 163) skewX(-14)">
+      <ellipse cx="0" cy="6" rx="18" ry="6" fill="#020617" stroke="#64748B" stroke-width="1.5" />
+      <rect x="-18" y="0" width="36" height="6" fill="#0F172A" />
+      <ellipse cx="0" cy="0" rx="18" ry="6" fill="#334155" stroke="#94A3B8" stroke-width="1.5" />
+    </g>
+  </g>
+
+  
+  <g transform="translate(205, 68) skewX(-14)" filter="url(#dropShadow)">
+    
+    <polygon points="10,0 44,0 44,102 10,102" fill="url(#silverGrad)" />
+    <polygon points="10,0 44,0 44,14 10,14" fill="url(#goldAccent)" />
+
+    
+    <polygon points="64,0 96,0 96,38 132,38 132,0 164,0 164,102 132,102 132,64 96,64 96,102 64,102" fill="url(#silverGrad)" />
+
+    
+    <polygon points="184,0 216,0 252,58 252,0 284,0 284,102 252,102 216,44 216,102 184,102" fill="url(#silverGrad)" />
+  </g>
+
+  
+  <g transform="translate(0, 4)">
+    <polygon points="175,180 445,180 438,202 168,202" fill="url(#iceBlueGrad)" />
+    <text x="307" y="195" font-family="&#39;Arial Black&#39;, &#39;Impact&#39;, sans-serif" font-size="12.5" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="3.5">HOCKEY NETWORK</text>
+  </g>
+</svg>

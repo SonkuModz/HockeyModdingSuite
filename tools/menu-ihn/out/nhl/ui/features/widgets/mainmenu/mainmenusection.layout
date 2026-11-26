@@ -1,0 +1,288 @@
+{
+ "commonName": "Composite",
+ "name": "MainMenuSection",
+ "height": "$SCREEN_HEIGHT",
+ "width": "$SCREEN_WIDTH",
+ "inheritState": false,
+ "layout": {
+  "type": "CanvasLayout"
+ },
+ "style-definitions": {
+  "SHOWSUBITEM": {
+   "showSubItem": true
+  },
+  "HIDESUBITEM": {
+   "showSubItem": false
+  },
+  "UNSELECTABLE": {
+   "isSelected": false,
+   "isInteractive": false,
+   "isSelectable": false
+  },
+  "SELECTABLE": {
+   "isSelected": true,
+   "isInteractive": true,
+   "isSelectable": true
+  }
+ },
+ "propertyMap": {
+  "data.widgetBindings.menuItems.list": "DynamicDataBindingMenuList.bindingName",
+  "data.widgetBindings.menuItems.index": [
+   "DynamicDataBindingMenuListIndex.bindingName",
+   "MenuContainer.ListCollectionView.Next.bindingName",
+   "MenuContainer.ListCollectionView.Previous.bindingName"
+  ],
+  "data.widgetBindings.menuItems.automationName": "MenuContainer.ListCollectionView.automationName",
+  "data.widgetBindings.suboptions.list": "DynamicDataBindingSubOptionsList.bindingName",
+  "data.widgetBindings.suboptions.index": [
+   "DynamicDataBindingSubOptionsListIndex.bindingName",
+   "MenuContainer.ListCollectionView.SubOptionsList.indexBindingName"
+  ],
+  "data.widgetBindings.suboptions.automationName": "MenuContainer.ListCollectionView.SubOptionsList.automationName",
+  "data.widgetBindings.dynamicMessage.isActive": [
+   "MenuContainer.DynamicMessageGroup.isSelectable",
+   "MenuContainer.DynamicMessageGroup.isInteractive",
+   "MenuContainer.DynamicMessageGroup.visible"
+  ],
+  "data.widgetBindings.selectedItemBinding": "DynamicBindingSelectedItem.bindingName",
+  "data.widgetBindings.dynamicMessageAction": "MenuContainer.DynamicMessageGroup.SelectOptionsListInputAction.actionName"
+ },
+ "behaviors": [
+  {
+   "commonName": "DynamicDataBinding",
+   "name": "DynamicBindingSelectedItem",
+   "property": "state",
+   "nodeNames": [
+    "this.ApplyStyleOnMenuState"
+   ]
+  },
+  {
+   "commonName": "DynamicDataBinding",
+   "name": "DynamicDataBindingMenuList",
+   "property": "itemSource",
+   "dataMapping": "data",
+   "nodeNames": [
+    "MenuContainer.ListCollectionView"
+   ]
+  },
+  {
+   "commonName": "DynamicDataBinding",
+   "name": "DynamicDataBindingMenuListIndex",
+   "property": "selectedIndex",
+   "nodeNames": [
+    "MenuContainer.ListCollectionView"
+   ]
+  },
+  {
+   "commonName": "DynamicDataBinding",
+   "name": "DynamicDataBindingSubOptionsList",
+   "property": "listItemSource",
+   "dataMapping": "data",
+   "nodeNames": [
+    "MenuContainer.ListCollectionView.SubOptionsList"
+   ]
+  },
+  {
+   "commonName": "DynamicDataBinding",
+   "name": "DynamicDataBindingSubOptionsListIndex",
+   "property": "listSelectedIndex",
+   "nodeNames": [
+    "MenuContainer.ListCollectionView.SubOptionsList"
+   ]
+  },
+  {
+   "commonName": "behavior.ApplyStyleOnCustomState",
+   "name": "ApplyStyleOnMenuState",
+   "states": {
+    "OPTIONS": {
+     "MenuContainer.ListCollectionView.SubOptionsList": [
+      "HIDESUBITEM",
+      "UNSELECTABLE"
+     ],
+     "MenuContainer.DynamicMessageGroup.MenuDynamicMessage": [
+      "UNSELECTABLE"
+     ],
+     "MenuContainer.DynamicMessageGroup": [
+      "UNSELECTABLE"
+     ],
+     "MenuContainer.ListCollectionView": [
+      "SELECTABLE"
+     ]
+    },
+    "SUBOPTIONS": {
+     "MenuContainer.DynamicMessageGroup.MenuDynamicMessage": [
+      "UNSELECTABLE"
+     ],
+     "MenuContainer.DynamicMessageGroup": [
+      "UNSELECTABLE"
+     ],
+     "MenuContainer.ListCollectionView.SubOptionsList": [
+      "SHOWSUBITEM",
+      "SELECTABLE"
+     ]
+    },
+    "DYNAMIC_MESSAGE": {
+     "MenuContainer.ListCollectionView.SubOptionsList": [
+      "HIDESUBITEM",
+      "UNSELECTABLE"
+     ],
+     "MenuContainer.DynamicMessageGroup.MenuDynamicMessage": [
+      "SELECTABLE"
+     ],
+     "MenuContainer.DynamicMessageGroup": [
+      "SELECTABLE"
+     ],
+     "MenuContainer.ListCollectionView": [
+      "UNSELECTABLE"
+     ]
+    }
+   }
+  }
+ ],
+ "children": [
+  {
+   "commonName": "Group",
+   "name": "MenuContainer",
+   "x": 90.0,
+   "y": 50.0,
+   "layout": {
+    "type": "PanelLayout"
+   },
+   "behaviors": [
+    {
+     "commonName": "behavior.SelectedInputMediator",
+     "name": "DynamicMesaggesInputMediator",
+     "targets": [
+      "ListCollectionView",
+      "DynamicMessageGroup"
+     ]
+    }
+   ],
+   "children": [
+    {
+     "commonName": "CollectionView",
+     "name": "ListCollectionView",
+     "height": 150.0,
+     "width": 1740.0,
+     "itemTemplate": "ListMenuRow",
+     "automationKey": "Name",
+     "isSelected": true,
+     "inheritState": false,
+     "checkItemHeights": true,
+     "layoutSteps": [
+      {
+       "type": "PositionItemsInLine",
+       "data": {
+        "paddingBetweenItems": 34.0
+       }
+      },
+      {
+       "type": "CalculateLayoutSize"
+      },
+      {
+       "type": "CalculateWindowPercent"
+      },
+      {
+       "type": "ScrollSelectionToCenter"
+      },
+      {
+       "type": "ClampScrollPercent"
+      },
+      {
+       "type": "PositionMountByScroll"
+      },
+      {
+       "type": "AnimateValuesOnMount",
+       "data": {
+        "speed": 0.4,
+        "properties": [
+         "x"
+        ]
+       }
+      }
+     ],
+     "orientation": "HORIZONTAL",
+     "reuseItems": true,
+     "layout": {
+      "type": "CanvasLayout"
+     },
+     "behaviors": [
+      {
+       "commonName": "behavior.InputAction",
+       "name": "Next",
+       "actionName": "next",
+       "inputCode": "META_RIGHT",
+       "trapInputPolicy": "HANDLED"
+      },
+      {
+       "commonName": "behavior.InputAction",
+       "name": "Previous",
+       "actionName": "previous",
+       "inputCode": "META_LEFT",
+       "trapInputPolicy": "HANDLED"
+      }
+     ],
+     "children": [
+      {
+       "commonName": "CollectionViewOptionsList",
+       "name": "SubOptionsList",
+       "listItemTemplate": "SubOptionsRow",
+       "relativePosition": "RIGHT",
+       "consumeInputs": false,
+       "automationKey": "Name",
+       "backgroundOverflowLeft": 0,
+       "listMarginLeft": 50,
+       "listLayoutSteps": [
+        {
+         "type": "SizeMountThroughToLayout"
+        },
+        {
+         "type": "PositionItemsInLine",
+         "data": {
+          "paddingBetweenItems": 2.0
+         }
+        },
+        {
+         "type": "CalculateLayoutSize"
+        },
+        {
+         "type": "CalculateWindowPercent"
+        }
+       ]
+      }
+     ],
+     "clipToBounds": true,
+     "checkItemWidths": true
+    },
+    {
+     "commonName": "Group",
+     "name": "DynamicMessageGroup",
+     "inheritState": false,
+     "marginTop": 160,
+     "isSelected": false,
+     "isSelectable": false,
+     "isInteractive": false,
+     "visible": false,
+     "behaviors": [
+      {
+       "commonName": "behavior.InputAction",
+       "name": "SelectOptionsListInputAction",
+       "audioTag": "previous",
+       "inputCode": "META_UP"
+      }
+     ],
+     "children": [
+      {
+       "commonName": "HomepageDynamicButtonTile",
+       "name": "MenuDynamicMessage",
+       "inheritState": true,
+       "height": 241.0,
+       "width": 675.0,
+       "trapInputPolicy": "HANDLED"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

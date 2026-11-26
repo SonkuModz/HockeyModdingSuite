@@ -1,0 +1,71 @@
+{
+  "level27": "utah_30",
+  "jobs": [
+    {
+      "host": "content/worlds/scoreboard/arizonageneric/scoreboard_arizonageneric_mesh",
+      "blank": [
+        0,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "rules": [
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_mesh",
+          "material": "scoreboard_digit_page_white_mat",
+          "to": 2
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_mesh",
+          "material": "scoreboard_datascreen_utah",
+          "to": 9,
+          "uv": [
+            1,
+            0.5,
+            0,
+            0
+          ]
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_mesh",
+          "material": "scoreboard_ads_utah",
+          "to": 9,
+          "uv": [
+            1,
+            0.5,
+            0,
+            0
+          ]
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_mesh",
+          "material": "*",
+          "to": 10
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_netside_mesh",
+          "to": 1
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_benchside_mesh",
+          "to": 1
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_undernetside_mesh",
+          "to": 1
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_underbenchside_mesh",
+          "to": 1
+        },
+        {
+          "mesh": "content/worlds/scoreboard/utah/scoreboard_utah_ribbon_mesh",
+          "to": 10
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,336 @@
+{
+    "commonName": "Composite",
+    "name": "HubHomeShootoutEndOfGameVersion",
+    "height": "AUTO",
+    "width": "$SAFEZONE_WIDTH",
+    "inheritState": false,
+    "layout":
+    {
+        "type": "CanvasLayout"
+    },
+    "style-definitions":
+    {
+        "Deselected":
+        {
+            "isInteractive": false,
+            "isSelected": false
+        },
+        "Selected":
+        {
+            "isInteractive": true,
+            "isSelected": true
+        }
+    },
+    "propertyMap":
+    {
+        "data.CPsTimer":
+        [
+            "SectionGroup.Stats.timerDelay",
+            "SectionGroup.OptionsListContainer.timerDelay"
+        ],
+        "data.LocalizedEndOfGameOptionsList": "SectionGroup.OptionsListContainer.widgetData",
+        "data.ReplayHighlights": "SectionGroup.ReplayHighlights.widgetData",
+        "data.GameStatsData": "SectionGroup.Stats.widgetData"
+    },
+    "children":
+    [
+        {
+            "commonName": "Group",
+            "name": "SectionGroup",
+            "height": "AUTO",
+            "width": "AUTO",
+            "x": 0.0,
+            "y": 0.0,
+            "clipToBounds": false,
+            "layout":
+            {
+                "type": "CanvasLayout"
+            },
+            "children":
+            [
+                {
+                    "commonName": "ContentPresenter",
+                    "name": "Stats",
+                    "layoutData":
+                    {
+                        "commonName": "GameStatsPanel",
+                        "name": "StatsItem",
+                        "height": 670.0,
+                        "width": 702.0,
+                        "x": 994.0,
+                        "y": 0.0
+                    },
+                    "preloadData":
+                    {
+                        "commonName": "Group",
+                        "name": "StatsPreload",
+                        "height": 670.0,
+                        "width": 702.0,
+                        "x": 994.0,
+                        "y": 0.0,
+                        "layout":
+                        {
+                            "type": "PanelLayout"
+                        },
+                        "children":
+                        [
+                            {
+                                "commonName": "Spinner",
+                                "name": "LoadingSpinner",
+                                "alignH": "CENTER",
+                                "alignV": "CENTER",
+                                "height": 100.0,
+                                "width": 100.0
+                            }
+                        ]
+                    },
+                    "setData": true,
+                    "layout":
+                    {
+                        "type": "CanvasLayout"
+                    },
+                    "behaviors":
+                    [
+                        {
+                            "commonName": "behavior.MoveNodeToFrontOnSelection",
+                            "name": "MoveNodeToFrontOnSelection",
+                            "target": "this",
+                            "triggeringElement": "this"
+                        }
+                    ],
+                    "bindings":
+                    [
+                        {
+                            "binding": "gauntlet_stats_visible",
+                            "property": "visible"
+                        }
+                    ]
+                },
+                {
+                    "commonName": "ContentPresenter",
+                    "name": "ReplayHighlights",
+                    "layoutData":
+                    {
+                        "commonName": "HubHomeReplayHighlights",
+                        "name": "ReplayHighlightsItem",
+                        "x": 96,
+                        "width": 828,
+                        "height": 480
+                    },
+                    "preloadData":
+                    {
+                        "commonName": "Group",
+                        "name": "StatsPreload",
+                        "width": 860,
+                        "height": 480,
+                        "x": 100.0,
+                        "y": 0.0,
+                        "layout":
+                        {
+                            "type": "PanelLayout"
+                        }
+                    },
+                    "setData": true,
+                    "behaviors":
+                    [
+                        {
+                            "commonName": "behavior.MoveNodeToFrontOnSelection",
+                            "name": "MoveNodeToFrontOnSelection",
+                            "target": "this",
+                            "triggeringElement": "this"
+                        }
+                    ]
+                },
+                {
+                    "commonName": "ContentPresenter",
+                    "name": "OptionsListContainer",
+                    "inheritState": false,
+                    "isSelected": true,
+                    "preloadData":
+                    {
+                        "commonName": "Group",
+                        "name": "OptionsListPreload",
+                        "height": 200.0,
+                        "width": 828.0,
+                        "x": 98.0,
+                        "y": 480.0,
+                        "layout":
+                        {
+                            "type": "PanelLayout"
+                        }
+                    },
+                    "layoutData":
+                    {
+                        "propertyMap":
+                        {
+                            "data": "OptionsList.itemSource"
+                        },
+                        "commonName": "Composite",
+                        "x": 98.0,
+                        "y": 480,
+                        "layout":
+                        {
+                            "type": "CanvasLayout"
+                        },
+                        "behaviors":
+                        [
+                            {
+                                "commonName": "behavior.ApplyStyleOnSelection",
+                                "name": "ListSelectionBehavior",
+                                "onDeselected":
+                                [
+                                    "Deselected"
+                                ],
+                                "onSelected":
+                                [
+                                    "Selected"
+                                ],
+                                "target":
+                                [
+                                    "OptionsList",
+                                    "ScrollbarOptionsList"
+                                ],
+                                "triggeringElement": "this"
+                            }
+                        ],
+                        "children":
+                        [
+                            {
+                                "commonName": "ScrollbarCollectionView",
+                                "name": "ScrollbarOptionsList",
+                                "height": 220.0,
+                                "x": 835.0,
+                                "inheritState": false,
+                                "hideOnDeselected": true,
+                                "collectionView": "OptionsList",
+                                "pillColor" : "$HIGHLIGHT_PRIMARY",
+                                "layout":
+                                {
+                                    "type": "CanvasLayout"
+                                }
+                            },
+                            {
+                                "commonName": "GridCollectionView",
+                                "name": "OptionsList",
+                                "height": 220.0,
+                                "width": 880.0,
+                                "x": -10.0,
+                                "clipToBounds": true,
+                                "inheritState": false,
+                                "isSelected": false,
+                                "itemDataMapping":
+                                {
+                                    "": "tileData"
+                                },
+                                "itemTemplate": "ManageTeamRow",
+                                "layoutSteps":
+                                [
+                                    {
+                                        "data":
+                                        {
+                                            "value": 220,
+                                            "property": "height"
+                                        },
+                                        "type": "SetPropertyOnMount"
+                                    },
+                                    {
+                                        "data":
+                                        {
+                                            "value": 828,
+                                            "property": "width"
+                                        },
+                                        "type": "SetPropertyOnMount"
+                                    },
+                                    {
+                                        "data":
+                                        {
+                                            "value": 828,
+                                            "property": "width"
+                                        },
+                                        "type": "SetPropertyOnItems"
+                                    },
+                                    {
+                                        "data":
+                                        {
+                                            "value": 54,
+                                            "property": "height"
+                                        },
+                                        "type": "SetPropertyOnItems"
+                                    },
+                                    {
+                                        "data":
+                                        {
+                                            "value": 10,
+                                            "property": "x"
+                                        },
+                                        "type": "SetPropertyOnItems"
+                                    },
+                                    {
+                                        "type": "PositionItemsInLine"
+                                    },
+                                    {
+                                        "type": "CalculateLayoutSize"
+                                    },
+                                    {
+                                        "type": "CalculateWindowPercent"
+                                    },
+                                    {
+                                        "type": "ScrollSelectionToCenter"
+                                    },
+                                    {
+                                        "type": "ClampScrollPercent"
+                                    },
+                                    {
+                                        "type": "PositionMountByScroll"
+                                    },
+                                    {
+                                        "data":
+                                        {
+                                            "properties":
+                                            [
+                                                "y"
+                                            ],
+                                            "speed": 0.4
+                                        },
+                                        "type": "AnimateValuesOnMount"
+                                    }
+                                ],
+                                "orientation": "VERTICAL",
+                                "reuseItems": true,
+                                "actionName": "options_list_index_changed",
+                                "actionTag": "index_changed",
+                                "updateIndexOnSelectionManagerItemChanged": true,
+                                "layout":
+                                {
+                                    "type": "CanvasLayout"
+                                }
+                            }
+                        ]
+                    },
+                    "setData": true,
+                    "layout":
+                    {
+                        "type": "CanvasLayout"
+                    },
+                    "behaviors":
+                    [
+                        {
+                            "commonName": "behavior.MoveNodeToFrontOnSelection",
+                            "name": "MoveNodeToFrontOnSelection",
+                            "target": "this",
+                            "triggeringElement": "this"
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "authoringData":
+    {
+        "designSize":
+        {
+            "width": 1728.0,
+            "height": 680.0
+        }
+    }
+}
