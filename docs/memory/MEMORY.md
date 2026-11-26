@@ -1,0 +1,14 @@
+- [HMS project](nhl27kit-project.md) — HMS (ex-NHL27Kit), NHL 27 PS5 + NHL 24 PS4 suite; NHL24Kit is reference only
+- [Autonomous runs](nhl27kit-autonomous-run.md) — user checks remotely, wants screenshots per feature; plan in NHL27Kit/PLAN.md; write straight into the game files via ModStore
+- [NHL 24 real-life calibration](nhl24-real-life-calibration.md) — paused by user 2026-11-03; resume from PLAN §28 + baselines json
+- [NHL 24 pressure off](nhl24-pressure-off.md) — 1-byte eboot entry 4d7c573cfad1 + issue fixes 1 (8bbcebe28c34) + hitting fixes 1 (66b44c5d2f4f) + skating fixes 1 + penalty/puck fixes 1; scalar patches proven to take effect on 1.60
+- [NHL 24 tuning match broke the game](nhl24-tuning-match-broke-game.md) — restored 2026-11-04; don't re-apply or re-run it
+- [Commentary via Whisper](commentary-whisper.md) — paused 2026-11-23; 27→24 swaps paired by transcript; what's applied and what's left
+- [No DB cache](nhl27kit-no-db-cache.md) — read DBs fresh from the game every time; roster shows in-game portraits
+- [Sportsnet scorebug (NHL 24)](nhl24-sportsnet-scorebug.md) — shipped in HMS 1.5.0; source in tools/scorebug-sportsnet
+- [NCAA custom leagues](ncaa-custom-leagues.md) — 62-team NCAA league + team logos confirmed in game; next league logo, centre ice
+- [NHL 24 new kit folders](nhl24-new-kit-folders.md) — what loads in game: brt entries, patch-CAS root, odd res ids (even = crash)
+- [IHN broadcast package](ihn-broadcast-package.md) — NHL 24 navy/gold package; title confirmed; main menu top bar + jumbotron pause Home confirmed 2026-11-25; other pause tabs next
+- [Center Ice rosters only](center-ice-rosters-only.md) — newer CI rosters via cims-view + cims-rosters (entry 5ede75a9b929); NCAA kept; restore order
+- [Utah arena port](utah-arena-port.md) — NHL 27 Utah arena in NHL 24 level 22; MVDB texture binding + cooked layer transforms lessons
+- [Rice-Eccles Winter Classic](riceeccles-winter-classic.md) — CFB 27 stadium in NHL 24 level 904 via ModStore; applied 2026-11-26, in-game look pending
